@@ -7,56 +7,79 @@ import {
   query, 
   where, 
   getDocs, 
-  limit 
+  limit,
+  getDoc 
 } from 'firebase/firestore';
 
-// Helper: Generate a short 4-char code (e.g., A9X1)
-const generateTeamCode = () => {
-  return Math.random().toString(36).substring(2, 6).toUpperCase();
+const generateTeamCode = () => Math.random().toString(36).substring(2, 6).toUpperCase();
+
+const shouldSendEmail = async () => {
+  try {
+    const settingsRef = doc(db, 'system', 'config');
+    const settingsSnap = await getDoc(settingsRef);
+    if (!settingsSnap.exists()) return true;
+    return settingsSnap.data().emailEnabled !== false;
+  } catch (error) {
+    return true; 
+  }
+};
+
+const sendTicketEmail = async (email, name, eventTitle, ticketId, teamCode) => {
+  const emailAllowed = await shouldSendEmail();
+  if (!emailAllowed) {
+    console.log("High Traffic Mode: Email skipped.");
+    return;
+  }
+  // (Email logic stub - you would implement actual fetch call here if you have a backend)
 };
 
 // 1. INDIVIDUAL REGISTRATION
 export const registerForEvent = async (eventId, user) => {
   if (!user) throw new Error("User must be logged in");
+  
+  // 1a. Fetch Extended User Profile
+  const userProfileRef = doc(db, 'users', user.uid);
+  const userProfileSnap = await getDoc(userProfileRef);
+  const userDetails = userProfileSnap.exists() ? userProfileSnap.data() : {};
 
   const eventRef = doc(db, 'events', eventId);
   const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
 
   try {
     await runTransaction(db, async (transaction) => {
-      // Check Event
       const eventDoc = await transaction.get(eventRef);
       if (!eventDoc.exists()) throw new Error("Event does not exist");
-      
       const eventData = eventDoc.data();
-      const currentSold = eventData.ticketsSold || 0;
-      const maxTickets = parseInt(eventData.totalTickets);
+      
+      if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) throw new Error("Sold Out!");
+      if (eventData.isRestricted && !user.email.endsWith('chitkara.edu.in')) throw new Error("University Students only.");
 
-      if (currentSold >= maxTickets) throw new Error("Event is Sold Out!");
-
-      if (eventData.isRestricted && !user.email.endsWith('chitkara.edu.in')) {
-        throw new Error("Restricted to University Students only.");
-      }
-
-      // Check Duplicate
       const existingTicket = await transaction.get(registrationRef);
       if (existingTicket.exists()) throw new Error("Already registered.");
 
-      // Create Ticket
       transaction.set(registrationRef, {
         eventId,
         eventTitle: eventData.title,
+        clubName: eventData.clubName || 'University Board',
+        eventDate: eventData.date,
         userId: user.uid,
         userEmail: user.email,
         userName: user.displayName,
+        
+        // Extended Details
+        userPhone: userDetails.phone || 'N/A',
+        userRollNo: userDetails.rollNo || 'N/A',
+        userBranch: userDetails.branch || 'N/A',
+
         type: 'individual',
         createdAt: serverTimestamp(),
         status: 'confirmed'
       });
 
-      // Update Count
-      transaction.update(eventRef, { ticketsSold: currentSold + 1 });
+      transaction.update(eventRef, { ticketsSold: (eventData.ticketsSold || 0) + 1 });
     });
+
+    sendTicketEmail(user.email, user.displayName, "Event", registrationRef.id, null);
     return { success: true };
   } catch (error) {
     console.error("Registration Failed:", error);
@@ -64,10 +87,14 @@ export const registerForEvent = async (eventId, user) => {
   }
 };
 
-// 2. REGISTER A NEW TEAM (LEADER)
+// 2. REGISTER TEAM
 export const registerTeam = async (eventId, user, teamName) => {
-  if (!user) throw new Error("User must be logged in");
-  if (!teamName) throw new Error("Team Name is required");
+  if (!user) throw new Error("Login required");
+
+  // 1a. Fetch Extended User Profile
+  const userProfileRef = doc(db, 'users', user.uid);
+  const userProfileSnap = await getDoc(userProfileRef);
+  const userDetails = userProfileSnap.exists() ? userProfileSnap.data() : {};
 
   const eventRef = doc(db, 'events', eventId);
   const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
@@ -76,75 +103,62 @@ export const registerTeam = async (eventId, user, teamName) => {
   try {
     const teamCode = await runTransaction(db, async (transaction) => {
       const eventDoc = await transaction.get(eventRef);
-      if (!eventDoc.exists()) throw new Error("Event does not exist");
-      
       const eventData = eventDoc.data();
-      const currentSold = eventData.ticketsSold || 0;
-      const maxTickets = parseInt(eventData.totalTickets);
-
-      if (currentSold >= maxTickets) throw new Error("Event is Full!");
+      if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) throw new Error("Sold Out!");
 
       const existingTicket = await transaction.get(registrationRef);
-      if (existingTicket.exists()) throw new Error("You are already registered.");
-
+      if (existingTicket.exists()) throw new Error("Already registered.");
+      
       const existingTeam = await transaction.get(teamRef);
-      if (existingTeam.exists()) throw new Error("Team Name already taken!");
+      if (existingTeam.exists()) throw new Error("Team Name taken!");
 
       const code = generateTeamCode();
 
-      // A. Create Team Doc
       transaction.set(teamRef, {
-        eventId,
-        teamName,
-        teamCode: code,
-        leaderId: user.uid,
-        leaderName: user.displayName,
-        members: [user.uid],
-        createdAt: serverTimestamp()
+        eventId, teamName, teamCode: code, leaderId: user.uid, createdAt: serverTimestamp(), members: [user.uid]
       });
 
-      // B. Create Leader Ticket (With Code)
       transaction.set(registrationRef, {
         eventId,
         eventTitle: eventData.title,
+        clubName: eventData.clubName || 'University Board',
+        eventDate: eventData.date,
         userId: user.uid,
         userEmail: user.email,
         userName: user.displayName,
+        
+        // Extended Details
+        userPhone: userDetails.phone || 'N/A',
+        userRollNo: userDetails.rollNo || 'N/A',
+        userBranch: userDetails.branch || 'N/A',
+
         type: 'team_leader',
         teamId: teamRef.id,
-        teamName: teamName,
-        teamCode: code, 
+        teamName, teamCode: code, 
         createdAt: serverTimestamp(),
         status: 'confirmed'
       });
 
-      // C. Update Count (1 Team = 1 Slot)
-      transaction.update(eventRef, { ticketsSold: currentSold + 1 });
-      
+      transaction.update(eventRef, { ticketsSold: (eventData.ticketsSold || 0) + 1 });
       return code;
     });
 
+    sendTicketEmail(user.email, user.displayName, "Team Event", registrationRef.id, teamCode);
     return { success: true, teamCode };
-
-  } catch (error) {
-    console.error("Team Registration Failed:", error);
-    throw error;
-  }
+  } catch (error) { throw error; }
 };
 
-// 3. JOIN AN EXISTING TEAM (MEMBER)
+// 3. JOIN TEAM
 export const joinTeam = async (eventId, user, teamCode) => {
-  if (!user) throw new Error("User must be logged in");
-  if (!teamCode) throw new Error("Team Code is required");
+  // 1a. Fetch Extended User Profile
+  const userProfileRef = doc(db, 'users', user.uid);
+  const userProfileSnap = await getDoc(userProfileRef);
+  const userDetails = userProfileSnap.exists() ? userProfileSnap.data() : {};
 
-  // A. Find Team by Code
   const teamsRef = collection(db, 'teams');
   const q = query(teamsRef, where('teamCode', '==', teamCode), where('eventId', '==', eventId), limit(1));
   const querySnapshot = await getDocs(q);
-
-  if (querySnapshot.empty) {
-    throw new Error("Invalid Team Code. Please check with your leader.");
-  }
+  if (querySnapshot.empty) throw new Error("Invalid Team Code");
 
   const teamDoc = querySnapshot.docs[0];
   const teamData = teamDoc.data();
@@ -154,37 +168,29 @@ export const joinTeam = async (eventId, user, teamCode) => {
 
   try {
     await runTransaction(db, async (transaction) => {
-      // Check Event
       const eventDoc = await transaction.get(eventRef);
-      if (!eventDoc.exists()) throw new Error("Event not found");
       const eventData = eventDoc.data();
-
-      // Check User Duplicate
       const existingTicket = await transaction.get(registrationRef);
-      if (existingTicket.exists()) throw new Error("You are already registered for this event.");
+      if (existingTicket.exists()) throw new Error("Already registered");
+      
+      const freshTeam = await transaction.get(teamRef);
+      if ((freshTeam.data().members || []).length >= (eventData.maxTeamSize || 4)) throw new Error("Team Full");
 
-      // Check Team Size Limit
-      const freshTeamDoc = await transaction.get(teamRef);
-      const currentMembers = freshTeamDoc.data().members || [];
-      const maxMembers = eventData.maxTeamSize || 4;
-
-      if (currentMembers.length >= maxMembers) {
-        throw new Error(`Team is full! (Max ${maxMembers} members)`);
-      }
-
-      // EXECUTE JOIN
-      // 1. Add user to Team Member list
-      transaction.update(teamRef, {
-        members: [...currentMembers, user.uid]
-      });
-
-      // 2. Create Ticket for Member
+      transaction.update(teamRef, { members: [...freshTeam.data().members, user.uid] });
       transaction.set(registrationRef, {
         eventId,
         eventTitle: eventData.title,
+        clubName: eventData.clubName || 'University Board',
+        eventDate: eventData.date,
         userId: user.uid,
         userEmail: user.email,
         userName: user.displayName,
+        
+        // Extended Details
+        userPhone: userDetails.phone || 'N/A',
+        userRollNo: userDetails.rollNo || 'N/A',
+        userBranch: userDetails.branch || 'N/A',
+
         type: 'team_member',
         teamId: teamDoc.id,
         teamName: teamData.teamName,
@@ -192,25 +198,40 @@ export const joinTeam = async (eventId, user, teamCode) => {
         createdAt: serverTimestamp(),
         status: 'confirmed'
       });
-      
-      // Note: We DO NOT increment 'ticketsSold' because the slot was taken by the Team Leader.
     });
 
+    sendTicketEmail(user.email, user.displayName, "Team Join", registrationRef.id, teamCode);
     return { success: true, teamName: teamData.teamName };
-
-  } catch (error) {
-    console.error("Join Team Failed:", error);
-    throw error;
-  }
+  } catch (error) { throw error; }
 };
 
-// Helper
 export const checkRegistrationStatus = async (eventId, userId) => {
   if (!userId) return false;
-  // Simple check if doc exists
-  const docRef = doc(db, 'registrations', `${eventId}_${userId}`);
-  // We use query for safety
   const q = query(collection(db, 'registrations'), where('eventId', '==', eventId), where('userId', '==', userId));
   const docSnap = await getDocs(q);
   return !docSnap.empty;
+};
+
+export const cancelRegistration = async (ticketId, eventId) => {
+    const ticketRef = doc(db, 'registrations', ticketId);
+    const eventRef = doc(db, 'events', eventId);
+    
+    try {
+        await runTransaction(db, async (transaction) => {
+            const ticketDoc = await transaction.get(ticketRef);
+            if (!ticketDoc.exists()) throw new Error("Ticket not found");
+            transaction.delete(ticketRef);
+            const eventDoc = await transaction.get(eventRef);
+            if (eventDoc.exists()) {
+              const currentSold = eventDoc.data().ticketsSold || 0;
+              if (currentSold > 0) {
+                transaction.update(eventRef, { ticketsSold: currentSold - 1 });
+              }
+            }
+        });
+        return { success: true };
+    } catch (e) { 
+        console.error("Cancellation error:", e);
+        throw e; 
+    }
 };
