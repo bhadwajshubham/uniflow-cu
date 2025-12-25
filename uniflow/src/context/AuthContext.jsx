@@ -1,52 +1,93 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { auth } from '../lib/firebase';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
-import { syncUserWithDb } from '../features/auth/services/userService'; // Import the service
+import { 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { 
+  doc, 
+  getDoc, 
+  setDoc, 
+  serverTimestamp 
+} from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
 
 const AuthContext = createContext();
 
+export const useAuth = () => useContext(AuthContext);
+
 export const AuthProvider = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [userRole, setUserRole] = useState(null); // New State for Role
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // 1. Login Function
+  const login = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      // 🔥 CRITICAL FIX: Check if user exists in DB, if not, CREATE THEM
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (!userSnap.exists()) {
+        console.log("🆕 New User Detected! Creating Database Profile...");
+        await setDoc(userRef, {
+          name: user.displayName,
+          email: user.email,
+          photoURL: user.photoURL,
+          role: 'student', // Default role
+          createdAt: serverTimestamp(),
+        });
+      } else {
+        console.log("✅ Existing User Logged In. Fetching Profile...");
+      }
+      
+      return user;
+    } catch (error) {
+      console.error("Login Error:", error);
+      throw error;
+    }
+  };
+
+  // 2. Logout Function
+  const logout = () => signOut(auth);
+
+  // 3. Monitor Auth State & Fetch Profile
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // 1. User logged in
-        setCurrentUser(user);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      
+      if (currentUser) {
+        // Fetch the profile from Firestore to get the ROLE
+        const userRef = doc(db, 'users', currentUser.uid);
+        const userSnap = await getDoc(userRef);
         
-        // 2. Sync with Database (The Magic Step)
-        try {
-          const dbUser = await syncUserWithDb(user);
-          setUserRole(dbUser.role);
-          console.log("User Synced to DB:", dbUser.role);
-        } catch (error) {
-          console.error("Error syncing user:", error);
+        if (userSnap.exists()) {
+          setProfile(userSnap.data());
+          // Debug Log
+          console.log("👤 Profile Loaded:", userSnap.data());
+        } else {
+          // Fallback if DB doc is missing even after login
+          console.warn("⚠️ User authenticated but no DB profile found.");
+          setProfile(null);
         }
       } else {
-        setCurrentUser(null);
-        setUserRole(null);
+        setProfile(null);
       }
+      
       setLoading(false);
     });
 
     return unsubscribe;
   }, []);
 
-  const login = async () => {
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
-    return signInWithPopup(auth, provider);
-  };
-
-  const logout = () => {
-    return signOut(auth);
-  };
-
   const value = {
-    currentUser,
-    userRole, // Now we can check if they are admin everywhere
+    user,
+    profile, // This contains the 'role' (admin/student)
     login,
     logout,
     loading
@@ -58,5 +99,3 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
-
-export const useAuth = () => useContext(AuthContext);

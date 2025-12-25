@@ -1,96 +1,96 @@
-import { Mail, Github, Linkedin, Globe, Code2, MapPin } from 'lucide-react';
+import React from 'react';
+import { Github, Linkedin, Mail, Globe, Sparkles, Code2 } from 'lucide-react';
 
 const AboutPage = () => {
-  // 👇 REPLACE THESE STRINGS WITH YOUR REAL DETAILS
-  const myDetails = {
-    name: "Shubham Bhardwaj",
-    title: "Full Stack Engineer & Founder",
-    // Use your GitHub avatar or any public image URL
-    photoUrl: "https://avatars.githubusercontent.com/u/YOUR_GITHUB_USERNAME?v=4", 
-    portfolioUrl: "https://your-portfolio-website.com",
-    linkedinUrl: "https://www.linkedin.com/in/your-profile-id/",
-    githubUrl: "https://github.com/bhadwajshubham",
-    email: "shubham@example.com", // Optional
-    bio: "I built UniFlow to solve the chaos of event management. My goal is to create scalable, user-centric software that makes a real impact."
-  };
-
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black p-4 md:p-6 flex items-center justify-center relative overflow-hidden">
       
-      {/* Header Section */}
-      <div className="text-center space-y-4">
-        <h1 className="text-4xl font-black text-zinc-900 dark:text-white tracking-tight">
-          Meet the <span className="text-indigo-600">Architect</span>
-        </h1>
-        <p className="text-zinc-500 dark:text-zinc-400 max-w-xl mx-auto">
-          UniFlow was built with a vision to simplify campus life using cutting-edge technology.
-        </p>
-      </div>
+      {/* Background Blobs (Decoration) */}
+      <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-indigo-500 rounded-full blur-[100px] opacity-20 animate-pulse"></div>
+      <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-80 h-80 bg-purple-500 rounded-full blur-[100px] opacity-20 animate-pulse delay-700"></div>
 
-      {/* Profile Card */}
-      <div className="bg-white dark:bg-zinc-900 rounded-3xl p-8 border border-zinc-200 dark:border-zinc-800 shadow-xl flex flex-col md:flex-row items-center gap-8">
+      {/* Glass Card */}
+      <div className="relative z-10 w-full max-w-3xl bg-white/80 dark:bg-zinc-900/80 backdrop-blur-2xl border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 md:p-12 shadow-2xl">
         
-        {/* Photo Area */}
-        <div className="relative group">
-          <div className="absolute -inset-1 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full blur opacity-25 group-hover:opacity-75 transition duration-1000"></div>
-          <div className="relative w-48 h-48 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden border-4 border-white dark:border-zinc-900 flex items-center justify-center">
-             {/* If photo fails, it falls back to an avatar */}
-             <img 
-               src={myDetails.photoUrl} 
-               onError={(e) => e.target.src = "https://api.dicebear.com/7.x/avataaars/svg?seed=Shubham"}
-               alt={myDetails.name} 
-               className="w-full h-full object-cover"
-             />
-          </div>
-        </div>
-
-        {/* Info Area */}
-        <div className="flex-1 text-center md:text-left space-y-4">
-          <div>
-            <h2 className="text-2xl font-bold text-zinc-900 dark:text-white">{myDetails.name}</h2>
-            <p className="text-indigo-600 font-medium">{myDetails.title}</p>
+        <div className="flex flex-col md:flex-row items-center gap-10">
+          
+          {/* Photo Section */}
+          <div className="relative group shrink-0">
+            <div className="absolute -inset-1 bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 rounded-full blur opacity-75 group-hover:opacity-100 transition duration-1000"></div>
+            <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-white dark:border-black shadow-inner bg-zinc-100 dark:bg-zinc-800">
+              {/* 👇 Your GitHub Avatar Auto-Link */}
+              <img 
+                src="https://github.com/bhadwajshubham.png" 
+                alt="Shubham Bhardwaj" 
+                className="w-full h-full object-cover transform transition group-hover:scale-110 duration-700"
+                onError={(e) => e.target.src = "https://api.dicebear.com/7.x/avataaars/svg?seed=Architect"}
+              />
+            </div>
+            {/* Online Status Dot */}
+            <div className="absolute bottom-3 right-3 bg-emerald-500 w-5 h-5 rounded-full border-4 border-white dark:border-zinc-900 z-20"></div>
           </div>
 
-          <div className="flex flex-wrap justify-center md:justify-start gap-2">
-            <span className="px-3 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-full text-xs font-bold text-zinc-600 dark:text-zinc-400">React + Vite</span>
-            <span className="px-3 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-full text-xs font-bold text-zinc-600 dark:text-zinc-400">Firebase Auth</span>
-            <span className="px-3 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-full text-xs font-bold text-zinc-600 dark:text-zinc-400">Tailwind CSS</span>
-          </div>
-
-          <p className="text-zinc-500 text-sm leading-relaxed">
-            "{myDetails.bio}"
-          </p>
-
-          {/* Social Links */}
-          <div className="flex items-center justify-center md:justify-start gap-4 pt-2">
+          {/* Content Section */}
+          <div className="text-center md:text-left flex-1 space-y-4">
             
-            {/* GitHub (Always Include) */}
-            <a href={myDetails.githubUrl} target="_blank" rel="noreferrer" className="p-2 bg-zinc-50 dark:bg-zinc-800 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors" title="GitHub">
-              <Github className="h-5 w-5" />
-            </a>
+            <div className="flex items-center justify-center md:justify-start gap-2">
+              <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-full text-xs font-bold uppercase tracking-wider border border-indigo-200 dark:border-indigo-500/20">
+                Lead Architect
+              </span>
+              <Sparkles className="w-4 h-4 text-amber-400 fill-amber-400" />
+            </div>
+            
+            <div>
+              <h1 className="text-4xl font-black text-zinc-900 dark:text-white tracking-tight mb-1">
+                Shubham Bhardwaj
+              </h1>
+              <p className="text-zinc-500 dark:text-zinc-400 font-medium flex items-center justify-center md:justify-start gap-2">
+                <Code2 className="w-4 h-4" /> Full Stack Engineer
+              </p>
+            </div>
 
-            {/* LinkedIn (Highly Recommended) */}
-            <a href={myDetails.linkedinUrl} target="_blank" rel="noreferrer" className="p-2 bg-zinc-50 dark:bg-zinc-800 rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors" title="LinkedIn">
-              <Linkedin className="h-5 w-5" />
-            </a>
+            <p className="text-zinc-600 dark:text-zinc-300 leading-relaxed text-sm">
+              Building <span className="text-indigo-600 dark:text-indigo-400 font-bold">UniFlow</span> to revolutionize campus events. 
+              I specialize in creating high-performance, scalable web applications using React, Firebase, and Modern UI principles.
+            </p>
 
-            {/* Portfolio (Optional - Only shows if you change the link) */}
-            {myDetails.portfolioUrl !== "https://your-portfolio-website.com" && (
-                <a href={myDetails.portfolioUrl} target="_blank" rel="noreferrer" className="p-2 bg-zinc-50 dark:bg-zinc-800 rounded-full hover:bg-emerald-50 hover:text-emerald-600 transition-colors" title="Portfolio">
-                <Globe className="h-5 w-5" />
-                </a>
-            )}
-
-            {/* Email (Optional - Uncomment if you want it) */}
-            {/* <a href={`mailto:${myDetails.email}`} className="p-2 bg-zinc-50 dark:bg-zinc-800 rounded-full hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
-              <Mail className="h-5 w-5" />
-            </a> 
-            */}
+            {/* Social Links Row */}
+            <div className="flex items-center justify-center md:justify-start gap-3 pt-2">
+              <SocialBtn icon={Github} href="https://github.com/bhadwajshubham" label="GitHub" />
+              <SocialBtn icon={Linkedin} href="https://linkedin.com/in/" label="LinkedIn" />
+              <SocialBtn icon={Globe} href="#" label="Portfolio" />
+              <SocialBtn icon={Mail} href="mailto:shubham@example.com" label="Email" />
+            </div>
           </div>
         </div>
+
+        {/* Tech Stack Footer */}
+        <div className="mt-10 pt-8 border-t border-zinc-200 dark:border-zinc-800 flex flex-wrap justify-center gap-4 text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
+          <span>React 18</span>
+          <span>•</span>
+          <span>Firebase</span>
+          <span>•</span>
+          <span>Tailwind</span>
+          <span>•</span>
+          <span>Vite PWA</span>
+        </div>
+
       </div>
     </div>
   );
 };
+
+// Reusable Button Component
+const SocialBtn = ({ icon: Icon, href, label }) => (
+  <a 
+    href={href} 
+    target="_blank" 
+    rel="noreferrer"
+    aria-label={label}
+    className="p-3 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-xl hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-600 dark:hover:text-white transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/30"
+  >
+    <Icon className="w-5 h-5" />
+  </a>
+);
 
 export default AboutPage;
