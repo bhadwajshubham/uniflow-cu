@@ -1,29 +1,44 @@
-import { useAuth } from '../../../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext'; // Path is correct ✅
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ArrowRight, Calendar, QrCode, Trophy, Shield, Lock } from 'lucide-react';
 
 const LoginPage = () => {
-  const { login, currentUser } = useAuth();
+  // 🔥 FIX 1: Changed 'currentUser' to 'user' to match Context
+  const { login, user, loading } = useAuth(); 
   const navigate = useNavigate();
+  const location = useLocation();
   const [error, setError] = useState('');
 
+  // 🔥 FIX 2: Smart Redirect (The Ejector Seat)
   useEffect(() => {
-    if (currentUser) {
-      navigate('/events');
+    if (user) {
+      // If they came from a specific page, send them back there.
+      // Otherwise, go to /events.
+      const destination = location.state?.from?.pathname || '/events';
+      navigate(destination, { replace: true });
     }
-  }, [currentUser, navigate]);
+  }, [user, navigate, location]);
 
   const handleGoogleLogin = async () => {
     try {
       setError('');
       await login();
-      navigate('/events');
+      // The useEffect above will handle the navigation automatically
     } catch (error) {
       console.error('Login Failed', error);
       setError('Authentication failed. Please try again.');
     }
   };
+
+  // Optional: Loading State
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex bg-white dark:bg-zinc-950 font-sans">
@@ -45,7 +60,7 @@ const LoginPage = () => {
              </p>
           </div>
 
-          {/* Feature Grid (Honest Features Only) */}
+          {/* Feature Grid */}
           <div className="grid gap-4">
             <div className="flex items-center gap-4 p-4 rounded-xl bg-white dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/50 backdrop-blur-sm">
                 <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
@@ -109,6 +124,11 @@ const LoginPage = () => {
               <span className="font-semibold text-zinc-900 dark:text-white">Continue with Google</span>
               <ArrowRight className="absolute right-4 h-4 w-4 text-zinc-300 group-hover:text-zinc-600 dark:group-hover:text-white transition-colors opacity-0 group-hover:opacity-100" />
             </button>
+
+            {/* Error Message Display */}
+            {error && (
+              <p className="text-sm text-red-500 text-center">{error}</p>
+            )}
 
             {/* Other Options (Visual Only - Disabled) */}
             <div className="relative">
