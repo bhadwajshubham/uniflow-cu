@@ -4,41 +4,45 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, Calendar, QrCode, Trophy, Lock } from 'lucide-react';
 
 const LoginPage = () => {
-  // ✅ FIX: Using 'user' (which matches your AuthContext), NOT 'currentUser'
-  const { login, user, loading } = useAuth(); 
+  const { login, user, loading } = useAuth(); // Using correct 'user' variable
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState('');
 
-  // 🚀 THE REDIRECT LOGIC
-  // This watches the 'user'. As soon as the logs say "Profile Loaded", this fires.
+  // 🔄 1. AUTO-REDIRECT LOGIC
   useEffect(() => {
-    if (user) {
-      console.log("✅ User found in Login Page. Redirecting to Dashboard...");
-      const destination = location.state?.from?.pathname || '/';
+    if (user && !loading) {
+      console.log("✅ User detected. Redirecting to Dashboard...");
+      const destination = location.state?.from?.pathname || '/events'; // Default to /events
       navigate(destination, { replace: true });
     }
-  }, [user, navigate, location]);
+  }, [user, loading, navigate, location]);
 
   const handleGoogleLogin = async () => {
     try {
       setError('');
       await login();
-      // The useEffect above will handle the redirect automatically
+      // The useEffect above handles the redirect once the user state updates
     } catch (error) {
       console.error('Login Failed', error);
       setError('Authentication failed. Please try again.');
     }
   };
 
-  if (loading) {
+  // 🛑 2. PREVENT FLICKER: If loading OR user is already logged in, show Spinner ONLY.
+  // This stops the "Lock Icon" form from flashing on the screen.
+  if (loading || user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-black">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+        <p className="text-zinc-500 text-sm font-medium animate-pulse">
+          {user ? "Redirecting to Dashboard..." : "Loading UniFlow..."}
+        </p>
       </div>
     );
   }
 
+  // 🎨 3. RENDER LOGIN FORM (Only if NO user exists)
   return (
     <div className="min-h-screen flex bg-white dark:bg-zinc-950 font-sans">
       
@@ -66,16 +70,6 @@ const LoginPage = () => {
                 <div>
                   <div className="font-semibold text-zinc-900 dark:text-white">Centralized Schedule</div>
                   <div className="text-xs text-zinc-500">One hub for all university activities</div>
-                </div>
-            </div>
-            
-            <div className="flex items-center gap-4 p-4 rounded-xl bg-white dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/50 backdrop-blur-sm">
-                <div className="p-2.5 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400">
-                  <QrCode className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="font-semibold text-zinc-900 dark:text-white">QR Entry System</div>
-                  <div className="text-xs text-zinc-500">Fast, paperless check-ins</div>
                 </div>
             </div>
           </div>
