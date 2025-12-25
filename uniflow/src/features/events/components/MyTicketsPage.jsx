@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { Ticket, Calendar, QrCode, Clock, Search, MapPin, XCircle } from 'lucide-react';
@@ -15,11 +15,10 @@ const MyTicketsPage = () => {
     const fetchTickets = async () => {
       if (!user) return;
       try {
+        // Simple query first to avoid index issues
         const q = query(
           collection(db, 'registrations'), 
           where('userId', '==', user.uid)
-          // Note: compound queries (where + orderBy) require an index. 
-          // If this fails, remove orderBy and sort in JS.
         );
         
         const snapshot = await getDocs(q);
@@ -28,8 +27,12 @@ const MyTicketsPage = () => {
           ...doc.data()
         }));
 
-        // Sort manually to avoid index errors for now
-        ticketData.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
+        // Sort manually in JavaScript (safe & robust)
+        ticketData.sort((a, b) => {
+          const dateA = a.createdAt?.seconds || 0;
+          const dateB = b.createdAt?.seconds || 0;
+          return dateB - dateA; // Newest first
+        });
         
         setTickets(ticketData);
       } catch (err) {
@@ -44,9 +47,13 @@ const MyTicketsPage = () => {
 
   // Filter Logic
   const filteredTickets = tickets.filter(ticket => {
-    const isPast = new Date(ticket.eventDate) < new Date();
+    // Safety check for date
+    const eventDate = ticket.eventDate ? new Date(ticket.eventDate) : new Date();
+    const isPast = eventDate < new Date();
+    
     const matchesTab = activeTab === 'upcoming' ? !isPast : isPast;
-    const matchesSearch = ticket.eventTitle?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (ticket.eventTitle || '').toLowerCase().includes(searchTerm.toLowerCase());
+    
     return matchesTab && matchesSearch;
   });
 
@@ -76,7 +83,7 @@ const MyTicketsPage = () => {
               placeholder="Search tickets..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="w-full pl-10 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-zinc-900 dark:text-white"
             />
           </div>
         </div>
@@ -125,3 +132,56 @@ const MyTicketsPage = () => {
                     {ticket.status || 'Confirmed'}
                   </span>
                 </div>
+
+                {/* QR Section */}
+                <div className="flex-shrink-0 flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 rounded-xl w-full md:w-32 h-32">
+                   {ticket.status === 'cancelled' ? (
+                     <XCircle className="w-12 h-12 text-zinc-300" />
+                   ) : (
+                     <QrCode className="w-16 h-16 text-zinc-900 dark:text-white" />
+                   )}
+                </div>
+
+                {/* Details */}
+                <div className="flex-1 space-y-3">
+                  <div>
+                    <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-1">
+                      {ticket.eventTitle || "Event Name Unavailable"}
+                    </h3>
+                    <div className="flex items-center gap-4 text-sm text-zinc-500">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4" />
+                        <span>{ticket.eventDate || "TBA"}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-4 h-4" />
+                        <span>{ticket.eventTime || "TBA"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-sm text-zinc-500">
+                    <MapPin className="w-4 h-4" />
+                    <span>{ticket.eventLocation || "Venue to be announced"}</span>
+                  </div>
+
+                  <div className="pt-4 flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800">
+                    <span className="text-xs font-mono text-zinc-400">ID: {ticket.id.slice(0, 8)}...</span>
+                    
+                    {activeTab === 'upcoming' && ticket.status !== 'cancelled' && (
+                      <button className="text-sm font-medium text-red-500 hover:text-red-600 transition-colors">
+                        Cancel Ticket
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default MyTicketsPage;
