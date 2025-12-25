@@ -1,24 +1,64 @@
-import { db, storage } from '../../../lib/firebase';
-import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { 
+  collection, 
+  addDoc, 
+  getDocs, 
+  doc, 
+  getDoc, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  orderBy, 
+  serverTimestamp,
+  where 
+} from 'firebase/firestore';
+import { db } from '../../../lib/firebase';
 
-// 1. Upload Image
-export const uploadEventImage = async (file) => {
-  if (!file) return null;
+const COLLECTION_NAME = 'events';
+
+// Fetch all events (Public)
+export const getEvents = async () => {
   try {
-    const storageRef = ref(storage, `events/${Date.now()}_${file.name}`);
-    const snapshot = await uploadBytes(storageRef, file);
-    return await getDownloadURL(snapshot.ref);
+    const q = query(collection(db, COLLECTION_NAME), orderBy('date', 'asc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
   } catch (error) {
-    console.error("Error uploading image:", error);
+    console.error("Error fetching events:", error);
     throw error;
   }
 };
 
-// 2. Create Event
-export const createEvent = async (eventData) => {
+// Fetch single event
+export const getEventById = async (id) => {
   try {
-    const docRef = await addDoc(collection(db, 'events'), eventData);
+    const docRef = doc(db, COLLECTION_NAME, id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() };
+    } else {
+      throw new Error("Event not found");
+    }
+  } catch (error) {
+    console.error("Error fetching event:", error);
+    throw error;
+  }
+};
+
+// 🔥 UPDATED: Create Event with Organizer Stamp
+// You must pass 'userId' when calling this function from your Form!
+export const createEvent = async (eventData, userId) => {
+  if (!userId) throw new Error("User ID is required to create an event");
+
+  try {
+    const docRef = await addDoc(collection(db, COLLECTION_NAME), {
+      ...eventData,
+      organizerId: userId, // 👈 THE STAMP (Ownership)
+      ticketsSold: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
     return docRef.id;
   } catch (error) {
     console.error("Error creating event:", error);
@@ -26,42 +66,27 @@ export const createEvent = async (eventData) => {
   }
 };
 
-// 3. Update Event (NEW)
-export const updateEvent = async (eventId, updatedData) => {
+// Update Event (Admin only)
+export const updateEvent = async (id, updates) => {
   try {
-    const eventRef = doc(db, 'events', eventId);
-    await updateDoc(eventRef, updatedData);
-    return { success: true };
+    const docRef = doc(db, COLLECTION_NAME, id);
+    await updateDoc(docRef, {
+      ...updates,
+      updatedAt: serverTimestamp()
+    });
   } catch (error) {
     console.error("Error updating event:", error);
     throw error;
   }
 };
 
-// 4. Delete Event (NEW)
-export const deleteEvent = async (eventId) => {
+// Delete Event
+export const deleteEvent = async (id) => {
   try {
-    await deleteDoc(doc(db, 'events', eventId));
-    // Note: In a production app, you would also batch delete all 'registrations' for this event.
-    // For MVP, leaving orphaned tickets is acceptable (they just won't load event data).
-    return { success: true };
+    const docRef = doc(db, COLLECTION_NAME, id);
+    await deleteDoc(docRef);
   } catch (error) {
     console.error("Error deleting event:", error);
     throw error;
-  }
-};
-
-// 5. Fetch All Events
-export const getAllEvents = async () => {
-  try {
-    const q = query(collection(db, 'events'), orderBy('date', 'asc'));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-  } catch (error) {
-    console.error("Error fetching events:", error);
-    return [];
   }
 };

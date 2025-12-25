@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { 
+import { ThemeToggle from '../ThemeToggle';
   Menu, 
   X, 
   LogOut, 
