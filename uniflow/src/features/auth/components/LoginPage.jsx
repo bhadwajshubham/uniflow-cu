@@ -1,37 +1,36 @@
-import { useAuth } from '../../../context/AuthContext'; // Path is correct ✅
+import { useAuth } from '../../../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { ArrowRight, Calendar, QrCode, Trophy, Shield, Lock } from 'lucide-react';
+import { ArrowRight, Calendar, QrCode, Trophy, Lock } from 'lucide-react';
 
 const LoginPage = () => {
-  // 🔥 FIX 1: Changed 'currentUser' to 'user' to match Context
-  const { login, user, loading } = useAuth(); 
+  // 🔥 FIX: We use 'user', not 'currentUser' because that is what AuthContext provides
+  const { login, user, loading } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [error, setError] = useState('');
 
-  // 🔥 FIX 2: Smart Redirect (The Ejector Seat)
+  // 🔥 THE REDIRECT LOGIC
   useEffect(() => {
+    // If the 'user' exists (meaning you are logged in), GO TO EVENTS
     if (user) {
-      // If they came from a specific page, send them back there.
-      // Otherwise, go to /events.
-      const destination = location.state?.from?.pathname || '/events';
-      navigate(destination, { replace: true });
+      console.log("✅ User found. Redirecting to /events");
+      navigate('/events', { replace: true });
     }
-  }, [user, navigate, location]);
+  }, [user, navigate]);
 
   const handleGoogleLogin = async () => {
     try {
       setError('');
+      console.log("🖱️ Logging in...");
       await login();
-      // The useEffect above will handle the navigation automatically
+      // The useEffect above will catch the change and redirect you.
     } catch (error) {
-      console.error('Login Failed', error);
+      console.error('❌ Login Failed', error);
       setError('Authentication failed. Please try again.');
     }
   };
 
-  // Optional: Loading State
+  // Loading Spinner
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black">
@@ -43,9 +42,8 @@ const LoginPage = () => {
   return (
     <div className="min-h-screen flex bg-white dark:bg-zinc-950 font-sans">
       
-      {/* LEFT SIDE: The Functional Dashboard Preview */}
+      {/* LEFT SIDE: The Dashboard Preview */}
       <div className="hidden lg:flex w-1/2 bg-zinc-50 dark:bg-zinc-900 relative overflow-hidden items-center justify-center p-12">
-        {/* Subtle Background Elements */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-[100px]"></div>
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-500/10 rounded-full blur-[100px]"></div>
         
@@ -60,7 +58,6 @@ const LoginPage = () => {
              </p>
           </div>
 
-          {/* Feature Grid */}
           <div className="grid gap-4">
             <div className="flex items-center gap-4 p-4 rounded-xl bg-white dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/50 backdrop-blur-sm">
                 <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
@@ -94,7 +91,6 @@ const LoginPage = () => {
           </div>
         </div>
         
-        {/* Technical Grid Pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
       </div>
 
@@ -115,7 +111,6 @@ const LoginPage = () => {
           </div>
 
           <div className="space-y-4">
-            {/* GOOGLE - Primary Action */}
             <button
               onClick={handleGoogleLogin}
               className="relative w-full flex items-center justify-center gap-3 px-6 py-4 bg-white dark:bg-zinc-900 border-2 border-zinc-200 dark:border-zinc-800 rounded-xl hover:border-zinc-900 dark:hover:border-zinc-600 hover:shadow-lg transition-all group"
@@ -125,12 +120,10 @@ const LoginPage = () => {
               <ArrowRight className="absolute right-4 h-4 w-4 text-zinc-300 group-hover:text-zinc-600 dark:group-hover:text-white transition-colors opacity-0 group-hover:opacity-100" />
             </button>
 
-            {/* Error Message Display */}
             {error && (
               <p className="text-sm text-red-500 text-center">{error}</p>
             )}
 
-            {/* Other Options (Visual Only - Disabled) */}
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-zinc-200 dark:border-zinc-800"></div>
