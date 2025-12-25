@@ -38,4 +38,9 @@ export default defineConfig({
       }
     })
   ],
+  // 👇 THIS IS THE MISSING PIECE FOR VERCEL
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+  }
 });
