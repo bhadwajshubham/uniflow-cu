@@ -1,185 +1,127 @@
-import { useEffect, useState } from 'react';
-import { useAuth } from '../../../context/AuthContext';
+import React, { useEffect, useState } from 'react';
+import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore'; // Added doc, getDoc
-import { Loader2, Ticket, Trophy, ArrowLeft, Award, Trash2, Star, Search, Filter, ExternalLink } from 'lucide-react'; 
-import { useNavigate } from 'react-router-dom';
-import CertificateModal from './CertificateModal';
-import ReviewModal from './ReviewModal';
-import { cancelRegistration } from '../services/registrationService';
+import { useAuth } from '../../../context/AuthContext';
+import { Ticket, Calendar, QrCode, Clock, Search, MapPin, XCircle } from 'lucide-react';
 
 const MyTicketsPage = () => {
-  const { currentUser } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // Filter States
+  const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming' | 'past'
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All'); 
-
-  // Modal States
-  const [selectedCertificate, setSelectedCertificate] = useState(null);
-  const [reviewTicket, setReviewTicket] = useState(null);
-  const [cancellingId, setCancellingId] = useState(null);
 
   useEffect(() => {
-    fetchTickets();
-  }, [currentUser]);
-
-  const fetchTickets = async () => {
-    if (!currentUser) return;
-    try {
-      const q = query(collection(db, 'registrations'), where('userId', '==', currentUser.uid));
-      const querySnapshot = await getDocs(q);
-      
-      const ticketsWithDetails = await Promise.all(querySnapshot.docs.map(async (ticketDoc) => {
-        const ticketData = ticketDoc.data();
+    const fetchTickets = async () => {
+      if (!user) return;
+      try {
+        const q = query(
+          collection(db, 'registrations'), 
+          where('userId', '==', user.uid)
+          // Note: compound queries (where + orderBy) require an index. 
+          // If this fails, remove orderBy and sort in JS.
+        );
         
-        // Fetch the EVENT details to get the privateLink
-        // (Optimally we could copy privateLink to ticket on registration, but fetching ensures it's up to date)
-        const eventRef = doc(db, 'events', ticketData.eventId);
-        const eventSnap = await getDoc(eventRef);
-        const eventData = eventSnap.exists() ? eventSnap.data() : {};
+        const snapshot = await getDocs(q);
+        const ticketData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
 
-        return { 
-          id: ticketDoc.id, 
-          ...ticketData,
-          privateLink: eventData.privateLink || null // <--- Attach link here
-        };
-      }));
+        // Sort manually to avoid index errors for now
+        ticketData.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
+        
+        setTickets(ticketData);
+      } catch (err) {
+        console.error("Error fetching tickets:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-      // Sort
-      ticketsWithDetails.sort((a, b) => new Date(b.eventDate) - new Date(a.eventDate));
-      setTickets(ticketsWithDetails);
+    fetchTickets();
+  }, [user]);
 
-    } catch (error) {
-      console.error("Error fetching tickets:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCancel = async (ticket) => {
-    if (!window.confirm("Are you sure?")) return;
-    setCancellingId(ticket.id);
-    try {
-      await cancelRegistration(ticket.id, ticket.eventId);
-      setTickets(prev => prev.filter(t => t.id !== ticket.id));
-    } catch (error) {
-      alert("Failed to cancel.");
-    } finally {
-      setCancellingId(null);
-    }
-  };
-
+  // Filter Logic
   const filteredTickets = tickets.filter(ticket => {
-    const matchesSearch = ticket.eventTitle.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'All' ? true : statusFilter === 'Attended' ? ticket.status === 'attended' : ticket.status === 'confirmed';
-    return matchesSearch && matchesStatus;
+    const isPast = new Date(ticket.eventDate) < new Date();
+    const matchesTab = activeTab === 'upcoming' ? !isPast : isPast;
+    const matchesSearch = ticket.eventTitle?.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesTab && matchesSearch;
   });
 
-  return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black p-6 md:p-12 font-sans">
-      
-      <div className="max-w-4xl mx-auto mb-8">
-        <div className="flex items-center gap-4 mb-6">
-          <button onClick={() => navigate('/events')} className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors">
-            <ArrowLeft className="h-6 w-6 text-zinc-600 dark:text-zinc-400" />
-          </button>
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-white">My Ticket Wallet</h1>
-        </div>
-
-        {/* SEARCH & FILTER BAR */}
-        <div className="flex gap-4 mb-6">
-          <div className="relative flex-1">
-             <Search className="absolute left-3 top-3 h-5 w-5 text-zinc-400" />
-             <input type="text" placeholder="Search..." className="w-full pl-10 pr-4 py-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-          </div>
-          <div className="relative w-40">
-             <select className="w-full h-full pl-4 pr-8 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none appearance-none" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-               <option value="All">All Tickets</option>
-               <option value="Upcoming">Upcoming</option>
-               <option value="Attended">History</option>
-             </select>
-             <Filter className="absolute right-3 top-3.5 h-4 w-4 text-zinc-400 pointer-events-none" />
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-4xl mx-auto">
-        {loading ? (
-          <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-indigo-600" /></div>
-        ) : filteredTickets.length === 0 ? (
-          <div className="text-center p-12 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-            <Ticket className="h-12 w-12 mx-auto text-zinc-300 mb-4" />
-            <h3 className="text-lg font-medium text-zinc-900 dark:text-white">No tickets found</h3>
-          </div>
-        ) : (
-          <div className="grid gap-4">
-            {filteredTickets.map(ticket => (
-              <div key={ticket.id} className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row justify-between items-center gap-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
-                <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${ticket.status === 'attended' ? 'bg-emerald-500' : 'bg-indigo-500'}`}></div>
-
-                <div className="flex-1 text-center md:text-left pl-4">
-                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase mb-3 ${ticket.status === 'attended' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-50 text-indigo-600'}`}>
-                    {ticket.status === 'confirmed' ? 'Upcoming' : 'Attended'}
-                  </div>
-                  <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">{ticket.eventTitle}</h3>
-                  <div className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-                     Date: {new Date(ticket.eventDate).toLocaleDateString()}
-                  </div>
-                  
-                  {/* --- NEW: PRIVATE LINK BUTTON --- */}
-                  {ticket.privateLink && ticket.status === 'confirmed' && (
-                    <div className="mb-4">
-                      <a 
-                        href={ticket.privateLink} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-sm font-bold rounded-xl hover:bg-emerald-200 transition-colors"
-                      >
-                        <ExternalLink className="h-4 w-4" /> Join WhatsApp/Group
-                      </a>
-                    </div>
-                  )}
-
-                  <div className="flex flex-wrap items-center gap-3 justify-center md:justify-start">
-                    {ticket.status === 'attended' && (
-                        <button onClick={() => setSelectedCertificate(ticket)} className="flex items-center gap-2 text-sm font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg"><Award className="h-4 w-4" /> Certificate</button>
-                    )}
-                    {ticket.status === 'attended' && (
-                        <button onClick={() => setReviewTicket(ticket)} className="flex items-center gap-2 text-sm font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg"><Star className="h-4 w-4" /> Rate Event</button>
-                    )}
-                    {ticket.status === 'confirmed' && (
-                        <button onClick={() => handleCancel(ticket)} disabled={cancellingId === ticket.id} className="flex items-center gap-2 text-sm font-bold text-red-500 px-3 py-1.5 rounded-lg"><Trash2 className="h-4 w-4" /> Cancel</button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="w-full md:w-auto bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 p-4 rounded-xl flex flex-col items-center justify-center min-w-[200px]">
-                   {ticket.type === 'individual' ? (
-                      <>
-                        <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Entry Pass</div>
-                        <div className="text-lg font-bold text-zinc-900 dark:text-white">Individual</div>
-                      </>
-                   ) : (
-                      <>
-                        <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Team Code</div>
-                        <div className="text-3xl font-black text-indigo-600 dark:text-indigo-400 font-mono">{ticket.teamCode}</div>
-                      </>
-                   )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {selectedCertificate && <CertificateModal ticket={selectedCertificate} onClose={() => setSelectedCertificate(null)} />}
-      {reviewTicket && <ReviewModal ticket={reviewTicket} onClose={() => setReviewTicket(null)} />}
+  if (loading) return (
+    <div className="min-h-screen pt-24 flex flex-col items-center justify-center bg-zinc-50 dark:bg-black">
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4"></div>
+      <p className="text-zinc-500">Loading your tickets...</p>
     </div>
   );
-};
 
-export default MyTicketsPage;
+  return (
+    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-5xl mx-auto">
+        
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+          <div>
+            <h1 className="text-3xl font-black text-zinc-900 dark:text-white">My Tickets</h1>
+            <p className="text-zinc-500 mt-1">Manage your upcoming events and history.</p>
+          </div>
+          
+          {/* Search Bar */}
+          <div className="relative w-full md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+            <input 
+              type="text" 
+              placeholder="Search tickets..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-2 mb-8 border-b border-zinc-200 dark:border-zinc-800 pb-1">
+          <button 
+            onClick={() => setActiveTab('upcoming')}
+            className={`px-6 py-2 text-sm font-medium rounded-t-lg transition-all ${
+              activeTab === 'upcoming' 
+                ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/10' 
+                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+            }`}
+          >
+            Upcoming
+          </button>
+          <button 
+            onClick={() => setActiveTab('past')}
+            className={`px-6 py-2 text-sm font-medium rounded-t-lg transition-all ${
+              activeTab === 'past' 
+                ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/10' 
+                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+            }`}
+          >
+            Past Events
+          </button>
+        </div>
+
+        {/* Tickets List */}
+        {filteredTickets.length === 0 ? (
+          <div className="text-center py-20 bg-white dark:bg-zinc-900 rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800">
+            <Ticket className="w-16 h-16 text-zinc-300 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-zinc-900 dark:text-white">No {activeTab} tickets</h3>
+            <p className="text-zinc-500 mt-2">You haven't registered for any events in this category.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredTickets.map(ticket => (
+              <div key={ticket.id} className="group bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-zinc-200 dark:border-zinc-800 hover:shadow-lg transition-all duration-300 flex flex-col md:flex-row gap-6 relative overflow-hidden">
+                
+                {/* Status Badge */}
+                <div className="absolute top-4 right-4">
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                    ticket.status === 'cancelled' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
+                  }`}>
+                    {ticket.status || 'Confirmed'}
+                  </span>
+                </div>

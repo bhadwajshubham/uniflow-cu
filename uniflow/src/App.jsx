@@ -12,10 +12,12 @@ import LeaderboardPage from './features/events/components/LeaderboardPage';
 import AdminDashboard from './features/events/components/AdminDashboard';
 import VerificationPage from './features/events/components/VerificationPage';
 import AboutPage from './features/auth/AboutPage'; // <--- NEW IMPORT
+import HelpPage from './features/auth/components/HelpPage';
 
 // Core Components
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+
 
 function App() {
   return (
@@ -69,6 +71,7 @@ function App() {
                   <ScannerPage />
                 </ProtectedRoute>
               } />
+              <Route path="/help" element={<HelpPage />} />
 
               <Route path="/admin" element={
                 <ProtectedRoute requireAdmin={true}>
