@@ -1,93 +1,68 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
-import { ThemeProvider } from './context/ThemeContext'; // <--- NEW IMPORT
+import React from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import Navbar from './components/layout/Navbar';
+import { useAuth } from './context/AuthContext';
 
 // Feature Components
 import LoginPage from './features/auth/components/LoginPage';
 import EventsPage from './features/events/components/EventsPage';
-import MyTicketsPage from './features/events/components/MyTicketsPage';
-import ScannerPage from './features/events/components/ScannerPage';
-import UserProfile from './features/auth/components/UserProfile';
-import LeaderboardPage from './features/events/components/LeaderboardPage';
-import AdminDashboard from './features/events/components/AdminDashboard';
-import VerificationPage from './features/events/components/VerificationPage';
-import AboutPage from './features/auth/AboutPage'; // <--- NEW IMPORT
-import HelpPage from './features/auth/components/HelpPage';
+import MyTicketsPage from './features/tickets/components/MyTicketsPage';
+import AdminDashboard from './features/admin/components/AdminDashboard';
+import HelpPage from './features/auth/components/HelpPage'; // 👈 We will make sure the file is here
 
-// Core Components
-import Layout from './components/Layout';
-import ProtectedRoute from './components/ProtectedRoute';
+// Protected Route Wrapper
+const ProtectedRoute = ({ children, requireAdmin = false }) => {
+  const { user, profile, loading } = useAuth();
+  const location = useLocation();
 
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  
+  if (!user) {
+    // Redirect to login, but remember where they were trying to go
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (requireAdmin && profile?.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+};
 
 function App() {
   return (
-    // 1. Theme Provider wraps everything so Dark Mode works everywhere
-    <ThemeProvider>
-      <AuthProvider>
-        <Router>
-          <Routes>
-            {/* ────────── PUBLIC ROUTES ────────── */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/verify" element={<VerificationPage />} />
-            
-            {/* ────────── PROTECTED ROUTES ────────── */}
-            {/* The Layout component wraps all these pages */}
-            <Route element={<Layout />}>
-              
-              <Route path="/events" element={
-                <ProtectedRoute>
-                  <EventsPage />
-                </ProtectedRoute>
-              } />
+    <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-white transition-colors duration-200">
+      <Navbar />
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/" element={<EventsPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/help" element={<HelpPage />} />
 
-              <Route path="/tickets" element={
-                <ProtectedRoute>
-                  <MyTicketsPage />
-                </ProtectedRoute>
-              } />
+        {/* Protected Routes */}
+        <Route 
+          path="/my-tickets" 
+          element={
+            <ProtectedRoute>
+              <MyTicketsPage />
+            </ProtectedRoute>
+          } 
+        />
 
-              <Route path="/leaderboard" element={
-                <ProtectedRoute>
-                  <LeaderboardPage />
-                </ProtectedRoute>
-              } />
-
-              <Route path="/profile" element={
-                <ProtectedRoute>
-                  <UserProfile />
-                </ProtectedRoute>
-              } />
-
-              {/* NEW: About / Founders Page */}
-              <Route path="/about" element={
-                <ProtectedRoute>
-                  <AboutPage />
-                </ProtectedRoute>
-              } />
-
-              {/* ADMIN ONLY ROUTES */}
-              <Route path="/scan" element={
-                <ProtectedRoute requireAdmin={true}>
-                  <ScannerPage />
-                </ProtectedRoute>
-              } />
-              <Route path="/help" element={<HelpPage />} />
-
-              <Route path="/admin" element={
-                <ProtectedRoute requireAdmin={true}>
-                  <AdminDashboard />
-                </ProtectedRoute>
-              } />
-
-            </Route>
-            
-            {/* ────────── DEFAULT REDIRECT ────────── */}
-            <Route path="/" element={<Navigate to="/events" replace />} />
-
-          </Routes>
-        </Router>
-      </AuthProvider>
-    </ThemeProvider>
+        {/* Admin Routes */}
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute requireAdmin={true}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          } 
+        />
+        
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </div>
   );
 }
 
