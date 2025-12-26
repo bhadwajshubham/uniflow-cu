@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { 
@@ -7,6 +7,8 @@ import {
   MoreVertical, RefreshCw 
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+// 👇 1. IMPORT THE MODAL
+import CreateEventModal from './CreateEventModal'; 
 
 const AdminDashboard = () => {
   const { user } = useAuth();
@@ -15,12 +17,14 @@ const AdminDashboard = () => {
   const [recentEvents, setRecentEvents] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // 👇 2. ADD MODAL STATE
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // ... (Keep your existing useEffect/fetchData logic EXACTLY the same) ...
   useEffect(() => {
     const fetchData = async () => {
       try {
         if (!user) return;
-
-        // 1. Fetch Stats (From User's Events)
         const q = query(collection(db, 'events'), where('organizerId', '==', user.uid));
         const eventSnaps = await getDocs(q);
         
@@ -33,31 +37,32 @@ const AdminDashboard = () => {
           eventsList.push({ id: doc.id, ...data });
         });
 
-        // Sort events manually for "Recent" list
-        eventsList.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
+        // Sort descending (newest first)
+        eventsList.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
         setStats({
           events: eventSnaps.size,
           tickets: totalTickets,
-          revenue: totalTickets * 15 // Mock revenue logic
+          revenue: totalTickets * 15 
         });
         
-        setRecentEvents(eventsList.slice(0, 5)); // Top 5 recent
-
+        setRecentEvents(eventsList.slice(0, 5)); 
       } catch (error) {
         console.error("Dashboard Error:", error);
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, [user]);
 
+  // 👇 3. REFRESH FUNCTION (Pass this to modal so list updates after creation)
+  const handleRefresh = () => {
+    window.location.reload(); // Simple refresh for now to see new event
+  };
+
   if (loading) return (
-    <div className="min-h-screen pt-24 flex justify-center text-zinc-500">
-      Loading Dashboard...
-    </div>
+    <div className="min-h-screen pt-24 flex justify-center text-zinc-500">Loading Dashboard...</div>
   );
 
   return (
@@ -71,23 +76,24 @@ const AdminDashboard = () => {
             <p className="text-zinc-500">Overview of your club's performance.</p>
           </div>
           
-          <div className="flex gap-3">
-             {/* Quick Actions */}
+          <div className="flex gap-3 w-full md:w-auto">
+             {/* 👇 4. BUTTON OPENS MODAL */}
             <button 
-              onClick={() => navigate('/create-event')} // You need to make sure this route exists later
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-all shadow-lg shadow-indigo-500/20"
+              onClick={() => setIsCreateModalOpen(true)} 
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
             >
               <Plus className="w-4 h-4" /> Create Event
             </button>
              <button 
               onClick={() => navigate('/scan')}
-              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-lg font-medium hover:bg-zinc-50 dark:hover:bg-zinc-700"
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-lg font-medium hover:bg-zinc-50 dark:hover:bg-zinc-700"
             >
               <QrCode className="w-4 h-4" /> Scan
             </button>
           </div>
         </div>
 
+        {/* ... (Keep Stats Grid & Table EXACTLY the same) ... */}
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           <StatCard icon={Calendar} label="Total Events" value={stats.events} color="blue" />
@@ -99,7 +105,7 @@ const AdminDashboard = () => {
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
           <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
             <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Recent Events</h3>
-            <button className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
+            <button onClick={handleRefresh} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
               <RefreshCw className="w-4 h-4 text-zinc-400" />
             </button>
           </div>
@@ -151,11 +157,20 @@ const AdminDashboard = () => {
             </table>
           </div>
         </div>
+
+        {/* 👇 5. RENDER THE MODAL AT THE BOTTOM */}
+        <CreateEventModal 
+          isOpen={isCreateModalOpen} 
+          onClose={() => setIsCreateModalOpen(false)}
+          onSuccess={handleRefresh}
+        />
+        
       </div>
     </div>
   );
 };
 
+// ... (Keep StatCard Helper) ...
 const StatCard = ({ icon: Icon, label, value, color }) => (
   <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
     <div className={`p-4 rounded-xl bg-${color}-50 dark:bg-${color}-900/20 text-${color}-600`}>

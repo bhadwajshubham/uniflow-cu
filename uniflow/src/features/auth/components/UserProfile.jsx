@@ -1,94 +1,72 @@
-import { useState } from 'react';
+import React from 'react';
 import { useAuth } from '../../../context/AuthContext';
-import { Shield, User, Mail, Edit } from 'lucide-react';
-import EditProfileModal from './EditProfileModal'; // Import Modal
+import { User, Mail, Shield, X, LogOut } from 'lucide-react';
 
-const UserProfile = () => {
-  const { currentUser, userRole } = useAuth();
-  const [isEditing, setIsEditing] = useState(false);
-  
+const UserProfile = ({ isOpen, onClose }) => {
+  const { user, profile, logout } = useAuth();
+
+  if (!isOpen || !user) return null;
+
   return (
-    <div className="p-6 md:p-12 max-w-4xl mx-auto">
-      <div className="flex flex-col md:flex-row gap-8">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white dark:bg-zinc-900 w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 animate-in slide-in-from-bottom-5 duration-300">
         
-        {/* Profile Card */}
-        <div className="flex-1 bg-white dark:bg-zinc-900 p-8 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xl relative">
-          
+        {/* Header Background */}
+        <div className="h-24 bg-gradient-to-r from-indigo-500 to-purple-600 relative">
           <button 
-            onClick={() => setIsEditing(true)}
-            className="absolute top-6 right-6 p-2 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all"
-            title="Edit Profile"
+            onClick={onClose}
+            className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full transition-colors"
           >
-            <Edit className="h-5 w-5" />
+            <X className="w-4 h-4" />
           </button>
+        </div>
 
-          <h1 className="text-3xl font-bold mb-8 flex items-center gap-3 text-zinc-900 dark:text-white">
-            <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
-              <User className="h-8 w-8 text-indigo-500" />
-            </div>
-            My Profile
-          </h1>
-          
-          <div className="space-y-6">
-            <div className="p-4 bg-zinc-50 dark:bg-black rounded-xl flex items-center gap-4">
-              <div className="p-3 bg-white dark:bg-zinc-800 rounded-full shadow-sm">
-                <User className="h-6 w-6 text-zinc-400" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Full Name</p>
-                <p className="text-lg font-bold text-zinc-900 dark:text-white">{currentUser?.displayName || 'Student'}</p>
-              </div>
-            </div>
+        {/* Avatar Section */}
+        <div className="px-6 relative -mt-12 mb-4 text-center">
+          <div className="w-24 h-24 mx-auto rounded-full border-4 border-white dark:border-zinc-900 bg-zinc-200 flex items-center justify-center shadow-lg">
+            {user.photoURL ? (
+              <img src={user.photoURL} alt="Profile" className="w-full h-full rounded-full object-cover" />
+            ) : (
+              <User className="w-10 h-10 text-zinc-400" />
+            )}
+          </div>
+          <h2 className="text-xl font-bold text-zinc-900 dark:text-white mt-3">
+            {user.displayName || "Student"}
+          </h2>
+          <span className="inline-block px-3 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 text-xs font-bold uppercase rounded-full tracking-wider mt-1">
+            {profile?.role || "Student"}
+          </span>
+        </div>
 
-            <div className="p-4 bg-zinc-50 dark:bg-black rounded-xl flex items-center gap-4">
-              <div className="p-3 bg-white dark:bg-zinc-800 rounded-full shadow-sm">
-                <Mail className="h-6 w-6 text-zinc-400" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Email Account</p>
-                <p className="text-lg font-bold text-zinc-900 dark:text-white">{currentUser?.email}</p>
-              </div>
-            </div>
-
-            <div className="p-4 bg-zinc-50 dark:bg-black rounded-xl flex items-center gap-4">
-              <div className="p-3 bg-white dark:bg-zinc-800 rounded-full shadow-sm">
-                <Shield className="h-6 w-6 text-indigo-500" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Current Role</p>
-                <div className="flex items-center gap-2">
-                  <p className="text-lg font-bold text-indigo-600 uppercase">{userRole}</p>
-                  {userRole === 'admin' && (
-                    <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full">ORGANIZER</span>
-                  )}
-                </div>
-              </div>
+        {/* Details */}
+        <div className="px-6 pb-6 space-y-4">
+          <div className="flex items-center gap-4 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50">
+            <Mail className="w-5 h-5 text-indigo-500" />
+            <div className="overflow-hidden">
+              <p className="text-xs text-zinc-400 uppercase font-bold">Email Address</p>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300 truncate">{user.email}</p>
             </div>
           </div>
-        </div>
 
-        {/* Side Panel (Info) */}
-        <div className="w-full md:w-80 space-y-6">
-           <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-6 rounded-2xl text-white shadow-lg">
-              <h3 className="font-bold text-lg mb-2">Did you know?</h3>
-              <p className="text-indigo-100 text-sm leading-relaxed">
-                Your <b>Full Name</b> displayed here is exactly what will appear on your Certificates. 
-                Make sure it matches your University ID card!
-              </p>
-           </div>
+          <div className="flex items-center gap-4 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50">
+            <Shield className="w-5 h-5 text-green-500" />
+            <div>
+              <p className="text-xs text-zinc-400 uppercase font-bold">Account Status</p>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300">Verified & Active</p>
+            </div>
+          </div>
 
-           <div className="bg-zinc-100 dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-              <h3 className="font-bold text-zinc-900 dark:text-white mb-2">Account Status</h3>
-              <div className="flex items-center gap-2 text-emerald-600 font-bold text-sm">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                Active Student
-              </div>
-           </div>
+          <button 
+            onClick={() => {
+              logout();
+              onClose();
+            }}
+            className="w-full py-3 mt-4 flex items-center justify-center gap-2 text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/10 dark:hover:bg-red-900/20 font-bold rounded-xl transition-colors"
+          >
+            <LogOut className="w-4 h-4" /> Sign Out
+          </button>
         </div>
       </div>
-
-      {/* MODAL */}
-      {isEditing && <EditProfileModal onClose={() => setIsEditing(false)} />}
     </div>
   );
 };
