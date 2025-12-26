@@ -2,35 +2,39 @@ import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Navbar from './components/layout/Navbar';
 import { AuthProvider } from './context/AuthContext';
-// 👇 IMPORT THE MISSING PROVIDER
-import { ThemeProvider } from './context/ThemeContext'; 
+import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 
-// 1. Auth Components
 import LoginPage from './features/auth/components/LoginPage';
+import HelpPage from './features/auth/components/HelpPage'; 
 
-// 2. Event Components
+// Events
 import EventsPage from './features/events/components/EventsPage';
+// 👇 NEW IMPORT
+import EventDetailsPage from './features/events/components/EventDetailsPage'; 
 import MyTicketsPage from './features/events/components/MyTicketsPage';
-import HelpPage from './features/events/components/HelpPage';
+
+// Admin
 import AdminDashboard from './features/events/components/AdminDashboard';
 import ScanPage from './features/events/components/ScanPage';
 
 const App = () => {
   return (
     <AuthProvider>
-      {/* 👇 WRAP EVERYTHING IN THEME PROVIDER */}
       <ThemeProvider>
         <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-white transition-colors duration-300">
           <Navbar />
           <Routes>
-            {/* Public Routes */}
+            {/* Public */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/help" element={<HelpPage />} />
             <Route path="/" element={<EventsPage />} />
             <Route path="/events" element={<EventsPage />} />
             
-            {/* Protected Student Routes */}
+            {/* 👇 THIS FIXES THE BLUE SCREEN */}
+            <Route path="/events/:id" element={<EventDetailsPage />} /> 
+
+            {/* Protected Student */}
             <Route 
               path="/my-tickets" 
               element={
@@ -40,7 +44,7 @@ const App = () => {
               } 
             />
 
-            {/* Protected Admin Routes */}
+            {/* Protected Admin */}
             <Route 
               path="/admin" 
               element={
