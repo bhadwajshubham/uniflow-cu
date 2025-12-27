@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Loader2, MapPin, Calendar, Clock, DollarSign, Type, Image as ImageIcon } from 'lucide-react';
+import { X, Save, Loader2, MapPin, Calendar, Clock, DollarSign, Type, Image as ImageIcon, Users, ShieldAlert, Building2 } from 'lucide-react';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 
@@ -13,7 +13,12 @@ const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
     price: 0,
     totalTickets: 0,
     description: '',
-    imageUrl: ''
+    imageUrl: '',
+    type: 'solo',
+    teamSize: 1,
+    isRestricted: false,
+    category: 'General',
+    allowedBranches: 'All'
   });
 
   // Populate form when event data arrives
@@ -27,7 +32,12 @@ const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
         price: event.price || 0,
         totalTickets: event.totalTickets || 0,
         description: event.description || '',
-        imageUrl: event.imageUrl || ''
+        imageUrl: event.imageUrl || '',
+        type: event.type || 'solo',
+        teamSize: event.teamSize || 1,
+        isRestricted: event.isRestricted || false,
+        category: event.category || 'General',
+        allowedBranches: event.allowedBranches || 'All'
       });
     }
   }, [event]);
@@ -35,8 +45,11 @@ const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
   if (!isOpen || !event) return null;
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }));
   };
 
   const handleUpdate = async (e) => {
@@ -46,16 +59,16 @@ const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
     try {
       const eventRef = doc(db, 'events', event.id);
       
-      // Update logic
       await updateDoc(eventRef, {
         ...formData,
         price: Number(formData.price),
         totalTickets: Number(formData.totalTickets),
+        teamSize: formData.type === 'team' ? Number(formData.teamSize) : 1,
         updatedAt: serverTimestamp()
       });
 
       alert("Event Updated Successfully!");
-      if (onSuccess) onSuccess(); // Refresh parent data
+      if (onSuccess) onSuccess(); 
       onClose();
     } catch (error) {
       console.error("Update Error:", error);
@@ -70,7 +83,7 @@ const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
       <div className="bg-white dark:bg-zinc-900 w-full max-w-lg rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col max-h-[90vh]">
         
         {/* Header */}
-        <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-zinc-900">
+        <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-zinc-900 rounded-t-2xl">
           <h2 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
             <Type className="w-5 h-5 text-indigo-500" /> Edit Event
           </h2>
@@ -116,6 +129,30 @@ const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
               </div>
             </div>
 
+            {/* Team Configuration (NEW) */}
+            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/30 rounded-xl border border-zinc-200 dark:border-zinc-700">
+               <label className="text-xs font-bold uppercase text-zinc-500 mb-2 block">Participation Type</label>
+               <div className="flex gap-4 mb-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="type" value="solo" checked={formData.type === 'solo'} onChange={handleChange} className="w-4 h-4 text-indigo-600" />
+                    <span className="text-sm font-medium dark:text-white">Individual</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="type" value="team" checked={formData.type === 'team'} onChange={handleChange} className="w-4 h-4 text-indigo-600" />
+                    <span className="text-sm font-medium dark:text-white">Team Event</span>
+                  </label>
+               </div>
+               {formData.type === 'team' && (
+                 <div className="mt-3">
+                   <label className="text-xs font-bold uppercase text-zinc-500 mb-1 block">Max Team Size</label>
+                   <div className="relative">
+                     <Users className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
+                     <input type="number" name="teamSize" min="2" max="10" value={formData.teamSize} onChange={handleChange} className="w-full pl-10 p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg outline-none dark:text-white" />
+                   </div>
+                 </div>
+               )}
+            </div>
+
             {/* Price & Tickets */}
             <div className="grid grid-cols-2 gap-4">
                <div>
@@ -129,6 +166,16 @@ const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
                  <label className="text-xs font-bold text-zinc-500 uppercase">Total Capacity</label>
                  <input type="number" name="totalTickets" value={formData.totalTickets} onChange={handleChange} className="w-full p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none dark:text-white" />
                </div>
+            </div>
+
+            {/* Restrictions */}
+            <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-xl">
+              <input type="checkbox" name="isRestricted" checked={formData.isRestricted} onChange={handleChange} className="w-5 h-5 rounded text-red-600 focus:ring-red-500" />
+              <div>
+                <h4 className="text-sm font-bold text-red-900 dark:text-red-400 flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4" /> Chitkara Only
+                </h4>
+              </div>
             </div>
 
             {/* Image URL */}
