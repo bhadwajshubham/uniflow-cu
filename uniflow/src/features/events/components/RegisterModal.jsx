@@ -1,23 +1,28 @@
 import { useState } from 'react';
 import { X, User, Users, Loader2, ArrowRight, ShieldCheck, Hash, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
+// Ensure these functions are exported from your service
 import { registerForEvent, registerTeam, joinTeam } from '../services/registrationService';
 
-const RegisterModal = ({ event, onClose }) => {
-  const { currentUser } = useAuth();
+const RegisterModal = ({ event, onClose, isOpen }) => {
+  // 🔥 FIX 1: Use 'user', not 'currentUser'
+  const { user } = useAuth();
   
-  // Logic: Decide initial step based on Event Type
-  const initialStep = event.participationType === 'individual' ? 'form' : 'choice';
-  const initialMode = event.participationType === 'individual' ? 'solo' : null;
+  // 🔥 FIX 2: Map 'type' (solo/team) to the logic
+  const isTeamEvent = event?.type === 'team';
+  const initialStep = isTeamEvent ? 'choice' : 'form';
+  const initialMode = isTeamEvent ? null : 'solo';
 
   const [step, setStep] = useState(initialStep); 
   const [mode, setMode] = useState(initialMode);
   const [loading, setLoading] = useState(false);
-  const [confirmedEligibility, setConfirmedEligibility] = useState(false); // <--- NEW STATE
+  const [confirmedEligibility, setConfirmedEligibility] = useState(false);
   
   // Inputs
   const [teamName, setTeamName] = useState('');
   const [teamCode, setTeamCode] = useState('');
+
+  if (!isOpen || !event) return null;
 
   const handleModeSelect = (selectedMode) => {
     setMode(selectedMode);
@@ -35,19 +40,22 @@ const RegisterModal = ({ event, onClose }) => {
 
     try {
       if (mode === 'solo') {
-        await registerForEvent(event.id, currentUser);
+        await registerForEvent(event.id, user);
         alert("Registration Successful!");
       } 
       else if (mode === 'create_team') {
-        const res = await registerTeam(event.id, currentUser, teamName);
+        const res = await registerTeam(event.id, user, teamName);
         alert(`Team Created! Code: ${res.teamCode}`);
       } 
       else if (mode === 'join_team') {
-        await joinTeam(event.id, currentUser, teamCode);
+        await joinTeam(event.id, user, teamCode);
         alert("Joined Team Successfully!");
       }
       onClose();
+      // Optional: Refresh page or parent state here
+      window.location.reload(); 
     } catch (error) {
+      console.error(error);
       alert(error.message || "Registration failed");
     } finally {
       setLoading(false);
@@ -56,7 +64,7 @@ const RegisterModal = ({ event, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in duration-200">
-      <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh] overflow-y-auto">
         
         {/* Header */}
         <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-black/20">
@@ -74,7 +82,8 @@ const RegisterModal = ({ event, onClose }) => {
             <div className="space-y-4">
               <p className="text-sm font-medium text-zinc-500 mb-2">Select how you want to participate:</p>
               
-              {(event.participationType === 'individual' || event.participationType === 'both' || !event.participationType) && (
+              {/* Solo Option (Only if allowed) */}
+              {!isTeamEvent && (
                 <button 
                   onClick={() => handleModeSelect('solo')}
                   className="w-full p-4 border border-zinc-200 dark:border-zinc-800 rounded-xl hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/10 transition-all group text-left flex items-center gap-4"
@@ -90,7 +99,8 @@ const RegisterModal = ({ event, onClose }) => {
                 </button>
               )}
 
-              {(event.participationType === 'team' || event.participationType === 'both' || !event.participationType) && (
+              {/* Team Options */}
+              {isTeamEvent && (
                 <>
                   <button 
                     onClick={() => handleModeSelect('create_team')}
@@ -126,7 +136,7 @@ const RegisterModal = ({ event, onClose }) => {
             <form onSubmit={handleRegister} className="space-y-6">
               
               {/* Back Button */}
-              {event.participationType !== 'individual' && (
+              {isTeamEvent && (
                 <div className="flex items-center gap-2 mb-2">
                   <button type="button" onClick={() => setStep('choice')} className="text-xs font-bold text-zinc-500 hover:text-indigo-600 uppercase tracking-wide">
                     ← Back to Options
@@ -134,29 +144,29 @@ const RegisterModal = ({ event, onClose }) => {
                 </div>
               )}
 
-              {/* NEW: ELIGIBILITY CHECK */}
+              {/* Eligibility Check */}
               {event.eligibility && (
                 <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-200 dark:border-amber-800/30">
-                   <div className="flex gap-3">
+                    <div className="flex gap-3">
                       <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
                       <div>
-                         <h4 className="font-bold text-amber-800 dark:text-amber-500 text-xs uppercase">Eligibility Restriction</h4>
-                         <p className="text-sm text-amber-900 dark:text-amber-300 mt-1 font-medium">{event.eligibility}</p>
+                          <h4 className="font-bold text-amber-800 dark:text-amber-500 text-xs uppercase">Eligibility Restriction</h4>
+                          <p className="text-sm text-amber-900 dark:text-amber-300 mt-1 font-medium">{event.eligibility}</p>
                       </div>
-                   </div>
-                   
-                   <label className="flex items-center gap-3 mt-4 cursor-pointer p-2 hover:bg-amber-100 dark:hover:bg-amber-900/20 rounded-lg transition-colors">
-                     <input 
-                       type="checkbox" 
-                       required 
-                       className="w-5 h-5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
-                       checked={confirmedEligibility}
-                       onChange={e => setConfirmedEligibility(e.target.checked)}
-                     />
-                     <span className="text-sm font-bold text-zinc-700 dark:text-zinc-300">
-                       I confirm that I meet this criteria.
-                     </span>
-                   </label>
+                    </div>
+                    
+                    <label className="flex items-center gap-3 mt-4 cursor-pointer p-2 hover:bg-amber-100 dark:hover:bg-amber-900/20 rounded-lg transition-colors">
+                      <input 
+                        type="checkbox" 
+                        required 
+                        className="w-5 h-5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                        checked={confirmedEligibility}
+                        onChange={e => setConfirmedEligibility(e.target.checked)}
+                      />
+                      <span className="text-sm font-bold text-zinc-700 dark:text-zinc-300">
+                        I confirm that I meet this criteria.
+                      </span>
+                    </label>
                 </div>
               )}
 
