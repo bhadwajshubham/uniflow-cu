@@ -5,8 +5,9 @@ import { updateProfile, updatePassword } from 'firebase/auth';
 import { auth, db } from '../../../lib/firebase'; 
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
-const EditProfileModal = ({ onClose }) => {
-  const { currentUser } = useAuth();
+const EditProfileModal = ({ onClose, isOpen }) => {
+  // 🔥 FIX: Use 'user', not 'currentUser'
+  const { user } = useAuth();
   
   // State for Saving
   const [saving, setSaving] = useState(false);
@@ -15,7 +16,7 @@ const EditProfileModal = ({ onClose }) => {
   const [fetching, setFetching] = useState(true);
   
   const [formData, setFormData] = useState({
-    displayName: currentUser?.displayName || '',
+    displayName: user?.displayName || '',
     phone: '',
     rollNo: '',
     branch: '',
@@ -25,18 +26,21 @@ const EditProfileModal = ({ onClose }) => {
     confirmPassword: ''
   });
 
+  if (!isOpen) return null;
+
   // 1. FETCH EXISTING DATA ON MOUNT
   useEffect(() => {
     const loadUserData = async () => {
-      if (!currentUser) return;
+      if (!user) return;
       try {
-        const docRef = doc(db, 'users', currentUser.uid);
+        const docRef = doc(db, 'users', user.uid);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
           const data = docSnap.data();
           setFormData(prev => ({
             ...prev,
+            displayName: user.displayName || '', // Sync with Auth
             phone: data.phone || '',
             rollNo: data.rollNo || '',
             branch: data.branch || '',
@@ -52,7 +56,7 @@ const EditProfileModal = ({ onClose }) => {
     };
 
     loadUserData();
-  }, [currentUser]);
+  }, [user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -69,7 +73,7 @@ const EditProfileModal = ({ onClose }) => {
       const promises = [];
 
       // Update Auth Name
-      if (formData.displayName !== currentUser.displayName) {
+      if (formData.displayName !== user.displayName) {
         promises.push(updateProfile(auth.currentUser, { displayName: formData.displayName }));
       }
 
@@ -81,7 +85,7 @@ const EditProfileModal = ({ onClose }) => {
       }
 
       // Save to Firestore
-      const userRef = doc(db, 'users', currentUser.uid);
+      const userRef = doc(db, 'users', user.uid);
       const userUpdate = setDoc(userRef, {
         phone: formData.phone,
         rollNo: formData.rollNo,
@@ -111,7 +115,7 @@ const EditProfileModal = ({ onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
       <div className="bg-white dark:bg-zinc-900 w-full max-w-lg rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh]">
         
         <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
@@ -143,7 +147,7 @@ const EditProfileModal = ({ onClose }) => {
             {/* Phone & Roll No */}
             <div className="grid grid-cols-2 gap-4">
                <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase">Phone No (10 Digits)</label>
+                  <label className="text-xs font-bold text-zinc-500 uppercase">Phone No</label>
                   <div className="relative mt-1">
                     <Phone className="absolute left-3 top-3 h-5 w-5 text-zinc-400" />
                     <input 
