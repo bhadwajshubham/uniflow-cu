@@ -33,10 +33,9 @@ const TicketPage = () => {
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
       
-      {/* Background Blur Effect */}
+      {/* Background Effects */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/20 to-purple-900/20 pointer-events-none"></div>
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/10 rounded-full blur-[100px]"></div>
-
+      
       {/* Header */}
       <div className="absolute top-6 left-6 z-10">
         <button onClick={() => navigate('/my-tickets')} className="p-3 bg-white/10 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition-all">
@@ -44,10 +43,10 @@ const TicketPage = () => {
         </button>
       </div>
 
-      {/* 🎫 THE TICKET CARD */}
+      {/* Ticket Card */}
       <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden relative z-10 animate-in zoom-in-95 duration-500">
         
-        {/* Ticket Header (Event Image or Gradient) */}
+        {/* Header Gradient */}
         <div className="h-48 bg-gradient-to-r from-indigo-600 to-purple-600 relative p-6 flex flex-col justify-end">
           <div className="absolute top-6 right-6 px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-bold text-white border border-white/10">
             {ticket.type === 'team_leader' || ticket.type === 'team_member' ? 'TEAM PASS' : 'SOLO PASS'}
@@ -60,7 +59,6 @@ const TicketPage = () => {
           </p>
         </div>
 
-        {/* Ticket Body */}
         <div className="p-8">
           
           {/* Info Grid */}
@@ -85,7 +83,7 @@ const TicketPage = () => {
             </div>
           </div>
 
-          {/* User Info */}
+          {/* User Details */}
           <div className="bg-zinc-50 rounded-2xl p-4 mb-8 border border-zinc-100">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
@@ -106,7 +104,7 @@ const TicketPage = () => {
             )}
           </div>
 
-          {/* QR Code (Big & Clear) */}
+          {/* 🔳 CORRECT QR GENERATION (ID ONLY) */}
           <div className="flex flex-col items-center justify-center">
             <div className="p-4 bg-white border-4 border-zinc-900 rounded-3xl shadow-sm">
               <img 
@@ -122,10 +120,10 @@ const TicketPage = () => {
 
         </div>
 
-        {/* Footer Actions */}
+        {/* Footer */}
         <div className="bg-zinc-50 p-6 flex gap-3 border-t border-zinc-100">
           <button className="flex-1 py-3 bg-zinc-900 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-zinc-800 transition-colors">
-            <Download className="w-4 h-4" /> Save Image
+            <Download className="w-4 h-4" /> Save
           </button>
           <button className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-900 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-zinc-50 transition-colors">
             <Share2 className="w-4 h-4" /> Share

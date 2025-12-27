@@ -4,18 +4,19 @@ import Navbar from './components/layout/Navbar';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/layout/ProtectedRoute';
-import TicketPage from './features/events/components/TicketPage';
 
-// 1. Auth Components
 import LoginPage from './features/auth/components/LoginPage';
+import HelpPage from './features/events/components/HelpPage';
 
-// 2. Event Components (Note: Based on your file structure, these are all in events/components)
+// Events
 import EventsPage from './features/events/components/EventsPage';
-import EventDetailsPage from './features/events/components/EventDetailsPage'; // 👈 The new page
+import EventDetailsPage from './features/events/components/EventDetailsPage';
 import MyTicketsPage from './features/events/components/MyTicketsPage';
-import HelpPage from './features/events/components/HelpPage'; // 👈 FIXED PATH (was causing error)
+import TicketPage from './features/events/components/TicketPage'; // Premium Ticket View
+
+// Admin
 import AdminDashboard from './features/events/components/AdminDashboard';
-import ScanPage from './features/events/components/ScanPage';
+import ScannerPage from './features/events/components/ScannerPage'; // 👈 USING THE GOOD SCANNER
 
 const App = () => {
   return (
@@ -24,18 +25,16 @@ const App = () => {
         <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-white transition-colors duration-300">
           <Navbar />
           <Routes>
-            {/* Public Routes */}
+            {/* Public */}
             <Route path="/login" element={<LoginPage />} />
-            
-            {/* Help Page (Fixed Path) */}
             <Route path="/help" element={<HelpPage />} />
-            
-            {/* Events Routes */}
             <Route path="/" element={<EventsPage />} />
             <Route path="/events" element={<EventsPage />} />
-            <Route path="/events/:id" element={<EventDetailsPage />} /> {/* 👈 Fixes Blue Screen */}
+            
+            {/* Event Details */}
+            <Route path="/events/:id" element={<EventDetailsPage />} /> 
 
-            {/* Protected Student Routes */}
+            {/* Protected Student */}
             <Route 
               path="/my-tickets" 
               element={
@@ -45,15 +44,17 @@ const App = () => {
               } 
             />
             
+            {/* Premium Ticket View Route */}
             <Route 
               path="/tickets/:ticketId" 
-                element={
-              <ProtectedRoute>
-              <TicketPage />
-           </ProtectedRoute>
-     } 
-   />
-            {/* Protected Admin Routes */}
+              element={
+                <ProtectedRoute>
+                  <TicketPage />
+                </ProtectedRoute>
+              } 
+            />
+
+            {/* Protected Admin */}
             <Route 
               path="/admin" 
               element={
@@ -66,7 +67,7 @@ const App = () => {
               path="/scan" 
               element={
                 <ProtectedRoute requireAdmin={true}>
-                  <ScanPage />
+                  <ScannerPage />
                 </ProtectedRoute>
               } 
             />
