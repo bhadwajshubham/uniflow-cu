@@ -1,96 +1,101 @@
 import React from 'react';
-import { Github, Linkedin, Mail, Globe, Sparkles, Code2 } from 'lucide-react';
+import { Mail, Github, Linkedin, HelpCircle, Code, Heart, Globe } from 'lucide-react';
 
 const AboutPage = () => {
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black p-4 md:p-6 flex items-center justify-center relative overflow-hidden">
-      
-      {/* Background Blobs (Decoration) */}
-      <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-indigo-500 rounded-full blur-[100px] opacity-20 animate-pulse"></div>
-      <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-80 h-80 bg-purple-500 rounded-full blur-[100px] opacity-20 animate-pulse delay-700"></div>
-
-      {/* Glass Card */}
-      <div className="relative z-10 w-full max-w-3xl bg-white/80 dark:bg-zinc-900/80 backdrop-blur-2xl border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 md:p-12 shadow-2xl">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-4 sm:px-6">
+      <div className="max-w-3xl mx-auto space-y-12">
         
-        <div className="flex flex-col md:flex-row items-center gap-10">
-          
-          {/* Photo Section */}
-          <div className="relative group shrink-0">
-            <div className="absolute -inset-1 bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 rounded-full blur opacity-75 group-hover:opacity-100 transition duration-1000"></div>
-            <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-white dark:border-black shadow-inner bg-zinc-100 dark:bg-zinc-800">
-              {/* 👇 Your GitHub Avatar Auto-Link */}
-              <img 
-                src="https://github.com/bhadwajshubham.png" 
-                alt="Shubham Bhardwaj" 
-                className="w-full h-full object-cover transform transition group-hover:scale-110 duration-700"
-                onError={(e) => e.target.src = "https://api.dicebear.com/7.x/avataaars/svg?seed=Architect"}
-              />
+        {/* 🆘 HELP SECTION */}
+        <section className="bg-white dark:bg-zinc-900 rounded-3xl p-8 shadow-sm border border-zinc-200 dark:border-zinc-800">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-full">
+              <HelpCircle className="w-6 h-6" />
             </div>
-            {/* Online Status Dot */}
-            <div className="absolute bottom-3 right-3 bg-emerald-500 w-5 h-5 rounded-full border-4 border-white dark:border-zinc-900 z-20"></div>
+            <h2 className="text-2xl font-black text-zinc-900 dark:text-white">Help & Support</h2>
           </div>
-
-          {/* Content Section */}
-          <div className="text-center md:text-left flex-1 space-y-4">
-            
-            <div className="flex items-center justify-center md:justify-start gap-2">
-              <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-full text-xs font-bold uppercase tracking-wider border border-indigo-200 dark:border-indigo-500/20">
-                Lead Architect
-              </span>
-              <Sparkles className="w-4 h-4 text-amber-400 fill-amber-400" />
-            </div>
-            
-            <div>
-              <h1 className="text-4xl font-black text-zinc-900 dark:text-white tracking-tight mb-1">
-                Shubham Bhardwaj
-              </h1>
-              <p className="text-zinc-500 dark:text-zinc-400 font-medium flex items-center justify-center md:justify-start gap-2">
-                <Code2 className="w-4 h-4" /> Full Stack Engineer
+          
+          <div className="space-y-4">
+            <details className="group bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-4 cursor-pointer">
+              <summary className="font-bold text-zinc-900 dark:text-white flex justify-between items-center">
+                How do I get my certificate?
+              </summary>
+              <p className="mt-2 text-zinc-500 text-sm leading-relaxed">
+                After attending an event, the organizer will scan your QR code. Once scanned, your certificate automatically appears in the "My Tickets" section under the "History" tab.
               </p>
-            </div>
+            </details>
 
-            <p className="text-zinc-600 dark:text-zinc-300 leading-relaxed text-sm">
-              Building <span className="text-indigo-600 dark:text-indigo-400 font-bold">UniFlow</span> to revolutionize campus events. 
-              I specialize in creating high-performance, scalable web applications using React, Firebase, and Modern UI principles.
+            <details className="group bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-4 cursor-pointer">
+              <summary className="font-bold text-zinc-900 dark:text-white flex justify-between items-center">
+                Can I cancel a ticket?
+              </summary>
+              <p className="mt-2 text-zinc-500 text-sm leading-relaxed">
+                Yes, but only before the event starts. Go to "My Tickets," select the ticket, and look for the cancel option if enabled by the organizer.
+              </p>
+            </details>
+            
+            <details className="group bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-4 cursor-pointer">
+              <summary className="font-bold text-zinc-900 dark:text-white flex justify-between items-center">
+                I am an organizer. How do I verify students?
+              </summary>
+              <p className="mt-2 text-zinc-500 text-sm leading-relaxed">
+                Use the "Scanner" button in your Admin Dashboard. It opens your camera to scan student QR codes instantly.
+              </p>
+            </details>
+          </div>
+        </section>
+
+        {/* 👨‍💻 DEVELOPER SPOTLIGHT (THE FAME SECTION) */}
+        <section className="relative overflow-hidden bg-gradient-to-br from-indigo-900 to-black text-white rounded-3xl p-8 shadow-2xl">
+          {/* Decorative Background */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 rounded-full blur-[80px] opacity-20"></div>
+          
+          <div className="relative z-10 text-center">
+            <div className="inline-block p-1 rounded-full bg-gradient-to-tr from-indigo-400 to-purple-400 mb-4">
+               {/* 🖼️ REPLACE WITH YOUR PHOTO URL */}
+               <img 
+                 src="https://github.com/shubham.png" 
+                 alt="Shubham" 
+                 className="w-24 h-24 rounded-full border-4 border-black object-cover"
+                 onError={(e) => e.target.src = 'https://ui-avatars.com/api/?name=Shubham&background=random'}
+               />
+            </div>
+            
+            <h2 className="text-3xl font-black mb-1">Meet the Developer</h2>
+            <p className="text-indigo-200 font-medium mb-6">Designed & Built by Shubham</p>
+            
+            <p className="text-zinc-400 max-w-lg mx-auto mb-8 text-sm leading-relaxed">
+              Hi, I'm a Full-Stack Engineer passionate about solving campus problems with code. 
+              UniFlow was built to make event management seamless for everyone at Chitkara University.
             </p>
 
-            {/* Social Links Row */}
-            <div className="flex items-center justify-center md:justify-start gap-3 pt-2">
-              <SocialBtn icon={Github} href="https://github.com/bhadwajshubham" label="GitHub" />
-              <SocialBtn icon={Linkedin} href="https://linkedin.com/in/" label="LinkedIn" />
-              <SocialBtn icon={Globe} href="#" label="Portfolio" />
-              <SocialBtn icon={Mail} href="mailto:shubham@example.com" label="Email" />
+            {/* Social Links */}
+            <div className="flex justify-center gap-4">
+              <a href="https://github.com/yourusername" target="_blank" rel="noopener noreferrer" className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors backdrop-blur-sm">
+                <Github className="w-5 h-5" />
+              </a>
+              <a href="https://linkedin.com/in/yourusername" target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 rounded-full transition-colors backdrop-blur-sm">
+                <Linkedin className="w-5 h-5" />
+              </a>
+              <a href="mailto:your.email@example.com" className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors backdrop-blur-sm">
+                <Mail className="w-5 h-5" />
+              </a>
+              <a href="https://yourportfolio.com" target="_blank" rel="noopener noreferrer" className="p-3 bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 rounded-full transition-colors backdrop-blur-sm">
+                <Globe className="w-5 h-5" />
+              </a>
             </div>
           </div>
-        </div>
-
-        {/* Tech Stack Footer */}
-        <div className="mt-10 pt-8 border-t border-zinc-200 dark:border-zinc-800 flex flex-wrap justify-center gap-4 text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
-          <span>React 18</span>
-          <span>•</span>
-          <span>Firebase</span>
-          <span>•</span>
-          <span>Tailwind</span>
-          <span>•</span>
-          <span>Vite PWA</span>
-        </div>
+          
+          <div className="mt-8 pt-6 border-t border-white/10 text-center">
+             <p className="text-xs text-zinc-500 flex items-center justify-center gap-1">
+               <Code className="w-3 h-3" /> with <Heart className="w-3 h-3 text-red-500" /> in Haryana
+             </p>
+          </div>
+        </section>
 
       </div>
     </div>
   );
 };
-
-// Reusable Button Component
-const SocialBtn = ({ icon: Icon, href, label }) => (
-  <a 
-    href={href} 
-    target="_blank" 
-    rel="noreferrer"
-    aria-label={label}
-    className="p-3 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-xl hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-600 dark:hover:text-white transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/30"
-  >
-    <Icon className="w-5 h-5" />
-  </a>
-);
 
 export default AboutPage;

@@ -15,6 +15,7 @@ import MyTicketsPage from './features/events/components/MyTicketsPage';
 import TicketPage from './features/events/components/TicketPage'; 
 import AdminDashboard from './features/events/components/AdminDashboard';
 import ScannerPage from './features/events/components/ScannerPage';
+import AboutPage from './features/events/components/AboutPage';
 
 const App = () => {
   return (
@@ -39,6 +40,8 @@ const App = () => {
                 </ProtectedRoute>
               } 
             />
+            
+            <Route path="/about" element={<AboutPage />} />
             
             {/* Premium Ticket View */}
             <Route 

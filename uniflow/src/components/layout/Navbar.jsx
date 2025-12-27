@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { 
-  Home, Ticket, User, LayoutDashboard, ScanLine 
-} from 'lucide-react';
+  Home, Ticket, User, LayoutDashboard, ScanLine, HelpCircle 
+} from 'lucide-react'; // 👈 Added HelpCircle
 import UserProfile from '../../features/auth/components/UserProfile';
-import ThemeToggle from '../ThemeToggle'; // 👈 IMPORT RESTORED
+import ThemeToggle from '../ThemeToggle';
 
 const Navbar = () => {
   const { user, profile } = useAuth();
@@ -15,15 +15,21 @@ const Navbar = () => {
   // Admin Check
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
 
-  // Navigation Items (Bottom Bar)
+  // 🧭 Navigation Configuration
   const navItems = [
-    { name: 'Events', path: '/events', icon: <Home className="w-6 h-6" /> },
+    { name: 'Home', path: '/', icon: <Home className="w-6 h-6" /> },
+    { name: 'Events', path: '/events', icon: <Home className="w-6 h-6" /> }, // Optional: You might want to remove one 'Home' or merge them
     { name: 'My Tickets', path: '/my-tickets', icon: <Ticket className="w-6 h-6" /> },
+    { name: 'About', path: '/about', icon: <HelpCircle className="w-6 h-6" /> }, // 👈 ADDED HERE (Cleanest way)
     ...(isAdmin ? [
       { name: 'Admin', path: '/admin', icon: <LayoutDashboard className="w-6 h-6" /> },
       { name: 'Scan', path: '/scan', icon: <ScanLine className="w-6 h-6" /> }
     ] : [])
   ];
+
+  // Logic to de-clutter mobile: Show max 5 items on mobile bottom bar
+  // If admin, we might need to hide 'About' on mobile to fit the screen
+  const mobileNavItems = navItems.slice(0, 5); 
 
   const isActive = (path) => location.pathname === path;
 
@@ -46,7 +52,7 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          <ThemeToggle /> {/* 👈 RESTORED HERE */}
+          <ThemeToggle />
           
           {user ? (
             <button onClick={() => setIsProfileOpen(true)} className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-700 dark:text-zinc-200 font-bold border border-zinc-200 dark:border-zinc-700 hover:border-indigo-500 transition-colors">
@@ -63,8 +69,7 @@ const Navbar = () => {
         <Link to="/" className="text-xl font-black text-indigo-600 tracking-tighter">UniFlow.</Link>
         
         <div className="flex items-center gap-3">
-          <ThemeToggle /> {/* 👈 RESTORED HERE TOO */}
-          
+          <ThemeToggle />
           {user && (
             <button onClick={() => setIsProfileOpen(true)} className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-full">
               <User className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
@@ -76,7 +81,7 @@ const Navbar = () => {
       {/* 📱 MOBILE BOTTOM BAR */}
       <nav className="md:hidden fixed bottom-0 w-full bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 z-50 pb-safe">
         <div className="flex justify-around items-center h-16">
-          {navItems.map((item) => (
+          {mobileNavItems.map((item) => (
             <Link 
               key={item.name} 
               to={item.path} 
