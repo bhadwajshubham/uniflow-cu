@@ -7,34 +7,34 @@ import { ArrowLeft, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
 
 const ScannerPage = () => {
   const navigate = useNavigate();
-  const [scanResult, setScanResult] = useState(null); // 'success' | 'error' | 'warning'
+  const [scanResult, setScanResult] = useState(null); 
   const [message, setMessage] = useState('');
   
-  // 🔒 USE REFS to track state without re-rendering the effect
+  // Refs for State Management
   const isProcessing = useRef(false);
   const lastScannedId = useRef(null);
+  const timerRef = useRef(null); // 👈 TRACK TIMER TO PREVENT LEAKS
 
   useEffect(() => {
-    // 1. Initialize Scanner ONLY ONCE
+    // 1. Initialize Scanner
     const scanner = new Html5QrcodeScanner(
       "reader",
       { fps: 10, qrbox: { width: 250, height: 250 } },
-      /* verbose= */ false
+      false
     );
 
-    scanner.render(onScanSuccess, (error) => {
-      // Ignore failures to keep console clean
-    });
+    scanner.render(onScanSuccess, (error) => {});
 
     async function onScanSuccess(decodedText) {
-      // 🔒 Check Refs instead of State
       if (isProcessing.current) return; 
       if (decodedText === lastScannedId.current) return; 
 
       isProcessing.current = true;
       lastScannedId.current = decodedText;
       
-      // Play Beep
+      // Clear any existing timer
+      if (timerRef.current) clearTimeout(timerRef.current);
+
       new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg').play().catch(()=>{});
 
       try {
@@ -43,9 +43,9 @@ const ScannerPage = () => {
 
         if (!ticketSnap.exists()) {
           setScanResult('error');
-          setMessage('Invalid Ticket: ID not found.');
-          // Allow retry immediately for invalid codes so they don't get stuck
-          setTimeout(() => { isProcessing.current = false; }, 2000); 
+          setMessage('Invalid Ticket ID');
+          // Fast reset for invalid codes
+          timerRef.current = setTimeout(() => { isProcessing.current = false; }, 2000);
           return;
         }
 
@@ -71,25 +71,24 @@ const ScannerPage = () => {
         setScanResult('error');
         setMessage('System Error.');
       } finally {
-        // Reset Logic
-        setTimeout(() => {
+        // 🔒 SAFE CLEANUP: Set timer to reset UI
+        timerRef.current = setTimeout(() => {
           isProcessing.current = false;
           setScanResult(null);
           setMessage('');
-        }, 3000); // 3-second cooldown
+        }, 3000);
       }
     }
 
-    // Cleanup
+    // 🔒 CLEANUP ON UNMOUNT
     return () => {
       scanner.clear().catch(console.error);
+      if (timerRef.current) clearTimeout(timerRef.current); // Stop timer if user leaves
     };
-  }, []); // 🔒 Empty Dependency Array = Runs Once
+  }, []);
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center">
-      
-      {/* Header */}
       <div className="w-full p-4 flex items-center justify-between bg-zinc-900 border-b border-zinc-800">
         <button onClick={() => navigate('/admin')} className="p-2 bg-zinc-800 rounded-full hover:bg-zinc-700">
           <ArrowLeft className="w-5 h-5" />
@@ -98,17 +97,13 @@ const ScannerPage = () => {
         <div className="w-9"></div> 
       </div>
 
-      {/* Scanner Viewport */}
       <div className="w-full max-w-md p-4 flex-1 flex flex-col justify-center">
         <div id="reader" className="w-full rounded-2xl overflow-hidden border-2 border-zinc-700 bg-black"></div>
-        <p className="text-center text-zinc-500 text-sm mt-4">
-          Point camera at the Student's QR Code
-        </p>
+        <p className="text-center text-zinc-500 text-sm mt-4">Point camera at Student QR</p>
       </div>
 
-      {/* Result Overlay */}
       {scanResult && (
-        <div className={`fixed bottom-0 left-0 right-0 p-8 rounded-t-3xl shadow-2xl transition-transform duration-300 transform translate-y-0 ${
+        <div className={`fixed bottom-0 left-0 right-0 p-8 rounded-t-3xl shadow-2xl transition-transform duration-300 ${
           scanResult === 'success' ? 'bg-green-600' : 
           scanResult === 'warning' ? 'bg-amber-500' : 'bg-red-600'
         }`}>
@@ -116,7 +111,6 @@ const ScannerPage = () => {
             {scanResult === 'success' && <CheckCircle className="w-16 h-16 mb-2" />}
             {scanResult === 'warning' && <AlertCircle className="w-16 h-16 mb-2" />}
             {scanResult === 'error' && <XCircle className="w-16 h-16 mb-2" />}
-            
             <h2 className="text-2xl font-black uppercase tracking-wide">
               {scanResult === 'success' ? 'APPROVED' : scanResult === 'warning' ? 'WARNING' : 'DENIED'}
             </h2>
