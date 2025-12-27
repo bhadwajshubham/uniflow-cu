@@ -4,7 +4,7 @@ import Navbar from './components/layout/Navbar';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/layout/ProtectedRoute';
-
+import HomePage from './features/events/components/HomePage';
 import LoginPage from './features/auth/components/LoginPage';
 import HelpPage from './features/events/components/HelpPage';
 
@@ -44,6 +44,10 @@ const App = () => {
               } 
             />
             
+            <Route path="/" element={<HomePage />} />
+            <Route path="/events" element={<EventsPage />} />
+
+
             {/* Premium Ticket View Route */}
             <Route 
               path="/tickets/:ticketId" 

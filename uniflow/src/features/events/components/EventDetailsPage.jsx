@@ -68,6 +68,7 @@ const EventDetailsPage = () => {
   // 🗑️ CLEAN DELETE LOGIC
   const handleDelete = async () => {
     if (!window.confirm("CRITICAL: This will delete the event AND all associated data.")) return;
+    if (!window.confirm("Are you sure you want to delete this event? This action cannot be undone.")) return;
     try {
       setLoading(true);
       const batch = writeBatch(db);
@@ -83,12 +84,16 @@ const EventDetailsPage = () => {
       snapReviews.docs.forEach(doc => batch.delete(doc.ref));
 
       await batch.commit();
+      // The associated registrations and reviews will be deleted by a Cloud Function.
       await deleteDoc(doc(db, 'events', id));
       
       alert("Event deleted.");
+      alert("Event and all associated data have been deleted.");
       navigate('/events');
     } catch (error) {
       alert("Failed to delete.");
+      console.error("Failed to delete event:", error);
+      alert("Failed to delete event.");
       setLoading(false);
     }
   };
