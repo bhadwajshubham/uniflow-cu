@@ -1,168 +1,222 @@
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { useParams, useNavigate } from 'react-router-dom';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import { Calendar, MapPin, ArrowRight, Frown, Filter } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext';
+import { Calendar, MapPin, Clock, ArrowLeft, Edit, List, ShieldCheck, AlertCircle, MessageCircle, Building2, Users } from 'lucide-react';
 
-const EventsPage = () => {
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // 'all', 'upcoming', 'past'
+// 👇 THESE ARE THE ONLY 3 MODALS YOU NEED
+import RegisterModal from './RegisterModal';
+import EditEventModal from './EditEventModal';
+import EventParticipantsModal from './EventParticipantsModal';
+
+const EventDetailsPage = () => {
+  const { id } = useParams();
+  const { user } = useAuth();
   const navigate = useNavigate();
+  
+  const [event, setEvent] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
+  
+  // Modal States
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
 
   useEffect(() => {
-    const fetchEvents = async () => {
+    const fetchEvent = async () => {
       try {
-        // 🔥 SIMPLIFIED QUERY: Fetch everything first, filter in JS to avoid Index errors
-        const eventsRef = collection(db, 'events');
-        const snapshot = await getDocs(eventsRef);
-        
-        const eventsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-
-        // Sort by Created Date (Newest first) in Javascript
-        eventsData.sort((a, b) => {
-          const dateA = a.createdAt?.seconds || 0;
-          const dateB = b.createdAt?.seconds || 0;
-          return dateB - dateA; 
-        });
-
-        setEvents(eventsData);
-      } catch (err) {
-        console.error("Error loading events:", err);
+        const docRef = doc(db, 'events', id);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setEvent({ id: docSnap.id, ...docSnap.data() });
+        }
+      } catch (error) {
+        console.error("Error fetching event:", error);
       } finally {
         setLoading(false);
       }
     };
-    fetchEvents();
-  }, []);
+    fetchEvent();
+  }, [id]);
 
-  // JS Filtering
-  const displayedEvents = events.filter(event => {
-    if (filter === 'all') return true;
-    const eventDate = new Date(event.date);
-    const today = new Date();
-    return filter === 'upcoming' ? eventDate >= today : eventDate < today;
-  });
+  if (loading) return <div className="min-h-screen pt-24 text-center text-zinc-500">Loading...</div>;
+  
+  if (!event) return (
+    <div className="min-h-screen pt-24 flex flex-col items-center justify-center">
+      <AlertCircle className="w-12 h-12 text-zinc-300 mb-4" />
+      <h2 className="text-xl font-bold">Event not found</h2>
+      <button onClick={() => navigate('/events')} className="text-indigo-600 mt-4 hover:underline">Back to Events</button>
+    </div>
+  );
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-black pt-16">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4"></div>
-        <p className="text-zinc-500 animate-pulse">Loading events...</p>
-      </div>
-    );
-  }
+  // 🔒 STRICT OWNERSHIP CHECK
+  const isOrganizer = user && event.organizerId === user.uid;
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-4">
+      <div className="max-w-5xl mx-auto">
         
-        {/* Header & Filter */}
-        <div className="flex flex-col md:flex-row justify-between items-end mb-10 gap-4">
-          <div className="text-center md:text-left">
-            <h1 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tight">
-              Discover Events
-            </h1>
-            <p className="mt-2 text-zinc-500 dark:text-zinc-400">
-              {displayedEvents.length} events scheduled.
-            </p>
+        {/* Navigation */}
+        <button onClick={() => navigate('/events')} className="flex items-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white mb-6 transition-colors">
+          <ArrowLeft className="w-4 h-4 mr-2" /> Back to Events
+        </button>
+
+        {/* 🛡️ ADMIN PANEL (Only Visible to Organizer) */}
+        {isOrganizer && (
+          <div className="mb-8 p-6 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-3xl animate-in slide-in-from-top-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-600/20">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-indigo-900 dark:text-white text-lg">Admin Controls</h3>
+                  <p className="text-sm text-indigo-700 dark:text-indigo-300">Manage this event.</p>
+                </div>
+              </div>
+              <div className="flex gap-3 w-full sm:w-auto">
+                <button 
+                  onClick={() => setIsParticipantsOpen(true)}
+                  className="flex-1 sm:flex-none px-5 py-3 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 flex items-center justify-center gap-2 transition-all"
+                >
+                  <List className="w-5 h-5 text-indigo-500" /> Participants
+                </button>
+                <button 
+                  onClick={() => setIsEditOpen(true)}
+                  className="flex-1 sm:flex-none px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg"
+                >
+                  <Edit className="w-5 h-5" /> Edit Details
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Main Content Card */}
+        <div className="bg-white dark:bg-zinc-900 rounded-[2rem] overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-2xl">
+          {/* Image */}
+          <div className="h-64 md:h-[400px] bg-zinc-100 dark:bg-zinc-800 relative">
+            {!imageError && event.imageUrl ? (
+              <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" onError={() => setImageError(true)} />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center">
+                <Calendar className="w-20 h-20 text-white/50" />
+              </div>
+            )}
+             <div className="absolute top-6 right-6 flex gap-2">
+               <div className="bg-white/90 dark:bg-black/90 backdrop-blur px-4 py-2 rounded-full text-sm font-bold border border-zinc-200 dark:border-zinc-700 shadow-sm">
+                {event.price > 0 ? `$${event.price}` : 'Free Entry'}
+              </div>
+            </div>
           </div>
 
-          <div className="flex bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-zinc-800">
-            {['all', 'upcoming'].map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-4 py-2 rounded-lg text-sm font-bold capitalize transition-all ${
-                  filter === f 
-                    ? 'bg-indigo-600 text-white shadow-md' 
-                    : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
-                }`}
-              >
-                {f}
-              </button>
-            ))}
+          <div className="p-8 md:p-12">
+            <div className="flex flex-col md:flex-row gap-12 justify-between">
+              
+              {/* Left Column: Details */}
+              <div className="flex-1">
+                 {/* Tags */}
+                 <div className="flex flex-wrap items-center gap-3 mb-6">
+                  <span className="px-3 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-lg text-xs font-bold uppercase tracking-wider">
+                    {event.category || 'Event'}
+                  </span>
+                  {event.allowedBranches && event.allowedBranches !== 'All' && (
+                    <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+                      <Building2 className="w-3 h-3" /> {event.allowedBranches} Only
+                    </span>
+                  )}
+                  {event.type === 'team' && (
+                    <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+                      <Users className="w-3 h-3" /> Team Event
+                    </span>
+                  )}
+                </div>
+
+                 <h1 className="text-4xl font-black text-zinc-900 dark:text-white mb-6">{event.title}</h1>
+                 <p className="text-zinc-600 dark:text-zinc-300 whitespace-pre-line text-lg mb-8 leading-relaxed">
+                   {event.description}
+                 </p>
+                 
+                 <div className="space-y-4 mb-8">
+                    <div className="flex items-center gap-3">
+                      <Calendar className="w-5 h-5 text-indigo-500"/>
+                      <span className="text-zinc-700 dark:text-zinc-300 font-medium">{event.date}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Clock className="w-5 h-5 text-indigo-500"/>
+                      <span className="text-zinc-700 dark:text-zinc-300 font-medium">{event.time}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <MapPin className="w-5 h-5 text-indigo-500"/>
+                      <span className="text-zinc-700 dark:text-zinc-300 font-medium">{event.location}</span>
+                    </div>
+                 </div>
+
+                 {/* WhatsApp Link */}
+                 {event.whatsappLink && (
+                  <a href={event.whatsappLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-green-600 font-bold hover:underline mb-8">
+                    <MessageCircle className="w-5 h-5" /> Join WhatsApp Group
+                  </a>
+                 )}
+              </div>
+
+              {/* Right Column: Registration Card */}
+              <div className="w-full md:w-80">
+                 <div className="p-6 bg-zinc-50 dark:bg-zinc-800/50 rounded-3xl border border-zinc-200 dark:border-zinc-700 sticky top-24">
+                    <button 
+                      onClick={() => setIsRegisterOpen(true)}
+                      disabled={event.ticketsSold >= event.totalTickets}
+                      className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-400 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-xl shadow-indigo-600/20 active:scale-95 text-lg"
+                    >
+                      {event.ticketsSold >= event.totalTickets ? 'Sold Out' : 'Register Now'}
+                    </button>
+                    
+                    <div className="mt-4 flex justify-between text-xs text-zinc-500 font-medium uppercase tracking-wide">
+                      <span>Capacity</span>
+                      <span>{event.ticketsSold}/{event.totalTickets} Filled</span>
+                    </div>
+                    <div className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full mt-2 overflow-hidden">
+                       <div 
+                         className="h-full bg-indigo-500 transition-all duration-500" 
+                         style={{ width: `${Math.min((event.ticketsSold / event.totalTickets) * 100, 100)}%` }}
+                       ></div>
+                    </div>
+                 </div>
+              </div>
+
+            </div>
           </div>
         </div>
 
-        {/* Empty State */}
-        {displayedEvents.length === 0 ? (
-          <div className="text-center py-24 bg-white dark:bg-zinc-900 rounded-3xl border border-dashed border-zinc-300 dark:border-zinc-800">
-            <div className="mx-auto w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center mb-4">
-              <Frown className="w-8 h-8 text-zinc-400" />
-            </div>
-            <h3 className="text-lg font-medium text-zinc-900 dark:text-white">No events found</h3>
-            <p className="text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto mt-2">
-              Looks like the schedule is clear. Check back later!
-            </p>
-          </div>
-        ) : (
-          /* Events Grid */
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {displayedEvents.map((event) => (
-              <div 
-                key={event.id}
-                onClick={() => navigate(`/events/${event.id}`)} 
-                className="group bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer"
-              >
-                {/* Image Section */}
-                <div className="h-48 bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
-                  <div className="absolute top-4 right-4 z-10 bg-white/90 dark:bg-black/90 backdrop-blur px-3 py-1 rounded-full text-xs font-bold border border-zinc-200 dark:border-zinc-700">
-                    {event.price > 0 ? `$${event.price}` : 'Free'}
-                  </div>
-                  
-                  {/* Status Badge */}
-                  {new Date(event.date) < new Date() && (
-                    <div className="absolute top-4 left-4 z-10 bg-zinc-900/90 text-white px-3 py-1 rounded-full text-xs font-bold uppercase">
-                      Past Event
-                    </div>
-                  )}
-
-                  {event.imageUrl ? (
-                    <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-zinc-300 dark:text-zinc-700 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20">
-                      <Calendar className="w-12 h-12 opacity-50" />
-                    </div>
-                  )}
-                </div>
-
-                {/* Details Section */}
-                <div className="p-6">
-                  <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-2 line-clamp-1">
-                    {event.title}
-                  </h3>
-                  
-                  <div className="space-y-2 text-sm text-zinc-500 dark:text-zinc-400 mb-6">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-indigo-500" />
-                      <span>{new Date(event.date).toDateString()}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-indigo-500" />
-                      <span>{event.location || 'Campus Center'}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                    <span className="text-xs font-medium text-zinc-400">
-                      {event.ticketsSold || 0} attending
-                    </span>
-                    <span className="flex items-center text-sm font-semibold text-indigo-600 dark:text-indigo-400 group-hover:gap-2 transition-all">
-                      Details <ArrowRight className="w-4 h-4 ml-1" />
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+        {/* MODAL MOUNTS */}
+        <RegisterModal 
+          isOpen={isRegisterOpen} 
+          onClose={() => setIsRegisterOpen(false)} 
+          event={event} 
+        />
+        
+        {/* Only mount admin modals if user is organizer */}
+        {isOrganizer && (
+          <>
+            <EditEventModal 
+              isOpen={isEditOpen} 
+              onClose={() => setIsEditOpen(false)} 
+              event={event} 
+              onSuccess={() => window.location.reload()} 
+            />
+            <EventParticipantsModal 
+              isOpen={isParticipantsOpen} 
+              onClose={() => setIsParticipantsOpen(false)} 
+              event={event} 
+            />
+          </>
         )}
+
       </div>
     </div>
   );
 };
 
-export default EventsPage;
+export default EventDetailsPage;
