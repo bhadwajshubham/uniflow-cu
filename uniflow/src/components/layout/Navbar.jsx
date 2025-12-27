@@ -1,106 +1,124 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { 
-  Home, Ticket, User, LayoutDashboard, ScanLine, HelpCircle 
-} from 'lucide-react'; // 👈 Added HelpCircle
-import UserProfile from '../../features/auth/components/UserProfile';
-import ThemeToggle from '../ThemeToggle';
+import { useTheme } from '../../context/ThemeContext';
+import { LogOut, User, Menu, X, Sun, Moon, Shield, Zap } from 'lucide-react'; // Added Zap icon
 
 const Navbar = () => {
-  const { user, profile } = useAuth();
-  const location = useLocation();
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const { user, profile, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  // Admin Check
-  const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
-
-  // 🧭 Navigation Configuration
-  const navItems = [
-    { name: 'Home', path: '/', icon: <Home className="w-6 h-6" /> },
-    { name: 'Events', path: '/events', icon: <Home className="w-6 h-6" /> }, // Optional: You might want to remove one 'Home' or merge them
-    { name: 'My Tickets', path: '/my-tickets', icon: <Ticket className="w-6 h-6" /> },
-    { name: 'About', path: '/about', icon: <HelpCircle className="w-6 h-6" /> }, // 👈 ADDED HERE (Cleanest way)
-    ...(isAdmin ? [
-      { name: 'Admin', path: '/admin', icon: <LayoutDashboard className="w-6 h-6" /> },
-      { name: 'Scan', path: '/scan', icon: <ScanLine className="w-6 h-6" /> }
-    ] : [])
-  ];
-
-  // Logic to de-clutter mobile: Show max 5 items on mobile bottom bar
-  // If admin, we might need to hide 'About' on mobile to fit the screen
-  const mobileNavItems = navItems.slice(0, 5); 
-
-  const isActive = (path) => location.pathname === path;
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+      setIsMenuOpen(false);
+    } catch (error) {
+      console.error('Failed to log out', error);
+    }
+  };
 
   return (
-    <>
-      {/* 🖥️ DESKTOP TOP BAR */}
-      <nav className="hidden md:flex fixed top-0 w-full bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 z-50 px-6 py-4 justify-between items-center">
-        <Link to="/" className="text-2xl font-black text-indigo-600 tracking-tighter">UniFlow.</Link>
-        
-        <div className="flex items-center gap-8">
-          {navItems.map((item) => (
-            <Link 
-              key={item.name} 
-              to={item.path} 
-              className={`text-sm font-bold transition-colors ${isActive(item.path) ? 'text-indigo-600' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'}`}
-            >
-              {item.name}
-            </Link>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-4">
-          <ThemeToggle />
+    <nav className="fixed top-0 w-full z-50 bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 transition-colors duration-300">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between h-16 items-center">
           
-          {user ? (
-            <button onClick={() => setIsProfileOpen(true)} className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-700 dark:text-zinc-200 font-bold border border-zinc-200 dark:border-zinc-700 hover:border-indigo-500 transition-colors">
-              {user.displayName?.[0] || <User className="w-5 h-5" />}
-            </button>
-          ) : (
-            <Link to="/login" className="px-5 py-2 bg-black dark:bg-white text-white dark:text-black rounded-full font-bold text-sm">Login</Link>
-          )}
-        </div>
-      </nav>
+          {/* Logo */}
+          <Link to="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/30">
+              U
+            </div>
+            <span className="text-xl font-black text-zinc-900 dark:text-white tracking-tight">UniFlow</span>
+          </Link>
 
-      {/* 📱 MOBILE TOP HEADER (Minimal) */}
-      <nav className="md:hidden fixed top-0 w-full bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 z-50 px-4 py-3 flex justify-between items-center">
-        <Link to="/" className="text-xl font-black text-indigo-600 tracking-tighter">UniFlow.</Link>
-        
-        <div className="flex items-center gap-3">
-          <ThemeToggle />
-          {user && (
-            <button onClick={() => setIsProfileOpen(true)} className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-full">
-              <User className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
-            </button>
-          )}
-        </div>
-      </nav>
+          {/* Desktop Nav */}
+          <div className="hidden md:flex items-center space-x-8">
+            <Link to="/events" className="text-sm font-medium text-zinc-500 hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400 transition-colors">Explore</Link>
+            <Link to="/about" className="text-sm font-medium text-zinc-500 hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400 transition-colors">About & Dev</Link>
+            
+            {user && (
+              <Link to="/my-tickets" className="text-sm font-medium text-zinc-500 hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400 transition-colors">My Tickets</Link>
+            )}
 
-      {/* 📱 MOBILE BOTTOM BAR */}
-      <nav className="md:hidden fixed bottom-0 w-full bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 z-50 pb-safe">
-        <div className="flex justify-around items-center h-16">
-          {mobileNavItems.map((item) => (
-            <Link 
-              key={item.name} 
-              to={item.path} 
-              className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${
-                isActive(item.path) ? 'text-indigo-600' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
-              }`}
-            >
-              {isActive(item.path) && <div className="absolute top-0 w-8 h-1 bg-indigo-600 rounded-b-full"></div>}
-              <div className={isActive(item.path) ? "animate-in zoom-in duration-200" : ""}>
-                {item.icon}
+            {/* Organizer Link */}
+            {(profile?.role === 'admin' || profile?.role === 'super_admin') && (
+              <Link to="/admin" className="text-sm font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                <Shield className="w-4 h-4" /> Organizer
+              </Link>
+            )}
+
+            {/* 👑 GOD MODE LINK (Super Admin Only) */}
+            {profile?.role === 'super_admin' && (
+              <Link to="/super-admin" className="text-sm font-black text-red-600 dark:text-red-400 flex items-center gap-1 animate-pulse">
+                <Zap className="w-4 h-4" /> GOD MODE
+              </Link>
+            )}
+          </div>
+
+          {/* Right Side Actions */}
+          <div className="hidden md:flex items-center space-x-4">
+            <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400 transition-colors">
+              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
+
+            {user ? (
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold shadow-md">
+                    {user.displayName ? user.displayName[0].toUpperCase() : 'U'}
+                  </div>
+                </div>
+                <button onClick={handleLogout} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-600 rounded-full transition-colors">
+                  <LogOut className="w-5 h-5" />
+                </button>
               </div>
-              <span className="text-[10px] font-bold">{item.name}</span>
-            </Link>
-          ))}
-        </div>
-      </nav>
+            ) : (
+              <Link to="/login" className="px-5 py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-black text-sm font-bold rounded-xl hover:scale-105 transition-transform">
+                Login
+              </Link>
+            )}
+          </div>
 
-      <UserProfile isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
-    </>
+          {/* Mobile Menu Button */}
+          <div className="md:hidden flex items-center gap-4">
+            <button onClick={toggleTheme} className="p-2 text-zinc-600 dark:text-zinc-400">
+              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
+            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 text-zinc-900 dark:text-white">
+              {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Menu */}
+      {isMenuOpen && (
+        <div className="md:hidden bg-white dark:bg-black border-t border-zinc-100 dark:border-zinc-800 p-4 space-y-4 animate-in slide-in-from-top-5">
+          <Link to="/events" className="block py-2 text-zinc-600 dark:text-zinc-300 font-medium" onClick={() => setIsMenuOpen(false)}>Explore Events</Link>
+          <Link to="/about" className="block py-2 text-zinc-600 dark:text-zinc-300 font-medium" onClick={() => setIsMenuOpen(false)}>About & Dev</Link>
+          
+          {user && (
+            <Link to="/my-tickets" className="block py-2 text-zinc-600 dark:text-zinc-300 font-medium" onClick={() => setIsMenuOpen(false)}>My Tickets</Link>
+          )}
+
+          {(profile?.role === 'admin' || profile?.role === 'super_admin') && (
+            <Link to="/admin" className="block py-2 text-indigo-600 font-bold" onClick={() => setIsMenuOpen(false)}>Organizer Dashboard</Link>
+          )}
+
+          {profile?.role === 'super_admin' && (
+            <Link to="/super-admin" className="block py-2 text-red-600 font-black" onClick={() => setIsMenuOpen(false)}>⚡ GOD MODE</Link>
+          )}
+
+          {user ? (
+            <button onClick={handleLogout} className="w-full text-left py-2 text-red-500 font-medium">Logout</button>
+          ) : (
+            <Link to="/login" className="block w-full text-center py-3 bg-zinc-900 dark:bg-white text-white dark:text-black font-bold rounded-xl" onClick={() => setIsMenuOpen(false)}>Login</Link>
+          )}
+        </div>
+      )}
+    </nav>
   );
 };
 

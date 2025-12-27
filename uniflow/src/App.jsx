@@ -5,28 +5,20 @@ import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 
-// ------------------- PAGES -------------------
-
-// 1. Core & Public
+// Pages
 import HomePage from './features/events/components/HomePage';
 import LoginPage from './features/auth/components/LoginPage';
 import HelpPage from './features/events/components/HelpPage';
+import AboutPage from './features/auth/AboutPage';
 
-// ⚠️ FIX: Importing AboutPage from the 'auth' folder as per your file structure
-import AboutPage from './features/auth/AboutPage'; 
-
-// 2. Events Discovery
 import EventsPage from './features/events/components/EventsPage';
 import EventDetailsPage from './features/events/components/EventDetailsPage';
-
-// 3. Student Features
 import MyTicketsPage from './features/events/components/MyTicketsPage';
 import TicketPage from './features/events/components/TicketPage'; 
 
-// 4. Admin Features
 import AdminDashboard from './features/events/components/AdminDashboard';
 import ScannerPage from './features/events/components/ScannerPage';
-
+import SuperAdminDashboard from './features/events/components/SuperAdminDashboard'; // 👈 NEW IMPORT
 
 const App = () => {
   return (
@@ -36,13 +28,12 @@ const App = () => {
           <Navbar />
           <Routes>
             {/* 🏠 PUBLIC ROUTES */}
-            <Route path="/" element={<HomePage />} />            {/* Landing Page */}
-            <Route path="/events" element={<EventsPage />} />    {/* Discovery */}
+            <Route path="/" element={<HomePage />} />
+            <Route path="/events" element={<EventsPage />} />
             <Route path="/events/:id" element={<EventDetailsPage />} />
-            
             <Route path="/login" element={<LoginPage />} />
             <Route path="/help" element={<HelpPage />} />
-            <Route path="/about" element={<AboutPage />} />      {/* Fame Page */}
+            <Route path="/about" element={<AboutPage />} />
             
             {/* 🔒 PROTECTED STUDENT ROUTES */}
             <Route 
@@ -54,7 +45,6 @@ const App = () => {
               } 
             />
             
-            {/* Premium Ticket View (Shareable) */}
             <Route 
               path="/tickets/:ticketId" 
               element={
@@ -64,7 +54,7 @@ const App = () => {
               } 
             />
 
-            {/* 🛡️ PROTECTED ADMIN ROUTES */}
+            {/* 🛡️ ADMIN ROUTES */}
             <Route 
               path="/admin" 
               element={
@@ -81,8 +71,17 @@ const App = () => {
                 </ProtectedRoute>
               } 
             />
+
+            {/* 👑 SUPER ADMIN ROUTE (GOD MODE) */}
+            <Route 
+              path="/super-admin" 
+              element={
+                <ProtectedRoute superAdminOnly={true}>
+                  <SuperAdminDashboard />
+                </ProtectedRoute>
+              } 
+            />
             
-            {/* 404 - Redirect everything else to Home */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>

@@ -71,16 +71,16 @@ const AboutPage = () => {
 
             {/* Social Links */}
             <div className="flex justify-center gap-4">
-              <a href="https://github.com/yourusername" target="_blank" rel="noopener noreferrer" className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors backdrop-blur-sm">
+              <a href="https://github.com/bhadwajshubham" target="_blank" rel="noopener noreferrer" className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors backdrop-blur-sm">
                 <Github className="w-5 h-5" />
               </a>
-              <a href="https://linkedin.com/in/yourusername" target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 rounded-full transition-colors backdrop-blur-sm">
+              <a href="www.linkedin.com/in/shubhambhardwaj0777" target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 rounded-full transition-colors backdrop-blur-sm">
                 <Linkedin className="w-5 h-5" />
               </a>
-              <a href="mailto:your.email@example.com" className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors backdrop-blur-sm">
+              <a href="mailto:bhardwajshubham0777@gmail.com" className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors backdrop-blur-sm">
                 <Mail className="w-5 h-5" />
               </a>
-              <a href="https://yourportfolio.com" target="_blank" rel="noopener noreferrer" className="p-3 bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 rounded-full transition-colors backdrop-blur-sm">
+              <a href="https://bhardwajshubham.netlify.app/" target="_blank" rel="noopener noreferrer" className="p-3 bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 rounded-full transition-colors backdrop-blur-sm">
                 <Globe className="w-5 h-5" />
               </a>
             </div>
