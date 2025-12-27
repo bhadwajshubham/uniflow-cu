@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,7 +6,30 @@
 
 @layer base {
   body {
-    @apply bg-slate-950 text-white font-sans antialiased;
+    /* 🎨 Light Mode: Warm Paper (#FDFBF7) | Dark Mode: Deep Black */
+    @apply bg-[#FDFBF7] text-zinc-900 dark:bg-black dark:text-white font-sans antialiased transition-colors duration-300;
     font-family: 'Inter', sans-serif;
+  }
+  
+  /* Smooth scrolling for the whole app */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Custom scrollbar for a premium feel */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-zinc-200 dark:bg-zinc-800 rounded-full hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors;
+  }
+}
+
+@layer components {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
   }
 }
