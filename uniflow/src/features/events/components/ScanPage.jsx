@@ -62,16 +62,16 @@ const ScanPage = () => {
       const data = docSnap.data();
 
       // Check if already used
-      if (data.status === 'used') {
+      if (data.status === 'used' || data.status === 'attended') {
         setScanResult('error');
         setResultMessage(`⚠️ Ticket already used by ${data.userName || 'Student'}!`);
       } else if (data.status === 'cancelled') {
          setScanResult('error');
          setResultMessage(`❌ Ticket was cancelled.`);
       } else {
-        // MARK AS USED
+        // MARK AS USED (Unified Status: 'attended')
         await updateDoc(docRef, { 
-          status: 'used',
+          status: 'attended',
           scannedAt: new Date()
         });
         setScanResult('success');

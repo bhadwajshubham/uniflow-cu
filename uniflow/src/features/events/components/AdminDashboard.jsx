@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs, query, where, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, where, deleteDoc, doc, writeBatch } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { 
@@ -31,7 +31,6 @@ const AdminDashboard = () => {
       if (!user) return;
       setLoading(true);
       
-      // 🔒 SECURITY FILTER: Only fetch events created by THIS user
       const q = query(
         collection(db, 'events'), 
         where('organizerId', '==', user.uid)
@@ -63,10 +62,26 @@ const AdminDashboard = () => {
 
   useEffect(() => { fetchData(); }, [user]);
 
+  // 🗑️ UPDATED DELETE LOGIC (Batch Delete)
   const handleDelete = async (eventId) => {
-    if (window.confirm("Are you sure? This will delete the event and all ticket data associated with it.")) {
-      await deleteDoc(doc(db, 'events', eventId));
-      fetchData();
+    if (window.confirm("Are you sure? This will delete the event and ALL ticket data associated with it.")) {
+      try {
+        // 1. Delete all associated registrations
+        const q = query(collection(db, 'registrations'), where('eventId', '==', eventId));
+        const snapshot = await getDocs(q);
+        
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+
+        // 2. Delete the event itself
+        await deleteDoc(doc(db, 'events', eventId));
+        
+        fetchData();
+      } catch (error) {
+        console.error("Delete failed", error);
+        alert("Failed to delete event completely.");
+      }
     }
   };
 
