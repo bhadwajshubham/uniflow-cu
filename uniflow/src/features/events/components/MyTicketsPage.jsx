@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
-import { Ticket, Calendar, Clock, Search, MapPin, XCircle, Users, CheckCircle, Award, Star } from 'lucide-react';
-import CertificateModal from './CertificateModal'; // 👈 IMPORTED
+import { Ticket, Calendar, Clock, Search, MapPin, XCircle, Users, CheckCircle, Award, Star, ExternalLink, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom'; // 👈 Added for navigation
+import CertificateModal from './CertificateModal';
 
 const MyTicketsPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate(); // 👈 Hook for redirection
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('upcoming');
@@ -20,51 +22,33 @@ const MyTicketsPage = () => {
     const fetchTickets = async () => {
       if (!user) return;
       try {
-        const q = query(
-          collection(db, 'registrations'), 
-          where('userId', '==', user.uid)
-        );
-        
+        const q = query(collection(db, 'registrations'), where('userId', '==', user.uid));
         const snapshot = await getDocs(q);
-        const ticketData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-
+        const ticketData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         // Sort manually (Newest first)
         ticketData.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-        
         setTickets(ticketData);
-      } catch (err) {
-        console.error("Error fetching tickets:", err);
-      } finally {
-        setLoading(false);
-      }
+      } catch (err) { console.error("Error fetching tickets:", err); } 
+      finally { setLoading(false); }
     };
-
     fetchTickets();
   }, [user]);
 
   // Filter Logic
   const filteredTickets = tickets.filter(ticket => {
     const eventDate = ticket.eventDate ? new Date(ticket.eventDate) : new Date();
-    // Normalize dates to ignore time
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     eventDate.setHours(0, 0, 0, 0);
 
     const isPast = eventDate < today;
-    
-    // If ticket is 'attended', treat it as past/history regardless of date
     const isCompleted = ticket.status === 'attended' || ticket.status === 'used';
 
-    // Logic: 'Upcoming' = Future AND Not Attended. 'Past' = Past OR Attended.
     const matchesTab = activeTab === 'upcoming' 
       ? (!isPast && !isCompleted) 
       : (isPast || isCompleted);
 
     const matchesSearch = (ticket.eventTitle || '').toLowerCase().includes(searchTerm.toLowerCase());
-    
     return matchesTab && matchesSearch;
   });
 
@@ -81,7 +65,7 @@ const MyTicketsPage = () => {
   );
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-24 px-4 sm:px-6 lg:px-8">
       <div className="max-w-5xl mx-auto">
         
         {/* Header Section */}
@@ -105,26 +89,8 @@ const MyTicketsPage = () => {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-8 border-b border-zinc-200 dark:border-zinc-800 pb-1">
-          <button 
-            onClick={() => setActiveTab('upcoming')}
-            className={`px-6 py-2 text-sm font-bold rounded-t-lg transition-all ${
-              activeTab === 'upcoming' 
-                ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/10' 
-                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-            }`}
-          >
-            Upcoming
-          </button>
-          <button 
-            onClick={() => setActiveTab('past')}
-            className={`px-6 py-2 text-sm font-bold rounded-t-lg transition-all ${
-              activeTab === 'past' 
-                ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/10' 
-                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-            }`}
-          >
-            History & Certificates
-          </button>
+          <button onClick={() => setActiveTab('upcoming')} className={`px-6 py-2 text-sm font-bold rounded-t-lg transition-all ${activeTab === 'upcoming' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/10' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>Upcoming</button>
+          <button onClick={() => setActiveTab('past')} className={`px-6 py-2 text-sm font-bold rounded-t-lg transition-all ${activeTab === 'past' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/10' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>History</button>
         </div>
 
         {/* Tickets List */}
@@ -150,7 +116,7 @@ const MyTicketsPage = () => {
                 </div>
 
                 {/* 🔳 QR / STATUS SECTION */}
-                <div className="flex-shrink-0 flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 rounded-2xl w-full md:w-40 h-40 p-3 border border-zinc-200 dark:border-zinc-800">
+                <div className="flex-shrink-0 flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 rounded-2xl w-full md:w-40 p-4 border border-zinc-200 dark:border-zinc-800">
                    {(ticket.status === 'used' || ticket.status === 'attended') ? (
                      <div className="text-center">
                        <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-2" />
@@ -170,20 +136,29 @@ const MyTicketsPage = () => {
                         <span className="text-xs font-bold text-red-400 uppercase">Cancelled</span>
                      </div>
                    ) : (
-                     <img 
-                       src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${ticket.id}`} 
-                       alt="Ticket QR" 
-                       className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-screen opacity-90"
-                     />
+                     <>
+                        {/* QR IMAGE */}
+                        <img 
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${ticket.id}`} 
+                          alt="Ticket QR" 
+                          className="w-24 h-24 object-contain mix-blend-multiply dark:mix-blend-screen opacity-90"
+                        />
+                        {/* 👁️ VIEW PASS BUTTON (Desktop) */}
+                        <button 
+                          onClick={() => navigate(`/tickets/${ticket.id}`)}
+                          className="mt-3 hidden md:flex text-xs font-bold text-indigo-600 hover:text-indigo-700 items-center gap-1"
+                        >
+                          View Pass <ExternalLink className="w-3 h-3" />
+                        </button>
+                     </>
                    )}
                 </div>
 
                 {/* Details */}
-                <div className="flex-1 flex flex-col justify-between">
+                <div className="flex-1 flex flex-col justify-center">
                   <div>
-                    {/* Team Badge */}
                     {ticket.teamCode && (
-                       <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 text-xs font-bold uppercase tracking-wide mb-2">
+                       <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 text-xs font-bold uppercase tracking-wide mb-2 w-fit">
                          <Users className="w-3 h-3" /> Team: {ticket.teamCode}
                        </div>
                     )}
@@ -193,27 +168,27 @@ const MyTicketsPage = () => {
                     </h3>
                     
                     <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-                      <div className="flex items-center gap-1.5">
-                        <Calendar className="w-4 h-4 text-indigo-500" />
-                        <span>{ticket.eventDate || "TBA"}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="w-4 h-4 text-indigo-500" />
-                        <span>{ticket.eventTime || "TBA"}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <MapPin className="w-4 h-4 text-indigo-500" />
-                        <span>{ticket.eventLocation || "Venue to be announced"}</span>
-                      </div>
+                      <div className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-indigo-500" /><span>{ticket.eventDate || "TBA"}</span></div>
+                      <div className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-indigo-500" /><span>{ticket.eventTime || "TBA"}</span></div>
+                      <div className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-indigo-500" /><span>{ticket.eventLocation || "Venue"}</span></div>
                     </div>
                   </div>
 
-                  <div className="pt-4 flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800 mt-2">
-                    <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
-                      ID: {ticket.id.slice(0, 8)}
-                    </span>
-                    
-                    {/* Review Button (For Past/Completed Events) */}
+                  {/* 📱 MOBILE ACTION BUTTON */}
+                  <div className="mt-2 md:hidden">
+                    {(ticket.status !== 'cancelled' && ticket.status !== 'attended' && ticket.status !== 'used') && (
+                        <button 
+                            onClick={() => navigate(`/tickets/${ticket.id}`)}
+                            className="w-full py-3 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-200 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                        >
+                            Open Full Ticket <ArrowRight className="w-4 h-4" />
+                        </button>
+                    )}
+                  </div>
+                  
+                  {/* Desktop ID / Review Footer */}
+                  <div className="hidden md:flex pt-4 items-center justify-between border-t border-zinc-100 dark:border-zinc-800 mt-auto">
+                    <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">ID: {ticket.id.slice(0, 8)}</span>
                     {(activeTab === 'past' || ticket.status === 'attended') && (
                       <button className="text-xs font-bold text-zinc-500 hover:text-indigo-600 flex items-center gap-1 transition-colors">
                         <Star className="w-3 h-3" /> Rate Event
@@ -226,7 +201,6 @@ const MyTicketsPage = () => {
           </div>
         )}
 
-        {/* 🎓 MOUNT CERTIFICATE MODAL */}
         <CertificateModal 
           isOpen={isCertificateOpen}
           onClose={() => setIsCertificateOpen(false)}
