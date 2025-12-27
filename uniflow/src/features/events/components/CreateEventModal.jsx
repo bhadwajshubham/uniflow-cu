@@ -37,37 +37,62 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
     }));
   };
 
-  // 🪄 MAGIC: Auto-generate a Stable URL Poster
+  // 🪄 MAGIC: Auto-generate a Local Banner (No Third Party, No Storage)
   const generateRandomImage = () => {
-    // 1. Get Title or Default
-    const titleText = formData.title ? formData.title.trim() : "Event";
+    // 1. Get Text Details
+    const titleText = formData.title ? formData.title.trim() : "Event Name";
+    const clubName = user.displayName || "UniFlow Club"; 
     
-    // 2. Define Category Colors (Background Hex without #)
-    const categoryColors = {
-      'Tech': '2563eb',    // Blue
-      'Cultural': 'db2777', // Pink
-      'Sports': 'ea580c',   // Orange
-      'Workshop': '059669', // Teal
-      'Seminar': '7c3aed',  // Purple
-      'Art': 'd97706',      // Gold
-      'General': '4b5563'   // Gray
+    // 2. Define Professional Gradients based on Category
+    const gradients = {
+      'Tech': ['#1e3a8a', '#3b82f6'],      // Dark Blue -> Blue
+      'Cultural': ['#831843', '#db2777'],  // Dark Pink -> Pink
+      'Sports': ['#7c2d12', '#ea580c'],    // Dark Orange -> Orange
+      'Workshop': ['#064e3b', '#10b981'],  // Dark Green -> Emerald
+      'Seminar': ['#4c1d95', '#8b5cf6'],   // Dark Purple -> Violet
+      'Art': ['#78350f', '#d97706'],       // Dark Gold -> Amber
+      'General': ['#1f2937', '#4b5563']    // Dark Gray -> Gray
     };
 
-    const bg = categoryColors[formData.category] || '4b5563'; // Default Gray
-    const fg = 'ffffff'; // White text
+    const [color1, color2] = gradients[formData.category] || gradients['General'];
 
-    // 3. Create a clean URL (Handles spaces/emojis automatically)
-    // Format: https://placehold.co/WIDTHxHEIGHT/BG/FG?text=Your+Text
-    const encodedTitle = encodeURIComponent(titleText);
-    const encodedCategory = encodeURIComponent(formData.category || 'General');
-    
-    // We add \n to create a new line for the category
-    const url = `https://placehold.co/800x450/${bg}/${fg}.png?text=${encodedTitle}%0A(${encodedCategory})`;
-    
-    setFormData(prev => ({ 
-      ...prev, 
-      imageUrl: url
-    }));
+    // 3. Create the SVG XML String
+    const svgString = `
+      <svg width="800" height="450" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:${color1};stop-opacity:1" />
+            <stop offset="100%" style="stop-color:${color2};stop-opacity:1" />
+          </linearGradient>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grad)" />
+        
+        <text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" 
+              font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="white">
+          ${titleText}
+        </text>
+        
+        <text x="50%" y="60%" dominant-baseline="middle" text-anchor="middle" 
+              font-family="Arial, sans-serif" font-size="24" fill="rgba(255,255,255,0.8)">
+          Organized by ${clubName}
+        </text>
+      </svg>
+    `;
+
+    // 4. Robust Base64 Conversion (Fixes "Invalid Character" errors)
+    try {
+      const base64Svg = btoa(unescape(encodeURIComponent(svgString)));
+      const dataUri = `data:image/svg+xml;base64,${base64Svg}`;
+      
+      setFormData(prev => ({ 
+        ...prev, 
+        imageUrl: dataUri
+      }));
+    } catch (err) {
+      console.error("Image generation failed", err);
+      // Fallback (Should rarely happen)
+      setFormData(prev => ({ ...prev, imageUrl: '' }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -80,13 +105,23 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
         throw new Error("Please fill in all required fields.");
       }
 
-      // If user didn't provide an image, generate a default one
+      // If user didn't click Auto-Gen, run it automatically now
       let finalImageUrl = formData.imageUrl;
       if (!finalImageUrl) {
-          const titleText = formData.title ? formData.title.trim() : "Event";
-          const encodedTitle = encodeURIComponent(titleText);
-          const bg = '4b5563';
-          finalImageUrl = `https://placehold.co/800x450/${bg}/ffffff.png?text=${encodedTitle}`;
+          const titleText = formData.title || "Event";
+          const clubName = user.displayName || "UniFlow Club";
+          const gradients = { 'Tech': ['#1e3a8a', '#3b82f6'], 'General': ['#1f2937', '#4b5563'] };
+          const [c1, c2] = gradients[formData.category] || gradients['General'];
+          
+          const svg = `
+            <svg width="800" height="450" xmlns="http://www.w3.org/2000/svg">
+              <defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:${c1}"/><stop offset="100%" style="stop-color:${c2}"/></linearGradient></defs>
+              <rect width="100%" height="100%" fill="url(#g)"/>
+              <text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="48" font-weight="bold" fill="white">${titleText}</text>
+              <text x="50%" y="60%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="24" fill="rgba(255,255,255,0.8)">Organized by ${clubName}</text>
+            </svg>`;
+          
+          finalImageUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
       }
 
       const eventPayload = {
@@ -127,7 +162,7 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
           </button>
         </div>
 
-        {/* Form Content */}
+        {/* Content */}
         <div className="p-6 overflow-y-auto custom-scrollbar">
           {error && <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-xl font-medium text-center">{error}</div>}
 
@@ -139,7 +174,7 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
               <input name="title" value={formData.title} onChange={handleChange} className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white" required placeholder="Event Title" />
             </div>
 
-            {/* Category Selector */}
+            {/* Category */}
             <div>
                <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">Category</label>
                <div className="grid grid-cols-3 gap-2">
@@ -160,7 +195,7 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
                </div>
             </div>
 
-            {/* 📸 IMAGE URL SECTION (Auto-Gen) */}
+            {/* 📸 BANNER SECTION (Auto-Gen) */}
             <div className="space-y-2">
                <label className="text-xs font-bold uppercase text-zinc-500">Event Poster</label>
                <div className="flex gap-2">
