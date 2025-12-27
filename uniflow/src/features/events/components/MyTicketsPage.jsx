@@ -2,13 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
-import { Ticket, Calendar, Clock, Search, MapPin, XCircle, Users, CheckCircle, Award, Star, ExternalLink, ArrowRight } from 'lucide-react';
-import { useNavigate } from 'react-router-dom'; // 👈 Added for navigation
+import { Ticket, Calendar, Clock, Search, MapPin, XCircle, Users, CheckCircle, Award, Star, ExternalLink, ArrowRight, Copy } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import CertificateModal from './CertificateModal';
 
 const MyTicketsPage = () => {
   const { user } = useAuth();
-  const navigate = useNavigate(); // 👈 Hook for redirection
+  const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('upcoming');
@@ -44,6 +44,7 @@ const MyTicketsPage = () => {
     const isPast = eventDate < today;
     const isCompleted = ticket.status === 'attended' || ticket.status === 'used';
 
+    // Logic: 'Upcoming' = Future AND Not Attended. 'History' = Past OR Attended.
     const matchesTab = activeTab === 'upcoming' 
       ? (!isPast && !isCompleted) 
       : (isPast || isCompleted);
@@ -55,6 +56,13 @@ const MyTicketsPage = () => {
   const openCertificate = (ticket) => {
     setSelectedTicket(ticket);
     setIsCertificateOpen(true);
+  };
+
+  // 📋 NEW FEATURE: Click to Copy Team Code
+  const copyTeamCode = (code) => {
+    navigator.clipboard.writeText(code);
+    // You can use a toast here if you have one, otherwise alert is fine for now
+    alert(`Team Code ${code} copied to clipboard!`); 
   };
 
   if (loading) return (
@@ -158,8 +166,12 @@ const MyTicketsPage = () => {
                 <div className="flex-1 flex flex-col justify-center">
                   <div>
                     {ticket.teamCode && (
-                       <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 text-xs font-bold uppercase tracking-wide mb-2 w-fit">
-                         <Users className="w-3 h-3" /> Team: {ticket.teamCode}
+                       // 📋 NEW: Clickable Team Code with Copy Logic
+                       <div 
+                         onClick={() => copyTeamCode(ticket.teamCode)} 
+                         className="cursor-pointer active:scale-95 transition-transform inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 text-xs font-bold uppercase tracking-wide mb-2 w-fit hover:bg-purple-100 dark:hover:bg-purple-900/40"
+                       >
+                         <Users className="w-3 h-3" /> Team: {ticket.teamCode} <Copy className="w-3 h-3 ml-1 opacity-50" />
                        </div>
                     )}
 
@@ -174,7 +186,7 @@ const MyTicketsPage = () => {
                     </div>
                   </div>
 
-                  {/* 📱 MOBILE ACTION BUTTON */}
+                  {/* 📱 MOBILE ACTION BUTTON (New Feature) */}
                   <div className="mt-2 md:hidden">
                     {(ticket.status !== 'cancelled' && ticket.status !== 'attended' && ticket.status !== 'used') && (
                         <button 
@@ -188,7 +200,9 @@ const MyTicketsPage = () => {
                   
                   {/* Desktop ID / Review Footer */}
                   <div className="hidden md:flex pt-4 items-center justify-between border-t border-zinc-100 dark:border-zinc-800 mt-auto">
-                    <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">ID: {ticket.id.slice(0, 8)}</span>
+                    <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
+                      ID: {ticket.id.slice(0, 8)}
+                    </span>
                     {(activeTab === 'past' || ticket.status === 'attended') && (
                       <button className="text-xs font-bold text-zinc-500 hover:text-indigo-600 flex items-center gap-1 transition-colors">
                         <Star className="w-3 h-3" /> Rate Event
@@ -201,6 +215,7 @@ const MyTicketsPage = () => {
           </div>
         )}
 
+        {/* 🎓 MOUNT CERTIFICATE MODAL */}
         <CertificateModal 
           isOpen={isCertificateOpen}
           onClose={() => setIsCertificateOpen(false)}
