@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../../../lib/firebase'; // ✅ Correct Path (3 levels up)
-import { useAuth } from '../../../context/AuthContext'; // ✅ Correct Path (3 levels up)
-import { Ticket, Calendar, QrCode, Clock, Search, MapPin, XCircle } from 'lucide-react';
+import { db } from '../../../lib/firebase';
+import { useAuth } from '../../../context/AuthContext';
+import { Ticket, Calendar, Clock, Search, MapPin, XCircle, Users, Star } from 'lucide-react';
 
 const MyTicketsPage = () => {
   const { user } = useAuth();
@@ -44,7 +44,12 @@ const MyTicketsPage = () => {
   const filteredTickets = tickets.filter(ticket => {
     // Safety check for date
     const eventDate = ticket.eventDate ? new Date(ticket.eventDate) : new Date();
-    const isPast = eventDate < new Date();
+    // Normalize dates to ignore time for the "Past" check
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    eventDate.setHours(0, 0, 0, 0);
+
+    const isPast = eventDate < today;
     
     const matchesTab = activeTab === 'upcoming' ? !isPast : isPast;
     const matchesSearch = (ticket.eventTitle || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -67,7 +72,7 @@ const MyTicketsPage = () => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-black text-zinc-900 dark:text-white">My Tickets</h1>
-            <p className="text-zinc-500 mt-1">Manage your upcoming events and history.</p>
+            <p className="text-zinc-500 mt-1">Access your passes and team codes.</p>
           </div>
           
           {/* Search Bar */}
@@ -78,7 +83,7 @@ const MyTicketsPage = () => {
               placeholder="Search tickets..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="w-full pl-10 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white"
             />
           </div>
         </div>
@@ -87,7 +92,7 @@ const MyTicketsPage = () => {
         <div className="flex gap-2 mb-8 border-b border-zinc-200 dark:border-zinc-800 pb-1">
           <button 
             onClick={() => setActiveTab('upcoming')}
-            className={`px-6 py-2 text-sm font-medium rounded-t-lg transition-all ${
+            className={`px-6 py-2 text-sm font-bold rounded-t-lg transition-all ${
               activeTab === 'upcoming' 
                 ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/10' 
                 : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
@@ -97,7 +102,7 @@ const MyTicketsPage = () => {
           </button>
           <button 
             onClick={() => setActiveTab('past')}
-            className={`px-6 py-2 text-sm font-medium rounded-t-lg transition-all ${
+            className={`px-6 py-2 text-sm font-bold rounded-t-lg transition-all ${
               activeTab === 'past' 
                 ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/10' 
                 : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
@@ -109,59 +114,84 @@ const MyTicketsPage = () => {
 
         {/* Tickets List */}
         {filteredTickets.length === 0 ? (
-          <div className="text-center py-20 bg-white dark:bg-zinc-900 rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800">
+          <div className="text-center py-20 bg-white dark:bg-zinc-900 rounded-3xl border border-dashed border-zinc-300 dark:border-zinc-800">
             <Ticket className="w-16 h-16 text-zinc-300 mx-auto mb-4" />
             <h3 className="text-xl font-bold text-zinc-900 dark:text-white">No {activeTab} tickets</h3>
             <p className="text-zinc-500 mt-2">You haven't registered for any events in this category.</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {filteredTickets.map(ticket => (
-              <div key={ticket.id} className="group bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-zinc-200 dark:border-zinc-800 hover:shadow-lg transition-all duration-300 flex flex-col md:flex-row gap-6 relative overflow-hidden">
+              <div key={ticket.id} className="group bg-white dark:bg-zinc-900 rounded-3xl p-6 border border-zinc-200 dark:border-zinc-800 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col md:flex-row gap-6 relative overflow-hidden">
                 
                 {/* Status Badge */}
-                <div className="absolute top-4 right-4">
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                    ticket.status === 'cancelled' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
+                <div className="absolute top-4 right-4 z-10">
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                    ticket.status === 'cancelled' ? 'bg-red-100 text-red-600' : 
+                    ticket.status === 'used' ? 'bg-zinc-100 text-zinc-500' : 'bg-green-100 text-green-600'
                   }`}>
                     {ticket.status || 'Confirmed'}
                   </span>
                 </div>
 
-                {/* QR Section */}
-                <div className="flex-shrink-0 flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 rounded-xl w-full md:w-32 h-32">
+                {/* 🔳 REAL QR CODE SECTION */}
+                <div className="flex-shrink-0 flex items-center justify-center bg-zinc-100 dark:bg-zinc-950 rounded-2xl w-full md:w-40 h-40 p-3 border border-zinc-200 dark:border-zinc-800">
                    {ticket.status === 'cancelled' ? (
-                     <XCircle className="w-12 h-12 text-zinc-300" />
+                     <div className="text-center">
+                       <XCircle className="w-10 h-10 text-red-300 mx-auto mb-2" />
+                       <span className="text-xs font-bold text-red-400 uppercase">Cancelled</span>
+                     </div>
                    ) : (
-                     <QrCode className="w-16 h-16 text-zinc-900 dark:text-white" />
+                     /* Zero-Dependency QR Generator (Works instantly) */
+                     <img 
+                       src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${ticket.id}`} 
+                       alt="Ticket QR" 
+                       className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-screen opacity-90"
+                     />
                    )}
                 </div>
 
                 {/* Details */}
-                <div className="flex-1 space-y-3">
+                <div className="flex-1 flex flex-col justify-between">
                   <div>
-                    <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-1">
+                    {/* Team Badge */}
+                    {ticket.teamCode && (
+                       <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 text-xs font-bold uppercase tracking-wide mb-2">
+                         <Users className="w-3 h-3" /> Team Code: {ticket.teamCode}
+                       </div>
+                    )}
+
+                    <h3 className="text-2xl font-black text-zinc-900 dark:text-white mb-2 leading-tight">
                       {ticket.eventTitle || "Event Name Unavailable"}
                     </h3>
-                    <div className="flex items-center gap-4 text-sm text-zinc-500">
+                    
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400 mb-4">
                       <div className="flex items-center gap-1.5">
-                        <Calendar className="w-4 h-4" />
+                        <Calendar className="w-4 h-4 text-indigo-500" />
                         <span>{ticket.eventDate || "TBA"}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <Clock className="w-4 h-4" />
+                        <Clock className="w-4 h-4 text-indigo-500" />
                         <span>{ticket.eventTime || "TBA"}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="w-4 h-4 text-indigo-500" />
+                        <span>{ticket.eventLocation || "Venue to be announced"}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 text-sm text-zinc-500">
-                    <MapPin className="w-4 h-4" />
-                    <span>{ticket.eventLocation || "Venue to be announced"}</span>
-                  </div>
-
-                  <div className="pt-4 flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800">
-                    <span className="text-xs font-mono text-zinc-400">ID: {ticket.id.slice(0, 8)}...</span>
+                  <div className="pt-4 flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800 mt-2">
+                    <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">
+                      ID: {ticket.id.slice(0, 8)}
+                    </span>
+                    
+                    {/* Review Button (For Past Events) */}
+                    {activeTab === 'past' && (
+                      <button className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+                        <Star className="w-3 h-3" /> Write Review
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
