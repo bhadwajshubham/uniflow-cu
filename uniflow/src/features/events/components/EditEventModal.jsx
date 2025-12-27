@@ -1,57 +1,51 @@
-import { useState, useRef } from 'react';
-import { X, Calendar, MapPin, Users, Upload, Loader2, Building2 } from 'lucide-react';
-import { updateEvent, uploadEventImage } from '../services/eventService';
+import React, { useState, useEffect } from 'react';
+import { X, Save, Loader2 } from 'lucide-react';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../../lib/firebase';
 
-const EditEventModal = ({ event, onClose }) => {
+const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
   const [loading, setLoading] = useState(false);
-  
-  // Initialize with existing event data
-  const [formData, setFormData] = useState({
-    title: event.title || '',
-    clubName: event.clubName || '',
-    date: event.date || '',
-    location: event.location || '',
-    description: event.description || '',
-    totalTickets: event.totalTickets || '',
-    category: event.category || 'General',
-    isRestricted: event.isRestricted || false
-  });
+  const [formData, setFormData] = useState({});
 
-  const [imageFile, setImageFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(event.imageUrl || null);
-  const fileInputRef = useRef(null);
-
-  const handleFile = (file) => {
-    if (file) {
-      setImageFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+  // Load event data when modal opens
+  useEffect(() => {
+    if (event) {
+      setFormData({
+        title: event.title || '',
+        date: event.date || '',
+        time: event.time || '',
+        location: event.location || '',
+        price: event.price || 0,
+        totalTickets: event.totalTickets || 0,
+        description: event.description || '',
+        imageUrl: event.imageUrl || '',
+        whatsappLink: event.whatsappLink || ''
+      });
     }
+  }, [event]);
+
+  if (!isOpen || !event) return null;
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e) => {
+  const handleUpdate = async (e) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      let imageUrl = event.imageUrl; // Default to old image
-      
-      // If new image selected, upload it
-      if (imageFile) {
-        imageUrl = await uploadEventImage(imageFile);
-      }
-
-      await updateEvent(event.id, {
+      const eventRef = doc(db, 'events', event.id);
+      await updateDoc(eventRef, {
         ...formData,
-        imageUrl: imageUrl,
-        updatedAt: new Date().toISOString()
+        price: Number(formData.price),
+        totalTickets: Number(formData.totalTickets),
+        updatedAt: serverTimestamp()
       });
-      
-      alert("Event updated successfully!");
+      alert("Event Updated Successfully!");
+      onSuccess();
       onClose();
-      window.location.reload();
-
     } catch (error) {
-      console.error(error);
+      console.error("Update Error:", error);
       alert("Failed to update event.");
     } finally {
       setLoading(false);
@@ -59,71 +53,45 @@ const EditEventModal = ({ event, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="bg-white dark:bg-zinc-900 w-full max-w-lg rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col max-h-[90vh]">
         
-        <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Edit Event</h2>
-          <button onClick={onClose}><X className="h-5 w-5 text-zinc-500" /></button>
+        <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Edit Event</h2>
+          <button onClick={onClose}><X className="w-5 h-5 text-zinc-500" /></button>
         </div>
 
-        <div className="p-6 overflow-y-auto custom-scrollbar">
-          <form id="edit-event-form" onSubmit={handleSubmit} className="space-y-4">
-            
-            {/* Image Preview */}
-            <div onClick={() => fileInputRef.current?.click()} className="h-40 bg-zinc-100 dark:bg-zinc-800 rounded-xl overflow-hidden cursor-pointer relative group">
-              {previewUrl ? (
-                <img src={previewUrl} className="w-full h-full object-cover" />
-              ) : (
-                <div className="flex items-center justify-center h-full text-zinc-400">Click to add image</div>
-              )}
-              <div className="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center text-white font-bold">Change Image</div>
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files[0])} />
-            </div>
-
-            {/* Fields */}
+        <form onSubmit={handleUpdate} className="p-6 overflow-y-auto space-y-4">
+          <div>
+            <label className="text-xs font-bold text-zinc-500 uppercase">Title</label>
+            <input name="title" value={formData.title} onChange={handleChange} className="w-full p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none dark:text-white" />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-bold text-zinc-500 uppercase">Title</label>
-              <input required type="text" className="w-full p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none"
-                value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+              <label className="text-xs font-bold text-zinc-500 uppercase">Date</label>
+              <input type="date" name="date" value={formData.date} onChange={handleChange} className="w-full p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none dark:text-white" />
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-               <div>
-                 <label className="text-xs font-bold text-zinc-500 uppercase">Date</label>
-                 <input required type="datetime-local" className="w-full p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none"
-                   style={{ colorScheme: 'dark' }}
-                   value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
-               </div>
-               <div>
-                 <label className="text-xs font-bold text-zinc-500 uppercase">Seats</label>
-                 <input required type="number" className="w-full p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none"
-                   value={formData.totalTickets} onChange={e => setFormData({...formData, totalTickets: e.target.value})} />
-               </div>
-            </div>
-
             <div>
-              <label className="text-xs font-bold text-zinc-500 uppercase">Location</label>
-              <input required type="text" className="w-full p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none"
-                value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
+              <label className="text-xs font-bold text-zinc-500 uppercase">Time</label>
+              <input type="time" name="time" value={formData.time} onChange={handleChange} className="w-full p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none dark:text-white" />
             </div>
+          </div>
 
-            <div>
-              <label className="text-xs font-bold text-zinc-500 uppercase">Description</label>
-              <textarea rows="4" className="w-full p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none"
-                value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
-            </div>
+          <div>
+             <label className="text-xs font-bold text-zinc-500 uppercase">Location</label>
+             <input name="location" value={formData.location} onChange={handleChange} className="w-full p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none dark:text-white" />
+          </div>
 
-          </form>
-        </div>
+          <div>
+             <label className="text-xs font-bold text-zinc-500 uppercase">Description</label>
+             <textarea name="description" value={formData.description} onChange={handleChange} className="w-full p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none dark:text-white h-24" />
+          </div>
 
-        <div className="p-6 border-t border-zinc-100 dark:border-zinc-800 flex justify-end gap-3">
-          <button type="button" onClick={onClose} className="px-4 py-2 font-bold text-zinc-500">Cancel</button>
-          <button type="submit" form="edit-event-form" disabled={loading} className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-xl flex items-center gap-2">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin"/> : 'Save Changes'}
+          <button type="submit" disabled={loading} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center justify-center gap-2">
+            {loading ? <Loader2 className="animate-spin" /> : <><Save className="w-4 h-4" /> Save Changes</>}
           </button>
-        </div>
-
+        </form>
       </div>
     </div>
   );

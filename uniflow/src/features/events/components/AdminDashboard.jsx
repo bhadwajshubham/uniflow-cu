@@ -4,18 +4,27 @@ import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { 
   Ticket, Calendar, Activity, Plus, QrCode, 
-  MoreVertical, RefreshCw, Trash2, Users
+  MoreVertical, RefreshCw, Trash2, Users, Edit
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import CreateEventModal from './CreateEventModal'; 
+import CreateEventModal from './CreateEventModal';
+// 👇 NEW IMPORTS
+import EditEventModal from './EditEventModal';
+import EventParticipantsModal from './EventParticipantsModal';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [stats, setStats] = useState({ events: 0, tickets: 0, funds: 0, attendanceRate: 0 });
+  const [stats, setStats] = useState({ events: 0, tickets: 0, funds: 0 });
   const [recentEvents, setRecentEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // MODAL STATES
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isParticipantsModalOpen, setIsParticipantsModalOpen] = useState(false);
+  
+  const [selectedEvent, setSelectedEvent] = useState(null); // Which event are we editing/viewing?
   const [activeMenuId, setActiveMenuId] = useState(null);
 
   const fetchData = async () => {
@@ -27,34 +36,17 @@ const AdminDashboard = () => {
       
       let totalTickets = 0;
       let totalFunds = 0;
-      let totalCapacity = 0;
       const eventsList = [];
 
       eventSnaps.forEach(doc => {
         const data = doc.data();
-        const sold = data.ticketsSold || 0;
-        const price = Number(data.price) || 0;
-        
-        totalTickets += sold;
-        totalFunds += (sold * price); // ✅ REAL MATH
-        totalCapacity += (Number(data.totalTickets) || 0);
-        
+        totalTickets += (data.ticketsSold || 0);
+        totalFunds += ((data.ticketsSold || 0) * (Number(data.price) || 0));
         eventsList.push({ id: doc.id, ...data });
       });
 
-      // Calculate Pulse (Attendance Rate)
-      const rate = totalCapacity > 0 ? Math.round((totalTickets / totalCapacity) * 100) : 0;
-
-      // Sort: Newest First
       eventsList.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-
-      setStats({
-        events: eventSnaps.size,
-        tickets: totalTickets,
-        funds: totalFunds,
-        attendanceRate: rate
-      });
-      
+      setStats({ events: eventSnaps.size, tickets: totalTickets, funds: totalFunds });
       setRecentEvents(eventsList);
     } catch (error) {
       console.error("Dashboard Error:", error);
@@ -63,185 +55,130 @@ const AdminDashboard = () => {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [user]);
+  useEffect(() => { fetchData(); }, [user]);
 
   const handleDelete = async (eventId) => {
-    if (window.confirm("Are you sure you want to cancel this event? This action cannot be undone.")) {
-      try {
-        await deleteDoc(doc(db, 'events', eventId));
-        setActiveMenuId(null);
-        fetchData(); 
-      } catch (err) {
-        alert("Error: " + err.message);
-      }
+    if (window.confirm("Delete this event?")) {
+      await deleteDoc(doc(db, 'events', eventId));
+      fetchData();
     }
   };
 
-  if (loading) return (
-    <div className="min-h-screen pt-24 flex justify-center text-zinc-500">Syncing Club Data...</div>
-  );
+  // 👇 HANDLERS
+  const openEdit = (event) => {
+    setSelectedEvent(event);
+    setIsEditModalOpen(true);
+    setActiveMenuId(null);
+  };
+
+  const openParticipants = (event) => {
+    setSelectedEvent(event);
+    setIsParticipantsModalOpen(true);
+    setActiveMenuId(null);
+  };
+
+  if (loading) return <div className="min-h-screen pt-24 text-center text-zinc-500">Loading Dashboard...</div>;
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-4 sm:px-6 lg:px-8" onClick={() => setActiveMenuId(null)}>
+    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-4" onClick={() => setActiveMenuId(null)}>
       <div className="max-w-7xl mx-auto">
         
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-zinc-900 dark:text-white">Club Command Center</h1>
-            <p className="text-zinc-500">Manage your events and track participation.</p>
-          </div>
-          
-          <div className="flex gap-3 w-full md:w-auto">
-            <button 
-              onClick={(e) => { e.stopPropagation(); setIsCreateModalOpen(true); }} 
-              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
-            >
-              <Plus className="w-4 h-4" /> Create Event
+        <div className="flex justify-between items-center mb-10">
+          <h1 className="text-3xl font-black text-zinc-900 dark:text-white">Dashboard</h1>
+          <div className="flex gap-2">
+            <button onClick={() => setIsCreateModalOpen(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg flex items-center gap-2">
+              <Plus className="w-4 h-4" /> Create
             </button>
-             <button 
-              onClick={() => navigate('/scan')}
-              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-lg font-medium hover:bg-zinc-50 dark:hover:bg-zinc-700"
-            >
-              <QrCode className="w-4 h-4" /> Scanner
+            <button onClick={() => navigate('/scan')} className="px-4 py-2 bg-zinc-800 text-white rounded-lg flex items-center gap-2">
+              <QrCode className="w-4 h-4" /> Scan
             </button>
           </div>
         </div>
 
-        {/* 📊 ETHICAL STATS GRID */}
+        {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          <StatCard icon={Calendar} label="Active Events" value={stats.events} color="blue" />
-          <StatCard icon={Users} label="Total Participants" value={stats.tickets} color="green" />
-          {/* Replaced 'Revenue' with 'Funds Raised' or 'Club Pulse' */}
-          <StatCard 
-            icon={Activity} 
-            label="Club Pulse (Fill Rate)" 
-            value={`${stats.attendanceRate}%`} 
-            color="purple" 
-            subValue={`$${stats.funds} Funds Raised`}
-          />
+          <div className="p-6 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+             <div className="text-zinc-500 text-sm">Active Events</div>
+             <div className="text-3xl font-black text-zinc-900 dark:text-white">{stats.events}</div>
+          </div>
+          <div className="p-6 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+             <div className="text-zinc-500 text-sm">Tickets Sold</div>
+             <div className="text-3xl font-black text-zinc-900 dark:text-white">{stats.tickets}</div>
+          </div>
+          <div className="p-6 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+             <div className="text-zinc-500 text-sm">Funds Raised</div>
+             <div className="text-3xl font-black text-zinc-900 dark:text-white">${stats.funds}</div>
+          </div>
         </div>
 
-        {/* Events Table */}
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm min-h-[400px]">
-          <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
-            <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Event Roadmap</h3>
-            <button onClick={fetchData} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
-              <RefreshCw className="w-4 h-4 text-zinc-400" />
-            </button>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-zinc-50 dark:bg-zinc-950/50 text-xs uppercase text-zinc-500 font-semibold">
+        {/* List */}
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden min-h-[400px]">
+           <table className="w-full text-left">
+              <thead className="bg-zinc-50 dark:bg-zinc-950/50 text-xs uppercase text-zinc-500">
                 <tr>
-                  <th className="px-6 py-4">Event Details</th>
+                  <th className="px-6 py-4">Event</th>
                   <th className="px-6 py-4">Date</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4">Engagement</th>
-                  <th className="px-6 py-4 text-right">Manage</th>
+                  <th className="px-6 py-4">Sales</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {recentEvents.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="px-6 py-12 text-center text-zinc-500">
-                      <div className="flex flex-col items-center">
-                        <Calendar className="w-12 h-12 text-zinc-300 mb-2" />
-                        <p>No active events.</p>
-                        <p className="text-xs">Click 'Create Event' to start.</p>
-                      </div>
+                {recentEvents.map((event) => (
+                  <tr key={event.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 relative">
+                    <td className="px-6 py-4 font-bold text-zinc-900 dark:text-white">{event.title}</td>
+                    <td className="px-6 py-4 text-zinc-500 text-sm">{event.date}</td>
+                    <td className="px-6 py-4 text-zinc-600 dark:text-zinc-300 text-sm">
+                      {event.ticketsSold} / {event.totalTickets}
+                    </td>
+                    <td className="px-6 py-4 text-right relative">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === event.id ? null : event.id); }}
+                        className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg"
+                      >
+                        <MoreVertical className="w-4 h-4 text-zinc-400" />
+                      </button>
+
+                      {/* DROPDOWN MENU */}
+                      {activeMenuId === event.id && (
+                        <div className="absolute right-8 top-8 w-48 bg-white dark:bg-zinc-800 rounded-xl shadow-xl border border-zinc-200 dark:border-zinc-700 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                          
+                          {/* 1. VIEW PAGE */}
+                          <button onClick={() => navigate(`/events/${event.id}`)} className="w-full text-left px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 flex items-center gap-2">
+                            <Ticket className="w-4 h-4" /> View Page
+                          </button>
+                          
+                          {/* 2. MANAGE PARTICIPANTS */}
+                          <button onClick={() => openParticipants(event)} className="w-full text-left px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 flex items-center gap-2">
+                            <Users className="w-4 h-4" /> Participants
+                          </button>
+
+                          {/* 3. EDIT EVENT */}
+                          <button onClick={() => openEdit(event)} className="w-full text-left px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 flex items-center gap-2">
+                            <Edit className="w-4 h-4" /> Edit Details
+                          </button>
+
+                          {/* 4. DELETE EVENT */}
+                          <button onClick={() => handleDelete(event.id)} className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 border-t border-zinc-100 dark:border-zinc-700">
+                            <Trash2 className="w-4 h-4" /> Delete
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
-                ) : (
-                  recentEvents.map((event) => (
-                    <tr key={event.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors relative">
-                      <td className="px-6 py-4">
-                        <p className="font-bold text-zinc-900 dark:text-white">{event.title}</p>
-                        <p className="text-xs text-zinc-500">{event.location}</p>
-                      </td>
-                      <td className="px-6 py-4 text-zinc-500 text-sm">
-                        {event.date}
-                      </td>
-                      <td className="px-6 py-4">
-                         {/* Dynamic Status Badge */}
-                         {new Date(event.date) < new Date() ? (
-                           <span className="px-2 py-1 bg-zinc-100 text-zinc-600 rounded-full text-xs font-bold">Past</span>
-                         ) : (
-                           <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">Upcoming</span>
-                         )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 h-2 bg-zinc-100 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-indigo-500 rounded-full" 
-                              style={{ width: `${Math.min((event.ticketsSold / event.totalTickets) * 100, 100)}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-xs text-zinc-500">{event.ticketsSold}/{event.totalTickets}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right relative">
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveMenuId(activeMenuId === event.id ? null : event.id);
-                          }}
-                          className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-colors"
-                        >
-                          <MoreVertical className="w-4 h-4 text-zinc-400" />
-                        </button>
-
-                        {activeMenuId === event.id && (
-                          <div className="absolute right-8 top-8 w-48 bg-white dark:bg-zinc-800 rounded-xl shadow-xl border border-zinc-200 dark:border-zinc-700 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                            <button 
-                              onClick={() => navigate(`/events/${event.id}`)}
-                              className="w-full text-left px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 flex items-center gap-2"
-                            >
-                              <Ticket className="w-4 h-4" /> View Details
-                            </button>
-                            <button 
-                              onClick={() => handleDelete(event.id)}
-                              className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 border-t border-zinc-100 dark:border-zinc-700"
-                            >
-                              <Trash2 className="w-4 h-4" /> Cancel Event
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
-            </table>
-          </div>
+           </table>
         </div>
 
-        <CreateEventModal 
-          isOpen={isCreateModalOpen} 
-          onClose={() => setIsCreateModalOpen(false)}
-          onSuccess={fetchData}
-        />
+        {/* MODALS */}
+        <CreateEventModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onSuccess={fetchData} />
+        <EditEventModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} event={selectedEvent} onSuccess={fetchData} />
+        <EventParticipantsModal isOpen={isParticipantsModalOpen} onClose={() => setIsParticipantsModalOpen(false)} event={selectedEvent} />
         
       </div>
     </div>
   );
 };
-
-const StatCard = ({ icon: Icon, label, value, color, subValue }) => (
-  <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-    <div className={`p-4 rounded-xl bg-${color}-50 dark:bg-${color}-900/20 text-${color}-600`}>
-      <Icon className="w-6 h-6" />
-    </div>
-    <div>
-      <p className="text-sm text-zinc-500 font-medium mb-1">{label}</p>
-      <p className="text-3xl font-black text-zinc-900 dark:text-white">{value}</p>
-      {subValue && <p className="text-xs text-zinc-400 mt-1 font-medium">{subValue}</p>}
-    </div>
-  </div>
-);
 
 export default AdminDashboard;
