@@ -1,83 +1,88 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/layout/Navbar';
-import { AuthProvider } from './context/AuthContext';
-import { ThemeProvider } from './context/ThemeContext';
-import ProtectedRoute from './components/layout/ProtectedRoute';
-import HomePage from './features/events/components/HomePage';
 import LoginPage from './features/auth/components/LoginPage';
-import HelpPage from './features/events/components/HelpPage';
+import SignupPage from './features/auth/components/SignupPage';
 
-// Events
+// Events & Home
+import HomePage from './features/events/components/HomePage'; // 👈 NEW IMPORT
 import EventsPage from './features/events/components/EventsPage';
 import EventDetailsPage from './features/events/components/EventDetailsPage';
+import CreateEventModal from './features/events/components/CreateEventModal';
 import MyTicketsPage from './features/events/components/MyTicketsPage';
-import TicketPage from './features/events/components/TicketPage'; // Premium Ticket View
+import TicketPage from './features/events/components/TicketPage'; // The Public Ticket View
 
 // Admin
 import AdminDashboard from './features/events/components/AdminDashboard';
-import ScannerPage from './features/events/components/ScannerPage'; // 👈 USING THE GOOD SCANNER
+import ScannerPage from './features/events/components/ScannerPage';
+
+// Protected Route Wrapper
+const ProtectedRoute = ({ children, adminOnly = false }) => {
+  const { user, profile, loading } = useAuth();
+  
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black text-zinc-500">Loading...</div>;
+  
+  if (!user) return <Navigate to="/login" />;
+  
+  if (adminOnly && profile?.role !== 'admin' && profile?.role !== 'super_admin') {
+    return <Navigate to="/" />;
+  }
+
+  return children;
+};
 
 const App = () => {
   return (
     <AuthProvider>
-      <ThemeProvider>
-        <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-white transition-colors duration-300">
+      <Router>
+        <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-white font-sans transition-colors duration-200">
           <Navbar />
           <Routes>
-            {/* Public */}
+            {/* 🏠 PUBLIC ROUTES */}
+            <Route path="/" element={<HomePage />} /> {/* 👈 LANDING PAGE */}
+            <Route path="/events" element={<EventsPage />} /> {/* 👈 DISCOVERY PAGE */}
+            <Route path="/events/:id" element={<EventDetailsPage />} />
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/help" element={<HelpPage />} />
-            <Route path="/" element={<EventsPage />} />
-            <Route path="/events" element={<EventsPage />} />
+            <Route path="/signup" element={<SignupPage />} />
             
-            {/* Event Details */}
-            <Route path="/events/:id" element={<EventDetailsPage />} /> 
-
-            {/* Protected Student */}
-            <Route 
-              path="/my-tickets" 
-              element={
-                <ProtectedRoute>
-                  <MyTicketsPage />
-                </ProtectedRoute>
-              } 
-            />
+            {/* 🔒 PROTECTED STUDENT ROUTES */}
+            <Route path="/my-tickets" element={
+              <ProtectedRoute>
+                <MyTicketsPage />
+              </ProtectedRoute>
+            } />
             
-            <Route path="/" element={<HomePage />} />
-            <Route path="/events" element={<EventsPage />} />
+            <Route path="/tickets/:ticketId" element={
+              <ProtectedRoute>
+                <TicketPage />
+              </ProtectedRoute>
+            } />
 
+            {/* 🛡️ ADMIN ROUTES */}
+            <Route path="/admin" element={
+              <ProtectedRoute adminOnly={true}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/create-event" element={
+              <ProtectedRoute adminOnly={true}>
+                <CreateEventModal isOpen={true} onClose={() => {}} />
+              </ProtectedRoute>
+            } />
 
-            {/* Premium Ticket View Route */}
-            <Route 
-              path="/tickets/:ticketId" 
-              element={
-                <ProtectedRoute>
-                  <TicketPage />
-                </ProtectedRoute>
-              } 
-            />
+            <Route path="/scan" element={
+              <ProtectedRoute adminOnly={true}>
+                <ScannerPage />
+              </ProtectedRoute>
+            } />
 
-            {/* Protected Admin */}
-            <Route 
-              path="/admin" 
-              element={
-                <ProtectedRoute requireAdmin={true}>
-                  <AdminDashboard />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/scan" 
-              element={
-                <ProtectedRoute requireAdmin={true}>
-                  <ScannerPage />
-                </ProtectedRoute>
-              } 
-            />
+            {/* 404 Catch All */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
-      </ThemeProvider>
+      </Router>
     </AuthProvider>
   );
 };
