@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Calendar, MapPin, DollarSign, Image as ImageIcon, Type, Ticket, Users, MessageCircle, Building2 } from 'lucide-react';
+import { X, Calendar, MapPin, DollarSign, Image as ImageIcon, Type, Ticket, Users, MessageCircle, Building2, ShieldAlert } from 'lucide-react';
 import { createEvent } from '../services/eventService'; 
 import { useAuth } from '../../../context/AuthContext';
 
@@ -16,20 +16,23 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
     price: 0,
     totalTickets: 100,
     description: '',
-    imageUrl: '',
+    imageUrl: '', // This is your Custom Poster Link
     category: 'General',
-    // 👇 NEW FIELDS ADDED
-    type: 'solo', // 'solo' or 'team'
+    type: 'solo', 
     teamSize: 1,
     whatsappLink: '',
-    allowedBranches: 'All' // 'All', 'CSE', 'ECE', etc.
+    allowedBranches: 'All',
+    isRestricted: false // 🔒 CHITKARA ONLY TOGGLE
   });
 
   if (!isOpen) return null;
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -45,11 +48,12 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
       const eventPayload = {
         ...formData,
         price: Number(formData.price),
-        totalTickets: Number(formData.totalTickets),
+        totalTickets: Number(formData.totalTickets), // Capacity
         teamSize: formData.type === 'team' ? Number(formData.teamSize) : 1,
         ticketsSold: 0,
         organizerId: user.uid,
-        organizerName: user.displayName || 'Admin',
+        organizerName: user.displayName || 'Admin', // Organiser Name
+        organizerEmail: user.email,
         createdAt: new Date()
       };
 
@@ -68,10 +72,11 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white dark:bg-zinc-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
         
+        {/* Header */}
         <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
           <h2 className="text-xl font-black text-zinc-900 dark:text-white flex items-center gap-2">
             <Calendar className="w-5 h-5 text-indigo-600" />
-            Create New Event
+            Create Event
           </h2>
           <button onClick={onClose} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full transition-colors">
             <X className="w-5 h-5 text-zinc-500" />
@@ -88,7 +93,16 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
               <label className="text-xs font-bold uppercase text-zinc-500">Event Title</label>
               <div className="relative">
                 <Type className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                <input name="title" value={formData.title} onChange={handleChange} className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none" required placeholder="Event Name" />
+                <input name="title" value={formData.title} onChange={handleChange} className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required placeholder="e.g. Hackathon 2025" />
+              </div>
+            </div>
+
+            {/* Poster Link */}
+            <div className="space-y-1">
+              <label className="text-xs font-bold uppercase text-zinc-500">Poster URL (Storage Saver)</label>
+              <div className="relative">
+                <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                <input name="imageUrl" value={formData.imageUrl} onChange={handleChange} className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none" placeholder="https://..." />
               </div>
             </div>
 
@@ -104,13 +118,31 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
               </div>
             </div>
 
-            {/* Location & Branch */}
+            {/* Location & Capacity */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase text-zinc-500">Location</label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                   <input name="location" value={formData.location} onChange={handleChange} className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none" required placeholder="Venue" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase text-zinc-500">Total Capacity</label>
+                <div className="relative">
+                  <Ticket className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                  <input type="number" name="totalTickets" value={formData.totalTickets} onChange={handleChange} className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none" required />
+                </div>
+              </div>
+            </div>
+
+            {/* Price & Branch */}
+            <div className="grid grid-cols-2 gap-4">
+               <div className="space-y-1">
+                <label className="text-xs font-bold uppercase text-zinc-500">Price (₹)</label>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                  <input type="number" name="price" value={formData.price} onChange={handleChange} className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none" />
                 </div>
               </div>
               <div className="space-y-1">
@@ -127,37 +159,24 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
               </div>
             </div>
 
-            {/* Solo/Team Logic */}
-            <div className="grid grid-cols-2 gap-4 bg-zinc-50 dark:bg-zinc-800/30 p-4 rounded-xl border border-zinc-100 dark:border-zinc-800">
-               <div className="space-y-1">
-                <label className="text-xs font-bold uppercase text-zinc-500">Event Type</label>
-                <div className="relative">
-                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                  <select name="type" value={formData.type} onChange={handleChange} className="w-full pl-10 pr-4 py-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none appearance-none">
-                    <option value="solo">Individual (Solo)</option>
-                    <option value="team">Team Based</option>
-                  </select>
-                </div>
-              </div>
-              
-              {formData.type === 'team' && (
-                <div className="space-y-1 animate-in fade-in">
-                  <label className="text-xs font-bold uppercase text-zinc-500">Max Team Size</label>
-                  <input type="number" name="teamSize" value={formData.teamSize} onChange={handleChange} min="2" max="10" className="w-full px-4 py-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none" />
-                </div>
-              )}
-            </div>
-
-            {/* WhatsApp Group Link */}
-            <div className="space-y-1">
-              <label className="text-xs font-bold uppercase text-zinc-500">WhatsApp Group Link</label>
-              <div className="relative">
-                <MessageCircle className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-green-500" />
-                <input name="whatsappLink" value={formData.whatsappLink} onChange={handleChange} placeholder="https://chat.whatsapp.com/..." className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none" />
+            {/* 🔒 CHITKARA ONLY CHECKBOX */}
+            <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-xl">
+              <input 
+                type="checkbox" 
+                name="isRestricted" 
+                checked={formData.isRestricted} 
+                onChange={handleChange} 
+                className="w-5 h-5 rounded text-red-600 focus:ring-red-500"
+              />
+              <div>
+                <h4 className="text-sm font-bold text-red-900 dark:text-red-400 flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4" /> Chitkara Students Only
+                </h4>
+                <p className="text-xs text-red-700 dark:text-red-300">Only emails ending in @chitkara.edu.in can register.</p>
               </div>
             </div>
 
-             {/* Description */}
+            {/* Description */}
             <div className="space-y-1">
               <label className="text-xs font-bold uppercase text-zinc-500">Description</label>
               <textarea name="description" value={formData.description} onChange={handleChange} className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none min-h-[100px]" placeholder="Event details..." />

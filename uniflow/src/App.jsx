@@ -4,6 +4,7 @@ import Navbar from './components/layout/Navbar';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/layout/ProtectedRoute';
+import TicketPage from './features/events/components/TicketPage';
 
 // 1. Auth Components
 import LoginPage from './features/auth/components/LoginPage';
@@ -43,7 +44,15 @@ const App = () => {
                 </ProtectedRoute>
               } 
             />
-
+            
+            <Route 
+              path="/tickets/:ticketId" 
+                element={
+              <ProtectedRoute>
+              <TicketPage />
+           </ProtectedRoute>
+     } 
+   />
             {/* Protected Admin Routes */}
             <Route 
               path="/admin" 

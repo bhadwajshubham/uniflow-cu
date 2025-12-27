@@ -1,134 +1,165 @@
-import React, { useEffect, useState } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { X, Save, Loader2, MapPin, Calendar, Clock, DollarSign, Type, Image as ImageIcon } from 'lucide-react';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import { Calendar, MapPin, ArrowRight, Frown, Loader2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 
-const EventsPage = () => {
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    title: '',
+    date: '',
+    time: '',
+    location: '',
+    price: 0,
+    totalTickets: 0,
+    description: '',
+    imageUrl: ''
+  });
 
+  // Populate form when event data arrives
   useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        console.log("Fetching events...");
-        const eventsRef = collection(db, 'events');
-        const snapshot = await getDocs(eventsRef);
-        
-        if (snapshot.empty) {
-          console.log("No documents found in 'events' collection.");
-          setEvents([]);
-          return;
-        }
+    if (event) {
+      setFormData({
+        title: event.title || '',
+        date: event.date || '',
+        time: event.time || '',
+        location: event.location || '',
+        price: event.price || 0,
+        totalTickets: event.totalTickets || 0,
+        description: event.description || '',
+        imageUrl: event.imageUrl || ''
+      });
+    }
+  }, [event]);
 
-        const eventsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+  if (!isOpen || !event) return null;
 
-        console.log("Events fetched:", eventsData);
-        setEvents(eventsData);
-      } catch (err) {
-        console.error("Error loading events:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchEvents();
-  }, []);
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-black pt-16">
-        <Loader2 className="h-10 w-10 animate-spin text-indigo-600 mb-4" />
-        <p className="text-zinc-500">Loading events...</p>
-      </div>
-    );
-  }
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const eventRef = doc(db, 'events', event.id);
+      
+      // Update logic
+      await updateDoc(eventRef, {
+        ...formData,
+        price: Number(formData.price),
+        totalTickets: Number(formData.totalTickets),
+        updatedAt: serverTimestamp()
+      });
+
+      alert("Event Updated Successfully!");
+      if (onSuccess) onSuccess(); // Refresh parent data
+      onClose();
+    } catch (error) {
+      console.error("Update Error:", error);
+      alert("Failed to update event: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white dark:bg-zinc-900 w-full max-w-lg rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col max-h-[90vh]">
         
         {/* Header */}
-        <div className="mb-10 text-center md:text-left">
-          <h1 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tight">
-            Discover Events
-          </h1>
-          <p className="mt-2 text-zinc-500 dark:text-zinc-400">
-            Check out what's happening on campus.
-          </p>
+        <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-zinc-900">
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+            <Type className="w-5 h-5 text-indigo-500" /> Edit Event
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full transition-colors">
+            <X className="w-5 h-5 text-zinc-500" />
+          </button>
         </div>
 
-        {/* Empty State */}
-        {events.length === 0 ? (
-          <div className="text-center py-24 bg-white dark:bg-zinc-900 rounded-3xl border border-dashed border-zinc-300 dark:border-zinc-800">
-            <div className="mx-auto w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center mb-4">
-              <Frown className="w-8 h-8 text-zinc-400" />
+        {/* Scrollable Form */}
+        <div className="p-6 overflow-y-auto custom-scrollbar">
+          <form id="edit-form" onSubmit={handleUpdate} className="space-y-4">
+            
+            {/* Title */}
+            <div>
+              <label className="text-xs font-bold text-zinc-500 uppercase">Event Title</label>
+              <input name="title" value={formData.title} onChange={handleChange} className="w-full p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none dark:text-white" required />
             </div>
-            <h3 className="text-lg font-medium text-zinc-900 dark:text-white">No events found</h3>
-            <p className="text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto mt-2">
-              The database returned 0 events. Try creating one in the Admin Dashboard!
-            </p>
-          </div>
-        ) : (
-          /* Events Grid */
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {events.map((event) => (
-              <div 
-                key={event.id}
-                onClick={() => navigate(`/events/${event.id}`)} 
-                className="group bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer"
-              >
-                {/* Image Section */}
-                <div className="h-48 bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
-                  <div className="absolute top-4 right-4 z-10 bg-white/90 dark:bg-black/90 backdrop-blur px-3 py-1 rounded-full text-xs font-bold border border-zinc-200 dark:border-zinc-700">
-                    {event.price > 0 ? `$${event.price}` : 'Free'}
-                  </div>
-                  
-                  {event.imageUrl ? (
-                    <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-zinc-300 dark:text-zinc-700 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20">
-                      <Calendar className="w-12 h-12 opacity-50" />
-                    </div>
-                  )}
-                </div>
 
-                {/* Details Section */}
-                <div className="p-6">
-                  <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-2 line-clamp-1">
-                    {event.title}
-                  </h3>
-                  
-                  <div className="space-y-2 text-sm text-zinc-500 dark:text-zinc-400 mb-6">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-indigo-500" />
-                      <span>{event.date}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-indigo-500" />
-                      <span>{event.location}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                    <span className="text-xs font-medium text-zinc-400">
-                      {event.ticketsSold || 0} attending
-                    </span>
-                    <span className="flex items-center text-sm font-semibold text-indigo-600 dark:text-indigo-400 group-hover:gap-2 transition-all">
-                      Details <ArrowRight className="w-4 h-4 ml-1" />
-                    </span>
-                  </div>
+            {/* Date & Time */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase">Date</label>
+                <div className="relative">
+                   <Calendar className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
+                   <input type="date" name="date" value={formData.date} onChange={handleChange} className="w-full pl-10 p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none dark:text-white" required />
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+              <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase">Time</label>
+                <div className="relative">
+                   <Clock className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
+                   <input type="time" name="time" value={formData.time} onChange={handleChange} className="w-full pl-10 p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none dark:text-white" required />
+                </div>
+              </div>
+            </div>
+
+            {/* Location */}
+            <div>
+              <label className="text-xs font-bold text-zinc-500 uppercase">Location</label>
+              <div className="relative">
+                 <MapPin className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
+                 <input name="location" value={formData.location} onChange={handleChange} className="w-full pl-10 p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none dark:text-white" required />
+              </div>
+            </div>
+
+            {/* Price & Tickets */}
+            <div className="grid grid-cols-2 gap-4">
+               <div>
+                 <label className="text-xs font-bold text-zinc-500 uppercase">Price (₹)</label>
+                 <div className="relative">
+                    <DollarSign className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
+                    <input type="number" name="price" value={formData.price} onChange={handleChange} className="w-full pl-10 p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none dark:text-white" />
+                 </div>
+               </div>
+               <div>
+                 <label className="text-xs font-bold text-zinc-500 uppercase">Total Capacity</label>
+                 <input type="number" name="totalTickets" value={formData.totalTickets} onChange={handleChange} className="w-full p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none dark:text-white" />
+               </div>
+            </div>
+
+            {/* Image URL */}
+            <div>
+              <label className="text-xs font-bold text-zinc-500 uppercase">Poster URL</label>
+              <div className="relative">
+                 <ImageIcon className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
+                 <input name="imageUrl" value={formData.imageUrl} onChange={handleChange} className="w-full pl-10 p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none dark:text-white" placeholder="https://..." />
+              </div>
+            </div>
+
+            {/* Description */}
+            <div>
+               <label className="text-xs font-bold text-zinc-500 uppercase">Description</label>
+               <textarea name="description" value={formData.description} onChange={handleChange} className="w-full p-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none dark:text-white h-24" />
+            </div>
+
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 border-t border-zinc-100 dark:border-zinc-800 flex justify-end gap-3 bg-zinc-50 dark:bg-zinc-900 rounded-b-2xl">
+          <button onClick={onClose} className="px-5 py-2.5 rounded-xl font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors">Cancel</button>
+          <button type="submit" form="edit-form" disabled={loading} className="px-6 py-2.5 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2">
+            {loading ? <Loader2 className="animate-spin w-4 h-4" /> : <><Save className="w-4 h-4" /> Save Changes</>}
+          </button>
+        </div>
+
       </div>
     </div>
   );
 };
 
-export default EventsPage;
+export default EditEventModal;

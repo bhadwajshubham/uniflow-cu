@@ -1,105 +1,112 @@
-import { Calendar, MapPin, Users, Edit, Ticket, Zap } from 'lucide-react';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Calendar, MapPin, ArrowRight, Edit, Trash2, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
+import { deleteDoc, doc } from 'firebase/firestore';
+import { db } from '../../../lib/firebase';
 
-const EventCard = ({ event, onRegister, onManage }) => {
-  const { userRole, currentUser } = useAuth();
-  
-  // Logic to show "Manage" button: If user is admin AND (it's their event OR they are Super Admin)
-  const isOwner = event.organizerId === currentUser?.uid;
-  // Assuming Super Admin email is fixed or we trust all admins for now based on your logic
-  const canManage = userRole === 'admin' && (isOwner || currentUser?.email === 'shubham1293.be23@chitkara.edu.in');
+const EventCard = ({ event, onEdit, onDelete }) => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
-  const soldPercentage = Math.min((event.ticketsSold / event.totalTickets) * 100, 100);
-  const isSoldOut = event.ticketsSold >= event.totalTickets;
+  // 🔒 SECURE CHECK: Only the creator sees these buttons
+  const isOrganizer = user && event.organizerId === user.uid;
+
+  const handleDelete = async (e) => {
+    e.stopPropagation(); // Stop card click
+    if (window.confirm("Are you sure you want to delete this event?")) {
+      try {
+        await deleteDoc(doc(db, 'events', event.id));
+        if (onDelete) onDelete(); // Refresh parent list
+      } catch (err) {
+        alert("Failed to delete: " + err.message);
+      }
+    }
+  };
+
+  const handleEdit = (e) => {
+    e.stopPropagation(); // Stop card click
+    if (onEdit) onEdit(event);
+  };
 
   return (
-    <div className="group relative bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden hover:shadow-xl transition-all duration-300 flex flex-col h-full">
+    <div 
+      onClick={() => navigate(`/events/${event.id}`)}
+      className="group bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer relative"
+    >
       
-      {/* IMAGE SECTION */}
-      <div className="relative h-48 overflow-hidden">
+      {/* 🛡️ ADMIN CONTROLS (Only visible to Creator) */}
+      {isOrganizer && (
+        <div className="absolute top-4 right-4 z-20 flex gap-2">
+          <button 
+            onClick={handleEdit}
+            className="p-2 bg-white/90 dark:bg-black/90 backdrop-blur text-indigo-600 rounded-lg shadow-sm hover:bg-indigo-50 dark:hover:bg-zinc-800 transition-colors"
+            title="Edit Event"
+          >
+            <Edit className="w-4 h-4" />
+          </button>
+          <button 
+            onClick={handleDelete}
+            className="p-2 bg-white/90 dark:bg-black/90 backdrop-blur text-red-500 rounded-lg shadow-sm hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            title="Delete Event"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Image Section */}
+      <div className="h-48 bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
+        {/* Price Badge */}
+        <div className="absolute top-4 left-4 z-10 bg-white/90 dark:bg-black/90 backdrop-blur px-3 py-1 rounded-full text-xs font-bold border border-zinc-200 dark:border-zinc-700 shadow-sm">
+          {event.price > 0 ? `₹${event.price}` : 'Free'}
+        </div>
+
+        {/* Organizer Badge (Optional visual cue) */}
+        {isOrganizer && (
+          <div className="absolute bottom-4 right-4 z-10 bg-indigo-600/90 backdrop-blur px-2 py-1 rounded-md text-[10px] font-bold text-white flex items-center gap-1 shadow-md">
+            <ShieldCheck className="w-3 h-3" /> YOUR EVENT
+          </div>
+        )}
+
         {event.imageUrl ? (
           <img 
             src={event.imageUrl} 
             alt={event.title} 
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
           />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-            <Ticket className="h-12 w-12 text-white/50" />
+          <div className="w-full h-full flex items-center justify-center text-zinc-300 dark:text-zinc-700 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20">
+            <Calendar className="w-12 h-12 opacity-50" />
           </div>
-        )}
-        
-        {/* Status Badge */}
-        <div className="absolute top-4 right-4 bg-white/90 dark:bg-black/80 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold shadow-sm text-zinc-900 dark:text-white border border-zinc-200 dark:border-zinc-700">
-           {isSoldOut ? 'SOLD OUT' : `${event.ticketsSold} / ${event.totalTickets} Sold`}
-        </div>
-
-        {/* SPONSOR BADGE (NEW) */}
-        {event.sponsorName && (
-           <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1 rounded-lg text-xs font-bold text-white border border-white/20 flex items-center gap-1 shadow-lg">
-              <Zap className="h-3 w-3 text-yellow-400 fill-yellow-400" /> 
-              <span>Powered by {event.sponsorName}</span>
-           </div>
         )}
       </div>
 
-      {/* CONTENT SECTION */}
-      <div className="p-5 flex flex-col flex-1">
-        <div className="flex justify-between items-start mb-2">
-           <div>
-             <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">{event.clubName}</span>
-             <h3 className="text-xl font-bold text-zinc-900 dark:text-white leading-tight mt-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-               {event.title}
-             </h3>
-           </div>
-        </div>
+      {/* Content Section */}
+      <div className="p-6">
+        <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-2 line-clamp-1">
+          {event.title}
+        </h3>
         
-        <p className="text-zinc-500 text-sm line-clamp-2 mb-4 flex-1">
-          {event.description || "No description provided."}
-        </p>
-
-        {/* Details Grid */}
-        <div className="space-y-2 mb-6">
-          <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
-             <Calendar className="h-4 w-4 shrink-0" />
-             <span>{new Date(event.date).toLocaleString()}</span>
+        <div className="space-y-2 text-sm text-zinc-500 dark:text-zinc-400 mb-6">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-indigo-500" />
+            <span>{event.date}</span>
           </div>
-          <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
-             <MapPin className="h-4 w-4 shrink-0" />
-             <span>{event.location}</span>
+          <div className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-indigo-500" />
+            <span>{event.location || 'Venue TBA'}</span>
           </div>
-          {event.eligibility && (
-             <div className="flex items-center gap-2 text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded w-fit mt-2">
-                ⚠️ {event.eligibility}
-             </div>
-          )}
         </div>
 
-        {/* Progress Bar */}
-        <div className="w-full h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden mb-6">
-           <div className={`h-full ${isSoldOut ? 'bg-red-500' : 'bg-indigo-500'} transition-all duration-1000`} style={{ width: `${soldPercentage}%` }}></div>
+        <div className="flex items-center justify-between pt-4 border-t border-zinc-100 dark:border-zinc-800">
+          <span className="text-xs font-medium text-zinc-400">
+            {event.ticketsSold || 0} attending
+          </span>
+          <span className="flex items-center text-sm font-semibold text-indigo-600 dark:text-indigo-400 group-hover:gap-2 transition-all">
+            Details <ArrowRight className="w-4 h-4 ml-1" />
+          </span>
         </div>
-
-        {/* BUTTONS */}
-        <div className="flex gap-3 mt-auto">
-          {canManage ? (
-            <button 
-              onClick={() => onManage(event)}
-              className="flex-1 py-3 rounded-xl font-bold bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white flex items-center justify-center gap-2 transition-colors"
-            >
-              <Edit className="h-4 w-4" /> Manage
-            </button>
-          ) : (
-            <button 
-              onClick={() => onRegister(event)}
-              disabled={isSoldOut}
-              className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 ${isSoldOut ? 'bg-zinc-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/25'}`}
-            >
-              {isSoldOut ? 'Sold Out' : 'Get Ticket'}
-            </button>
-          )}
-        </div>
-
       </div>
     </div>
   );
