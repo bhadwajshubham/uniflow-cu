@@ -1,15 +1,19 @@
 import { useState } from 'react';
 import { X, User, Users, Loader2, ArrowRight, ShieldCheck, Hash, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
-// Ensure these functions are exported from your service
 import { registerForEvent, registerTeam, joinTeam } from '../services/registrationService';
 
 const RegisterModal = ({ event, onClose, isOpen }) => {
-  // 🔥 FIX 1: Use 'user', not 'currentUser'
+  // 🔥 FIX 1: Use 'user' from our current AuthContext
   const { user } = useAuth();
   
-  // 🔥 FIX 2: Map 'type' (solo/team) to the logic
-  const isTeamEvent = event?.type === 'team';
+  if (!isOpen || !event) return null;
+
+  // 🔥 FIX 2: Handle both old 'participationType' and new 'type' naming conventions
+  // If event.type is 'team', or participationType is 'team' -> It is a team event.
+  const isTeamEvent = (event.type === 'team' || event.participationType === 'team');
+  const hasEligibility = event.eligibility && event.eligibility.length > 0;
+
   const initialStep = isTeamEvent ? 'choice' : 'form';
   const initialMode = isTeamEvent ? null : 'solo';
 
@@ -22,8 +26,6 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
   const [teamName, setTeamName] = useState('');
   const [teamCode, setTeamCode] = useState('');
 
-  if (!isOpen || !event) return null;
-
   const handleModeSelect = (selectedMode) => {
     setMode(selectedMode);
     setStep('form');
@@ -31,7 +33,9 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (event.eligibility && !confirmedEligibility) {
+    
+    // Eligibility Guard
+    if (hasEligibility && !confirmedEligibility) {
         alert("Please confirm your eligibility.");
         return;
     }
@@ -41,22 +45,21 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
     try {
       if (mode === 'solo') {
         await registerForEvent(event.id, user);
-        alert("Registration Successful!");
+        alert("✅ Registration Successful!");
       } 
       else if (mode === 'create_team') {
         const res = await registerTeam(event.id, user, teamName);
-        alert(`Team Created! Code: ${res.teamCode}`);
+        alert(`✅ Team Created! Your Code: ${res.teamCode}`);
       } 
       else if (mode === 'join_team') {
         await joinTeam(event.id, user, teamCode);
-        alert("Joined Team Successfully!");
+        alert("✅ Joined Team Successfully!");
       }
       onClose();
-      // Optional: Refresh page or parent state here
       window.location.reload(); 
     } catch (error) {
       console.error(error);
-      alert(error.message || "Registration failed");
+      alert("❌ " + (error.message || "Registration failed"));
     } finally {
       setLoading(false);
     }
@@ -69,7 +72,8 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
         {/* Header */}
         <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-black/20">
           <div>
-            <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Register for {event.title}</h2>
+            <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Register</h2>
+            <p className="text-xs text-zinc-500">{event.title}</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full transition-colors">
             <X className="h-5 w-5 text-zinc-500" />
@@ -82,7 +86,7 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
             <div className="space-y-4">
               <p className="text-sm font-medium text-zinc-500 mb-2">Select how you want to participate:</p>
               
-              {/* Solo Option (Only if allowed) */}
+              {/* Solo Option (Show if NOT purely a team event) */}
               {!isTeamEvent && (
                 <button 
                   onClick={() => handleModeSelect('solo')}
@@ -135,7 +139,7 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
             /* FORM STEP */
             <form onSubmit={handleRegister} className="space-y-6">
               
-              {/* Back Button */}
+              {/* Back Button for Team Mode */}
               {isTeamEvent && (
                 <div className="flex items-center gap-2 mb-2">
                   <button type="button" onClick={() => setStep('choice')} className="text-xs font-bold text-zinc-500 hover:text-indigo-600 uppercase tracking-wide">
@@ -144,8 +148,8 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
                 </div>
               )}
 
-              {/* Eligibility Check */}
-              {event.eligibility && (
+              {/* NEW: ELIGIBILITY CHECK */}
+              {hasEligibility && (
                 <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-200 dark:border-amber-800/30">
                     <div className="flex gap-3">
                       <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
@@ -203,7 +207,7 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
 
               <button 
                 type="submit"
-                disabled={loading || (event.eligibility && !confirmedEligibility)}
+                disabled={loading || (hasEligibility && !confirmedEligibility)}
                 className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Complete Registration'}
