@@ -40,6 +40,26 @@ const EventDetailsPage = () => {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           setEvent({ id: docSnap.id, ...docSnap.data() });
+  const fetchEventAndRegistration = async () => {
+    if (!id) return;
+    setLoading(true);
+    try {
+      // Fetch event
+      const docRef = doc(db, 'events', id);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const eventData = { id: docSnap.id, ...docSnap.data() };
+        setEvent(eventData);
+
+        // Check registration status after event is set
+        if (user) {
+          const q = query(collection(db, 'registrations'), where('eventId', '==', eventData.id), where('userId', '==', user.uid));
+          const snap = await getDocs(q);
+          setIsRegistered(!snap.empty);
+          if (!snap.empty) {
+            setUserTicketId(snap.docs[0].id);
+          }
         }
       } catch (error) {
         console.error("Error fetching event:", error);
@@ -49,8 +69,15 @@ const EventDetailsPage = () => {
     };
     fetchEvent();
   }, [id]);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // 2. Check Registration Status
+  // 1. Fetch Event
   useEffect(() => {
     const checkStatus = async () => {
       if (user && event) {
@@ -64,6 +91,8 @@ const EventDetailsPage = () => {
     };
     checkStatus();
   }, [user, event]);
+    fetchEventAndRegistration();
+  }, [id, user]);
 
   // 🗑️ CLEAN DELETE LOGIC
   const handleDelete = async () => {
@@ -181,6 +210,7 @@ const EventDetailsPage = () => {
                     <div className="mt-4 flex justify-between text-xs text-zinc-500 font-medium uppercase tracking-wide"><span>Capacity</span><span>{event.ticketsSold}/{event.totalTickets} Filled</span></div>
                     <div className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full mt-2 overflow-hidden">
                        <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${Math.min((event.ticketsSold / event.totalTickets) * 100, 100)}%` }}></div>
+                       <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${Math.min((event.ticketsSold / (event.totalTickets || 1)) * 100, 100)}%` }}></div>
                     </div>
                  </div>
               </div>
@@ -189,9 +219,11 @@ const EventDetailsPage = () => {
         </div>
 
         <RegisterModal isOpen={isRegisterOpen} onClose={() => setIsRegisterOpen(false)} event={event} />
+        <RegisterModal isOpen={isRegisterOpen} onClose={() => setIsRegisterOpen(false)} event={event} onSuccess={fetchEventAndRegistration} />
         {isOrganizer && (
           <>
             <EditEventModal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} event={event} onSuccess={() => window.location.reload()} />
+            <EditEventModal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} event={event} onSuccess={fetchEventAndRegistration} />
             <EventParticipantsModal isOpen={isParticipantsOpen} onClose={() => setIsParticipantsOpen(false)} event={event} />
           </>
         )}
