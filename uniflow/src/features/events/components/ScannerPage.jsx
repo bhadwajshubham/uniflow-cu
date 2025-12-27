@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
@@ -9,49 +9,48 @@ const ScannerPage = () => {
   const navigate = useNavigate();
   const [scanResult, setScanResult] = useState(null); // 'success' | 'error' | 'warning'
   const [message, setMessage] = useState('');
-  const [lastScannedId, setLastScannedId] = useState(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // 🔒 USE REFS to track state without re-rendering the effect
+  const isProcessing = useRef(false);
+  const lastScannedId = useRef(null);
 
   useEffect(() => {
-    // Prevent scanner from initializing twice
+    // 1. Initialize Scanner ONLY ONCE
     const scanner = new Html5QrcodeScanner(
       "reader",
       { fps: 10, qrbox: { width: 250, height: 250 } },
       /* verbose= */ false
     );
 
-    scanner.render(onScanSuccess, onScanFailure);
+    scanner.render(onScanSuccess, (error) => {
+      // Ignore failures to keep console clean
+    });
 
-    function onScanFailure(error) {
-      // Handle scan failure, usually better to ignore to prevent console spam
-    }
+    async function onScanSuccess(decodedText) {
+      // 🔒 Check Refs instead of State
+      if (isProcessing.current) return; 
+      if (decodedText === lastScannedId.current) return; 
 
-    async function onScanSuccess(decodedText, decodedResult) {
-      if (isProcessing) return; // Prevent double taps
-      if (decodedText === lastScannedId) return; // Debounce same code
-
-      setIsProcessing(true);
-      setLastScannedId(decodedText);
+      isProcessing.current = true;
+      lastScannedId.current = decodedText;
       
       // Play Beep
-      const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-      audio.play().catch(e => console.log("Audio play failed", e));
+      new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg').play().catch(()=>{});
 
       try {
-        // 1. Check if Ticket Exists
         const ticketRef = doc(db, 'registrations', decodedText);
         const ticketSnap = await getDoc(ticketRef);
 
         if (!ticketSnap.exists()) {
           setScanResult('error');
-          setMessage('Invalid Ticket: ID not found in database.');
-          setIsProcessing(false);
+          setMessage('Invalid Ticket: ID not found.');
+          // Allow retry immediately for invalid codes so they don't get stuck
+          setTimeout(() => { isProcessing.current = false; }, 2000); 
           return;
         }
 
         const data = ticketSnap.data();
 
-        // 2. Check Status
         if (data.status === 'attended' || data.status === 'used') {
           setScanResult('warning');
           setMessage(`⚠️ ALREADY USED by ${data.userName}`);
@@ -59,9 +58,8 @@ const ScannerPage = () => {
           setScanResult('error');
           setMessage('❌ Ticket Cancelled.');
         } else {
-          // 3. Mark as Attended
           await updateDoc(ticketRef, {
-            status: 'attended', // Consistent status
+            status: 'attended',
             scannedAt: serverTimestamp()
           });
           setScanResult('success');
@@ -71,24 +69,22 @@ const ScannerPage = () => {
       } catch (err) {
         console.error("Scan Error", err);
         setScanResult('error');
-        setMessage('System Error: Could not verify.');
+        setMessage('System Error.');
       } finally {
-        // Allow next scan after 3 seconds
+        // Reset Logic
         setTimeout(() => {
-          setIsProcessing(false);
+          isProcessing.current = false;
           setScanResult(null);
           setMessage('');
-        }, 3000);
+        }, 3000); // 3-second cooldown
       }
     }
 
-    // Cleanup logic
+    // Cleanup
     return () => {
-      scanner.clear().catch(error => {
-        console.error("Failed to clear html5QrcodeScanner. ", error);
-      });
+      scanner.clear().catch(console.error);
     };
-  }, [lastScannedId, isProcessing]);
+  }, []); // 🔒 Empty Dependency Array = Runs Once
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center">
@@ -99,13 +95,12 @@ const ScannerPage = () => {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h1 className="font-bold text-lg">Ticket Scanner</h1>
-        <div className="w-9"></div> {/* Spacer */}
+        <div className="w-9"></div> 
       </div>
 
       {/* Scanner Viewport */}
       <div className="w-full max-w-md p-4 flex-1 flex flex-col justify-center">
         <div id="reader" className="w-full rounded-2xl overflow-hidden border-2 border-zinc-700 bg-black"></div>
-        
         <p className="text-center text-zinc-500 text-sm mt-4">
           Point camera at the Student's QR Code
         </p>
@@ -129,7 +124,6 @@ const ScannerPage = () => {
           </div>
         </div>
       )}
-
     </div>
   );
 };
