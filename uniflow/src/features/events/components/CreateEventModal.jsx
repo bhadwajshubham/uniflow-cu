@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { X, Calendar, MapPin, DollarSign, Image as ImageIcon, Type, Ticket, Users, ShieldAlert, Sparkles } from 'lucide-react';
+import { 
+  X, Calendar, MapPin, DollarSign, Image as ImageIcon, 
+  Type, Ticket, Users, ShieldAlert, Sparkles 
+} from 'lucide-react';
 import { createEvent } from '../services/eventService'; 
 import { useAuth } from '../../../context/AuthContext';
 
@@ -18,7 +21,7 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
     description: '',
     imageUrl: '', 
     category: 'General',
-    type: 'solo', 
+    type: 'solo', // 'solo' or 'team'
     teamSize: 1,
     allowedBranches: 'All',
     isRestricted: false 
@@ -34,50 +37,36 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
     }));
   };
 
-  // 🪄 MAGIC: Auto-generate a simple SVG poster locally (No Storage Needed!)
+  // 🪄 MAGIC: Auto-generate a Stable URL Poster
   const generateRandomImage = () => {
-    const titleText = formData.title || "Upcoming Event";
+    // 1. Get Title or Default
+    const titleText = formData.title ? formData.title.trim() : "Event";
     
-    // 1. Define nice color gradients based on category
-    const gradients = {
-      'Tech': ['#2563eb', '#1e40af'],    // Blue
-      'Cultural': ['#db2777', '#9d174d'], // Pink
-      'Sports': ['#ea580c', '#9a3412'],   // Orange
-      'Workshop': ['#059669', '#047857'], // Teal
-      'Seminar': ['#7c3aed', '#5b21b6'],  // Purple
-      'Art': ['#d97706', '#b45309'],      // Yellow/Gold
-      'General': ['#4b5563', '#374151']   // Gray
+    // 2. Define Category Colors (Background Hex without #)
+    const categoryColors = {
+      'Tech': '2563eb',    // Blue
+      'Cultural': 'db2777', // Pink
+      'Sports': 'ea580c',   // Orange
+      'Workshop': '059669', // Teal
+      'Seminar': '7c3aed',  // Purple
+      'Art': 'd97706',      // Gold
+      'General': '4b5563'   // Gray
     };
+
+    const bg = categoryColors[formData.category] || '4b5563'; // Default Gray
+    const fg = 'ffffff'; // White text
+
+    // 3. Create a clean URL (Handles spaces/emojis automatically)
+    // Format: https://placehold.co/WIDTHxHEIGHT/BG/FG?text=Your+Text
+    const encodedTitle = encodeURIComponent(titleText);
+    const encodedCategory = encodeURIComponent(formData.category || 'General');
     
-    const [color1, color2] = gradients[formData.category] || gradients['General'];
-
-    // 2. Create a simple SVG string
-    // Use encodeURIComponent to ensure special characters in title don't break SVG
-    const svgString = `
-      <svg width="800" height="450" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:${color1};stop-opacity:1" />
-            <stop offset="100%" style="stop-color:${color2};stop-opacity:1" />
-          </linearGradient>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#grad1)" />
-        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="40" font-weight="bold" fill="#ffffff">
-          ${titleText}
-        </text>
-        <text x="50%" y="65%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="24" fill="#e5e7eb">
-          ${formData.category} Event
-        </text>
-      </svg>
-    `;
-
-    // 3. Convert SVG string to Base64 Data URI
-    const base64Svg = btoa(svgString);
-    const dataUri = `data:image/svg+xml;base64,${base64Svg}`;
+    // We add \n to create a new line for the category
+    const url = `https://placehold.co/800x450/${bg}/${fg}.png?text=${encodedTitle}%0A(${encodedCategory})`;
     
     setFormData(prev => ({ 
       ...prev, 
-      imageUrl: dataUri
+      imageUrl: url
     }));
   };
 
@@ -91,20 +80,18 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
         throw new Error("Please fill in all required fields.");
       }
 
-      // If no image URL is provided, generate a default one before saving
+      // If user didn't provide an image, generate a default one
       let finalImageUrl = formData.imageUrl;
       if (!finalImageUrl) {
-          // Re-run generation logic locally if empty
-          const titleText = formData.title || "Event";
-          const gradients = { 'Tech': ['#2563eb', '#1e40af'], 'General': ['#4b5563', '#374151'] };
-          const [c1, c2] = gradients[formData.category] || gradients['General'];
-          const svg = `<svg width="800" height="450" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:${c1}"/><stop offset="100%" style="stop-color:${c2}"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="40" font-weight="bold" fill="#fff">${titleText}</text></svg>`;
-          finalImageUrl = `data:image/svg+xml;base64,${btoa(svg)}`;
+          const titleText = formData.title ? formData.title.trim() : "Event";
+          const encodedTitle = encodeURIComponent(titleText);
+          const bg = '4b5563';
+          finalImageUrl = `https://placehold.co/800x450/${bg}/ffffff.png?text=${encodedTitle}`;
       }
 
       const eventPayload = {
         ...formData,
-        imageUrl: finalImageUrl, // Use the guaranteed image URL
+        imageUrl: finalImageUrl,
         price: Number(formData.price),
         totalTickets: Number(formData.totalTickets),
         teamSize: formData.type === 'team' ? Number(formData.teamSize) : 1,
@@ -130,6 +117,7 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white dark:bg-zinc-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
         
+        {/* Header */}
         <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
           <h2 className="text-xl font-black text-zinc-900 dark:text-white flex items-center gap-2">
             <Calendar className="w-5 h-5 text-indigo-600" /> Create Event
@@ -139,18 +127,19 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
           </button>
         </div>
 
+        {/* Form Content */}
         <div className="p-6 overflow-y-auto custom-scrollbar">
           {error && <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-xl font-medium text-center">{error}</div>}
 
           <form id="create-event-form" onSubmit={handleSubmit} className="space-y-5">
             
-            {/* Title (Moved up so it's ready for image generation) */}
+            {/* Title */}
             <div className="relative">
               <Type className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
               <input name="title" value={formData.title} onChange={handleChange} className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white" required placeholder="Event Title" />
             </div>
 
-            {/* Category (Moved up) */}
+            {/* Category Selector */}
             <div>
                <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">Category</label>
                <div className="grid grid-cols-3 gap-2">
@@ -214,7 +203,7 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
               <input name="location" value={formData.location} onChange={handleChange} className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white" required placeholder="Location" />
             </div>
 
-            {/* Team Config */}
+            {/* Team Configuration */}
             <div className="p-4 bg-zinc-50 dark:bg-zinc-800/30 rounded-xl border border-zinc-200 dark:border-zinc-700">
                <label className="text-xs font-bold uppercase text-zinc-500 mb-2 block">Participation Type</label>
                <div className="flex gap-4 mb-3">
@@ -258,11 +247,12 @@ const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
               </div>
             </div>
 
-            <textarea name="description" value={formData.description} onChange={handleChange} className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none min-h-[100px]" placeholder="Description..." />
+            <textarea name="description" value={formData.description} onChange={handleChange} className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none min-h-[100px] dark:text-white" placeholder="Description..." />
 
           </form>
         </div>
 
+        {/* Footer */}
         <div className="px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800">Cancel</button>
           <button type="submit" form="create-event-form" disabled={loading} className="px-6 py-2.5 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
