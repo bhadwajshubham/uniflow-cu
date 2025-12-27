@@ -1,26 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { 
-  Home, Search, Ticket, User, Menu, X, LogOut, 
-  ShieldCheck, LayoutDashboard, ScanLine 
+  Home, Ticket, User, LayoutDashboard, ScanLine 
 } from 'lucide-react';
 import UserProfile from '../../features/auth/components/UserProfile';
+import ThemeToggle from '../ThemeToggle'; // 👈 IMPORT RESTORED
 
 const Navbar = () => {
-  const { user, profile, logout } = useAuth();
+  const { user, profile } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   // Admin Check
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
 
-  // Navigation Items
+  // Navigation Items (Bottom Bar)
   const navItems = [
     { name: 'Events', path: '/events', icon: <Home className="w-6 h-6" /> },
     { name: 'My Tickets', path: '/my-tickets', icon: <Ticket className="w-6 h-6" /> },
-    // Admin Only Items
     ...(isAdmin ? [
       { name: 'Admin', path: '/admin', icon: <LayoutDashboard className="w-6 h-6" /> },
       { name: 'Scan', path: '/scan', icon: <ScanLine className="w-6 h-6" /> }
@@ -31,7 +29,7 @@ const Navbar = () => {
 
   return (
     <>
-      {/* 🖥️ DESKTOP TOP BAR (Hidden on Mobile) */}
+      {/* 🖥️ DESKTOP TOP BAR */}
       <nav className="hidden md:flex fixed top-0 w-full bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 z-50 px-6 py-4 justify-between items-center">
         <Link to="/" className="text-2xl font-black text-indigo-600 tracking-tighter">UniFlow.</Link>
         
@@ -48,8 +46,10 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center gap-4">
+          <ThemeToggle /> {/* 👈 RESTORED HERE */}
+          
           {user ? (
-            <button onClick={() => setIsProfileOpen(true)} className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-700 dark:text-zinc-200 font-bold border border-zinc-200 dark:border-zinc-700">
+            <button onClick={() => setIsProfileOpen(true)} className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-700 dark:text-zinc-200 font-bold border border-zinc-200 dark:border-zinc-700 hover:border-indigo-500 transition-colors">
               {user.displayName?.[0] || <User className="w-5 h-5" />}
             </button>
           ) : (
@@ -61,14 +61,19 @@ const Navbar = () => {
       {/* 📱 MOBILE TOP HEADER (Minimal) */}
       <nav className="md:hidden fixed top-0 w-full bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 z-50 px-4 py-3 flex justify-between items-center">
         <Link to="/" className="text-xl font-black text-indigo-600 tracking-tighter">UniFlow.</Link>
-        {user && (
-          <button onClick={() => setIsProfileOpen(true)} className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-full">
-            <User className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
-          </button>
-        )}
+        
+        <div className="flex items-center gap-3">
+          <ThemeToggle /> {/* 👈 RESTORED HERE TOO */}
+          
+          {user && (
+            <button onClick={() => setIsProfileOpen(true)} className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-full">
+              <User className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
+            </button>
+          )}
+        </div>
       </nav>
 
-      {/* 📱 MOBILE BOTTOM NAVIGATION BAR (The Native Feel) */}
+      {/* 📱 MOBILE BOTTOM BAR */}
       <nav className="md:hidden fixed bottom-0 w-full bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 z-50 pb-safe">
         <div className="flex justify-around items-center h-16">
           {navItems.map((item) => (
@@ -79,9 +84,7 @@ const Navbar = () => {
                 isActive(item.path) ? 'text-indigo-600' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
               }`}
             >
-              {/* Active Indicator Line */}
               {isActive(item.path) && <div className="absolute top-0 w-8 h-1 bg-indigo-600 rounded-b-full"></div>}
-              
               <div className={isActive(item.path) ? "animate-in zoom-in duration-200" : ""}>
                 {item.icon}
               </div>
@@ -91,7 +94,6 @@ const Navbar = () => {
         </div>
       </nav>
 
-      {/* Profile Modal */}
       <UserProfile isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
     </>
   );
