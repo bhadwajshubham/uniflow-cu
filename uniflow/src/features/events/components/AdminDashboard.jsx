@@ -3,12 +3,10 @@ import { collection, getDocs, query, where, deleteDoc, doc, writeBatch } from 'f
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { 
-  Ticket, Calendar, Plus, QrCode, MoreVertical, 
-  Trash2, Users, Edit, ShieldCheck, Download
+  Ticket, Calendar, Activity, Plus, QrCode, 
+  MoreVertical, RefreshCw, Trash2, Users, Edit, ShieldCheck
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
-// Import Modals
 import CreateEventModal from './CreateEventModal';
 import EditEventModal from './EditEventModal';
 import EventParticipantsModal from './EventParticipantsModal';
@@ -16,13 +14,11 @@ import EventParticipantsModal from './EventParticipantsModal';
 const AdminDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  
-  // Stats State
   const [stats, setStats] = useState({ events: 0, tickets: 0, funds: 0 });
   const [recentEvents, setRecentEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // Modal States
+  // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isParticipantsModalOpen, setIsParticipantsModalOpen] = useState(false);
@@ -30,13 +26,11 @@ const AdminDashboard = () => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [activeMenuId, setActiveMenuId] = useState(null);
 
-  // 1. Fetch Events Logic
   const fetchData = async () => {
     try {
       if (!user) return;
       setLoading(true);
       
-      // Query: Only events created by this Admin
       const q = query(
         collection(db, 'events'), 
         where('organizerId', '==', user.uid)
@@ -50,23 +44,14 @@ const AdminDashboard = () => {
 
       eventSnaps.forEach(doc => {
         const data = doc.data();
-        const sold = data.ticketsSold || 0;
-        const price = Number(data.price) || 0;
-        
-        totalTickets += sold;
-        totalFunds += (sold * price);
-        
+        totalTickets += (data.ticketsSold || 0);
+        totalFunds += ((data.ticketsSold || 0) * (Number(data.price) || 0));
         eventsList.push({ id: doc.id, ...data });
       });
 
-      // Sort by Newest First
       eventsList.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
-      setStats({ 
-        events: eventSnaps.size, 
-        tickets: totalTickets, 
-        funds: totalFunds 
-      });
+      setStats({ events: eventSnaps.size, tickets: totalTickets, funds: totalFunds });
       setRecentEvents(eventsList);
     } catch (error) {
       console.error("Dashboard Error:", error);
@@ -77,25 +62,29 @@ const AdminDashboard = () => {
 
   useEffect(() => { fetchData(); }, [user]);
 
-  // 2. Batch Delete Logic (Prevents Orphaned Tickets)
+  // 🗑️ CLEAN DELETE LOGIC (Tickets + Reviews + Event)
   const handleDelete = async (eventId) => {
-    if (window.confirm("WARNING: This will delete the event and ALL associated tickets. This cannot be undone.")) {
+    if (window.confirm("Are you sure? This will delete the event AND all associated data.")) {
       try {
-        // Step A: Find all tickets for this event
-        const q = query(collection(db, 'registrations'), where('eventId', '==', eventId));
-        const snapshot = await getDocs(q);
-        
-        // Step B: Delete tickets in a batch
         const batch = writeBatch(db);
-        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+
+        // 1. Get Tickets
+        const qTickets = query(collection(db, 'registrations'), where('eventId', '==', eventId));
+        const snapTickets = await getDocs(qTickets);
+        snapTickets.docs.forEach(doc => batch.delete(doc.ref));
+
+        // 2. Get Reviews
+        const qReviews = query(collection(db, 'reviews'), where('eventId', '==', eventId));
+        const snapReviews = await getDocs(qReviews);
+        snapReviews.docs.forEach(doc => batch.delete(doc.ref));
+
+        // 3. Commit Batch
         await batch.commit();
 
-        // Step C: Delete the event document
+        // 4. Delete Event Doc
         await deleteDoc(doc(db, 'events', eventId));
         
-        // Step D: Refresh UI
         fetchData();
-        alert("Event and ticket data cleaned up successfully.");
       } catch (error) {
         console.error("Delete failed", error);
         alert("Failed to delete event completely.");
@@ -103,7 +92,6 @@ const AdminDashboard = () => {
     }
   };
 
-  // Helper Functions
   const openEdit = (event) => {
     setSelectedEvent(event);
     setIsEditModalOpen(true);
@@ -116,63 +104,54 @@ const AdminDashboard = () => {
     setActiveMenuId(null);
   };
 
-  if (loading) return <div className="min-h-screen pt-24 text-center text-zinc-500">Loading your dashboard...</div>;
+  if (loading) return <div className="min-h-screen pt-24 text-center text-zinc-500">Loading your events...</div>;
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-4" onClick={() => setActiveMenuId(null)}>
       <div className="max-w-7xl mx-auto">
         
-        {/* --- Header Section --- */}
+        {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
           <div>
             <h1 className="text-3xl font-black text-zinc-900 dark:text-white flex items-center gap-2">
               Organizer Dashboard <ShieldCheck className="w-6 h-6 text-green-500" />
             </h1>
-            <p className="text-zinc-500 text-sm">Manage events, track attendance, and scan tickets.</p>
+            <p className="text-zinc-500 text-sm">Managing events created by {user.displayName}</p>
           </div>
           <div className="flex gap-2 w-full md:w-auto">
-            <button 
-              onClick={() => setIsCreateModalOpen(true)} 
-              className="flex-1 md:flex-none px-4 py-2 bg-indigo-600 text-white rounded-lg flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all"
-            >
+            <button onClick={() => setIsCreateModalOpen(true)} className="flex-1 md:flex-none px-4 py-2 bg-indigo-600 text-white rounded-lg flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all">
               <Plus className="w-4 h-4" /> Create Event
             </button>
-            <button 
-              onClick={() => navigate('/scan')} 
-              className="flex-1 md:flex-none px-4 py-2 bg-zinc-800 text-white rounded-lg flex items-center justify-center gap-2 hover:bg-zinc-700 transition-all"
-            >
-              <QrCode className="w-4 h-4" /> Scanner
+            <button onClick={() => navigate('/scan')} className="flex-1 md:flex-none px-4 py-2 bg-zinc-800 text-white rounded-lg flex items-center justify-center gap-2 hover:bg-zinc-700 transition-all">
+              <QrCode className="w-4 h-4" /> Scan
             </button>
           </div>
         </div>
 
-        {/* --- Stats Cards --- */}
+        {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           <div className="p-6 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
              <div className="text-zinc-500 text-sm font-medium">My Active Events</div>
              <div className="text-3xl font-black text-zinc-900 dark:text-white">{stats.events}</div>
           </div>
           <div className="p-6 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-             <div className="text-zinc-500 text-sm font-medium">Total Tickets Sold</div>
+             <div className="text-zinc-500 text-sm font-medium">My Ticket Sales</div>
              <div className="text-3xl font-black text-zinc-900 dark:text-white">{stats.tickets}</div>
           </div>
           <div className="p-6 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
              <div className="text-zinc-500 text-sm font-medium">Funds Raised</div>
-             {/* 🛠️ FIX: Proper Currency Formatting */}
-             <div className="text-3xl font-black text-zinc-900 dark:text-white">
-               ₹{stats.funds.toFixed(2)}
-             </div>
+             <div className="text-3xl font-black text-zinc-900 dark:text-white">${stats.funds.toFixed(2)}</div>
           </div>
         </div>
 
-        {/* --- Events List Table --- */}
+        {/* List */}
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden min-h-[400px]">
            <table className="w-full text-left">
               <thead className="bg-zinc-50 dark:bg-zinc-950/50 text-xs uppercase text-zinc-500">
                 <tr>
-                  <th className="px-6 py-4">Event Title</th>
+                  <th className="px-6 py-4">Event</th>
                   <th className="px-6 py-4">Date</th>
-                  <th className="px-6 py-4">Sales / Capacity</th>
+                  <th className="px-6 py-4">Sales</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -187,8 +166,6 @@ const AdminDashboard = () => {
                       <td className="px-6 py-4 text-zinc-600 dark:text-zinc-300 text-sm">
                         {event.ticketsSold} / {event.totalTickets}
                       </td>
-                      
-                      {/* Action Menu */}
                       <td className="px-6 py-4 text-right relative">
                         <button 
                           onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === event.id ? null : event.id); }}
@@ -197,25 +174,20 @@ const AdminDashboard = () => {
                           <MoreVertical className="w-4 h-4 text-zinc-400" />
                         </button>
 
-                        {/* Dropdown Popup */}
+                        {/* DROPDOWN MENU */}
                         {activeMenuId === event.id && (
                           <div className="absolute right-8 top-8 w-48 bg-white dark:bg-zinc-800 rounded-xl shadow-xl border border-zinc-200 dark:border-zinc-700 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                            
                             <button onClick={() => navigate(`/events/${event.id}`)} className="w-full text-left px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 flex items-center gap-2">
                               <Ticket className="w-4 h-4" /> View Page
                             </button>
-                            
-                            {/* 👇 CLICKING THIS OPENS ATTENDANCE & DOWNLOAD */}
                             <button onClick={() => openParticipants(event)} className="w-full text-left px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 flex items-center gap-2">
-                              <Users className="w-4 h-4" /> Participants / Attendance
+                              <Users className="w-4 h-4" /> Participants
                             </button>
-                            
                             <button onClick={() => openEdit(event)} className="w-full text-left px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 flex items-center gap-2">
                               <Edit className="w-4 h-4" /> Edit Details
                             </button>
-                            
                             <button onClick={() => handleDelete(event.id)} className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 border-t border-zinc-100 dark:border-zinc-700">
-                              <Trash2 className="w-4 h-4" /> Delete Event
+                              <Trash2 className="w-4 h-4" /> Delete
                             </button>
                           </div>
                         )}
@@ -227,24 +199,10 @@ const AdminDashboard = () => {
            </table>
         </div>
 
-        {/* --- MODAL MOUNTS --- */}
-        <CreateEventModal 
-          isOpen={isCreateModalOpen} 
-          onClose={() => setIsCreateModalOpen(false)} 
-          onSuccess={fetchData} 
-        />
-        <EditEventModal 
-          isOpen={isEditModalOpen} 
-          onClose={() => setIsEditModalOpen(false)} 
-          event={selectedEvent} 
-          onSuccess={fetchData} 
-        />
-        {/* This modal handles the CSV Download and Attendance Check */}
-        <EventParticipantsModal 
-          isOpen={isParticipantsModalOpen} 
-          onClose={() => setIsParticipantsModalOpen(false)} 
-          event={selectedEvent} 
-        />
+        {/* MODALS */}
+        <CreateEventModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onSuccess={fetchData} />
+        <EditEventModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} event={selectedEvent} onSuccess={fetchData} />
+        <EventParticipantsModal isOpen={isParticipantsModalOpen} onClose={() => setIsParticipantsModalOpen(false)} event={selectedEvent} />
         
       </div>
     </div>

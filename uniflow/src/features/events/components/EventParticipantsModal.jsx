@@ -1,32 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { 
   X, Search, Download, User, Users, CheckCircle, Clock, 
-  Trash2, Edit, Star, MessageSquare, AlertCircle 
+  Trash2, Edit, AlertCircle 
 } from 'lucide-react';
 import { 
-  collection, query, where, getDocs, deleteDoc, doc, orderBy, writeBatch 
+  collection, query, where, getDocs, deleteDoc, doc, writeBatch 
 } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import EditEventModal from './EditEventModal';
 
 const EventParticipantsModal = ({ isOpen, onClose, event }) => {
-  // State
   const [activeTab, setActiveTab] = useState('participants'); 
   const [loading, setLoading] = useState(true);
-  
-  // Data
   const [participants, setParticipants] = useState([]);
   const [reviews, setReviews] = useState([]);
-  
-  // Filtering & Editing
   const [filter, setFilter] = useState('');
   const [isEditing, setIsEditing] = useState(false);
 
-  // 1. Fetch Data
   useEffect(() => {
-    if (isOpen && event) {
-      fetchData();
-    }
+    if (isOpen && event) fetchData();
   }, [isOpen, event]);
 
   const fetchData = async () => {
@@ -34,68 +26,62 @@ const EventParticipantsModal = ({ isOpen, onClose, event }) => {
     try {
       const qP = query(collection(db, 'registrations'), where('eventId', '==', event.id));
       const snapP = await getDocs(qP);
-      const pData = snapP.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setParticipants(snapP.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
-      // Optional Reviews Fetch
-      let rData = [];
-      try {
-        const qR = query(collection(db, 'reviews'), where('eventId', '==', event.id));
-        const snapR = await getDocs(qR);
-        rData = snapR.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      } catch (e) {}
-
-      setParticipants(pData);
-      setReviews(rData);
-    } catch (error) {
-      console.error("Failed to load data", error);
-    } finally {
-      setLoading(false);
-    }
+      const qR = query(collection(db, 'reviews'), where('eventId', '==', event.id));
+      const snapR = await getDocs(qR);
+      setReviews(snapR.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) { console.error(error); } 
+    finally { setLoading(false); }
   };
 
-  // 2. Delete Logic (With Batch Cleanup)
+  // 🗑️ CLEAN DELETE LOGIC
   const handleDeleteEvent = async () => {
     if (!window.confirm("DANGER: Are you sure you want to delete this event? This cannot be undone.")) return;
     try {
-      // Delete registrations first
+      const batch = writeBatch(db);
+      
       const q = query(collection(db, 'registrations'), where('eventId', '==', event.id));
       const snapshot = await getDocs(q);
-      const batch = writeBatch(db);
       snapshot.docs.forEach(doc => batch.delete(doc.ref));
-      await batch.commit();
 
+      const qR = query(collection(db, 'reviews'), where('eventId', '==', event.id));
+      const snapR = await getDocs(qR);
+      snapR.docs.forEach(doc => batch.delete(doc.ref));
+
+      await batch.commit();
       await deleteDoc(doc(db, 'events', event.id));
       alert("Event deleted.");
       window.location.reload(); 
-    } catch (error) {
-      alert("Failed to delete: " + error.message);
-    }
+    } catch (error) { alert("Delete failed: " + error.message); }
   };
 
-  // 3. Export CSV Logic
+  // 📊 CSV EXPORT FIX (Quoted Strings)
   const handleExportCSV = () => {
     const headers = ['Name,Email,Status,Type,Team Code,Registered At'];
     const rows = participants.map(p => {
-      const name = p.userName || 'Student';
-      const email = p.userEmail || 'N/A';
+      // 🔒 WRAP IN QUOTES TO PREVENT COMMA BREAKING
+      const name = `"${p.userName || 'Student'}"`;
+      const email = `"${p.userEmail || 'N/A'}"`;
       const status = p.status || 'confirmed';
       const type = p.type || 'individual';
       const team = p.teamCode || 'N/A';
-      const date = p.createdAt?.toDate ? p.createdAt.toDate().toLocaleDateString() : 'N/A';
+      const date = p.createdAt?.toDate ? `"${p.createdAt.toDate().toLocaleDateString()}"` : 'N/A';
       
-      return `${name},${email},${status},${type},${team},"${date}"`;
+      return `${name},${email},${status},${type},${team},${date}`;
     });
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n");
-    const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", encodeURI(csvContent));
     link.setAttribute("download", `${event.title.replace(/\s+/g, '_')}_Participants.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
+  // ... (Render Logic Same as Before)
+  // Just ensuring you have the complete file structure
   const filteredParticipants = participants.filter(p => 
     (p.userName || '').toLowerCase().includes(filter.toLowerCase()) || 
     (p.userEmail || '').toLowerCase().includes(filter.toLowerCase())
@@ -177,8 +163,6 @@ const EventParticipantsModal = ({ isOpen, onClose, event }) => {
               </table>
             </>
           )}
-          
-          {/* Reviews Tab Logic here... (kept same as before) */}
         </div>
       </div>
 

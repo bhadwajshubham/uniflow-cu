@@ -2,11 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import { ArrowLeft, Calendar, Clock, MapPin, Share2, Download, User, Users } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Share2, Download, User, Users, ShieldAlert } from 'lucide-react';
+import { useAuth } from '../../../context/AuthContext'; // 👈 Added Auth
 
 const TicketPage = () => {
   const { ticketId } = useParams();
   const navigate = useNavigate();
+  const { user, profile } = useAuth(); // 👈 Get User & Profile
+  
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -29,6 +32,22 @@ const TicketPage = () => {
 
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading Pass...</div>;
   if (!ticket) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Ticket not found</div>;
+
+  // 🔒 SECURITY CHECK
+  // Allow if: User owns the ticket OR User is an Admin
+  const isOwner = user && ticket.userId === user.uid;
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
+
+  if (!isOwner && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-red-500 p-4 text-center">
+        <ShieldAlert className="w-16 h-16 mb-4" />
+        <h1 className="text-2xl font-bold">Access Denied</h1>
+        <p className="text-zinc-500 mt-2">You do not have permission to view this ticket.</p>
+        <button onClick={() => navigate('/')} className="mt-6 px-6 py-2 bg-zinc-800 text-white rounded-full">Go Home</button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
@@ -104,7 +123,7 @@ const TicketPage = () => {
             )}
           </div>
 
-          {/* 🔳 CORRECT QR GENERATION (ID ONLY) */}
+          {/* QR Code */}
           <div className="flex flex-col items-center justify-center">
             <div className="p-4 bg-white border-4 border-zinc-900 rounded-3xl shadow-sm">
               <img 
