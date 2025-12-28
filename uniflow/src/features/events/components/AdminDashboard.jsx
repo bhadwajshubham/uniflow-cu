@@ -3,7 +3,7 @@ import { collection, query, where, onSnapshot, doc, writeBatch, deleteDoc, getDo
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { 
-  Ticket, Calendar, Plus, QrCode, MoreVertical, Trash2, Users, Edit, ShieldCheck
+  Ticket, Calendar, Plus, QrCode, MoreVertical, Trash2, Users, Edit, ShieldCheck, Globe, Lock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import CreateEventModal from './CreateEventModal';
@@ -17,8 +17,9 @@ const AdminDashboard = () => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // God Mode Logic: Default to 'all' if SuperAdmin, else 'mine'
-  const [filterMode, setFilterMode] = useState(profile?.role === 'super_admin' ? 'all' : 'mine');
+  // 🔥 SUPER ADMIN LOGIC: Default to 'all' if SuperAdmin
+  const isSuper = profile?.role === 'super_admin';
+  const [filterMode, setFilterMode] = useState(isSuper ? 'all' : 'mine');
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -27,13 +28,18 @@ const AdminDashboard = () => {
   const [activeMenuId, setActiveMenuId] = useState(null);
 
   useEffect(() => {
-    if (!user) return;
-    const eventsRef = collection(db, 'events');
+    if (!user || !profile) return;
     
-    // SuperAdmin bypass logic
-    const q = (profile?.role === 'super_admin' && filterMode === 'all') 
-      ? query(eventsRef) 
-      : query(eventsRef, where('organizerId', '==', user.uid));
+    const eventsRef = collection(db, 'events');
+    let q;
+
+    // 🛡️ THE BYPASS: If SuperAdmin and mode is 'all', show everything without UID filter
+    if (isSuper && filterMode === 'all') {
+      q = query(eventsRef);
+    } else {
+      // Normal Admins or SuperAdmin in 'mine' mode
+      q = query(eventsRef, where('organizerId', '==', user.uid));
+    }
 
     const unsub = onSnapshot(q, (snapshot) => {
       let tTickets = 0; 
@@ -44,25 +50,26 @@ const AdminDashboard = () => {
         tFunds += ((d.ticketsSold || 0) * (Number(d.price) || 0));
         return { id: doc.id, ...d };
       });
+      
       setStats({ events: snapshot.size, tickets: tTickets, funds: tFunds });
       setEvents(list.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
       setLoading(false);
+    }, (error) => {
+      console.error("Dashboard Listener Error:", error);
+      setLoading(false);
     });
+
     return () => unsub();
   }, [user, profile, filterMode]);
 
   const handleDelete = async (eventId) => {
-    if (!window.confirm("🚨 PERMANENT ACTION: Wipe this event and all student tickets?")) return;
+    if (!window.confirm("🚨 CRITICAL: Delete this event and ALL student tickets permanently?")) return;
     try {
       setLoading(true);
       const docsToDelete = [];
       const qT = query(collection(db, 'registrations'), where('eventId', '==', eventId));
       const sT = await getDocs(qT);
       sT.docs.forEach(d => docsToDelete.push(d.ref));
-      
-      const qR = query(collection(db, 'reviews'), where('eventId', '==', eventId));
-      const sR = await getDocs(qR);
-      sR.docs.forEach(d => docsToDelete.push(d.ref));
 
       for (let i = 0; i < docsToDelete.length; i += 500) {
         const batch = writeBatch(db);
@@ -70,85 +77,122 @@ const AdminDashboard = () => {
         await batch.commit();
       }
       await deleteDoc(doc(db, 'events', eventId));
-      alert("Purged successfully.");
+      alert("Event Purged.");
     } catch (err) { 
-      console.error(err);
-      alert("Failed to delete."); 
+      alert("Delete failed: Check Firestore Rules."); 
     } finally { 
       setLoading(false); 
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-[#FDFBF7] dark:bg-black pt-32 text-center font-black text-indigo-600 tracking-widest uppercase">Initializing Core...</div>;
+  if (loading) return (
+    <div className="min-h-screen bg-[#FDFBF7] dark:bg-black flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-indigo-600 mx-auto mb-4"></div>
+        <p className="font-black text-xs uppercase tracking-widest text-indigo-600">Syncing UniFlow Core...</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] dark:bg-black pt-24 pb-24 px-4 transition-colors duration-500" onClick={() => setActiveMenuId(null)}>
+    <div className="min-h-screen bg-[#FDFBF7] dark:bg-black pt-24 pb-24 px-4 sm:px-8" onClick={() => setActiveMenuId(null)}>
       <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
+        
+        {/* HEADER SECTION */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-8">
           <div>
-            <h1 className="text-4xl font-black tracking-tighter dark:text-white flex items-center gap-2 italic uppercase">Organizer Dashboard</h1>
-            {profile?.role === 'super_admin' && (
-              <div className="flex gap-2 mt-4 bg-zinc-100 dark:bg-zinc-900 p-1 rounded-2xl w-fit border border-zinc-200 dark:border-zinc-800 shadow-inner">
-                <button onClick={() => setFilterMode('all')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${filterMode === 'all' ? 'bg-white dark:bg-zinc-800 text-indigo-600 shadow-xl' : 'text-zinc-400'}`}>System Wide</button>
-                <button onClick={() => setFilterMode('mine')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${filterMode === 'mine' ? 'bg-white dark:bg-zinc-800 text-indigo-600 shadow-xl' : 'text-zinc-400'}`}>Private Hub</button>
+            <h1 className="text-5xl font-black tracking-tighter dark:text-white uppercase italic">
+              Console {isSuper && <span className="text-indigo-600">.Root</span>}
+            </h1>
+            
+            {/* 🔥 SUPERADMIN VIEW TOGGLE */}
+            {isSuper && (
+              <div className="flex gap-2 mt-6 bg-zinc-100 dark:bg-zinc-900 p-1.5 rounded-[1.2rem] w-fit border border-zinc-200 dark:border-zinc-800 shadow-inner">
+                <button 
+                  onClick={() => setFilterMode('all')} 
+                  className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${filterMode === 'all' ? 'bg-white dark:bg-zinc-800 text-indigo-600 shadow-xl' : 'text-zinc-400 hover:text-zinc-600'}`}
+                >
+                  <Globe className="w-3 h-3" /> Platform Global
+                </button>
+                <button 
+                  onClick={() => setFilterMode('mine')} 
+                  className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${filterMode === 'mine' ? 'bg-white dark:bg-zinc-800 text-indigo-600 shadow-xl' : 'text-zinc-400 hover:text-zinc-600'}`}
+                >
+                  <Lock className="w-3 h-3" /> Private Hub
+                </button>
               </div>
             )}
           </div>
+
           <div className="flex gap-3 w-full md:w-auto">
-            <button onClick={() => setIsCreateModalOpen(true)} className="flex-1 md:flex-none px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] shadow-xl hover:scale-105 transition-all flex items-center gap-2"><Plus className="w-4 h-4" /> New Event</button>
-            <button onClick={() => navigate('/scan')} className="flex-1 md:flex-none px-8 py-4 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] flex items-center gap-2 shadow-xl hover:scale-105 transition-all"><QrCode className="w-5 h-5" /> Scanner</button>
+            <button onClick={() => setIsCreateModalOpen(true)} className="flex-1 md:flex-none px-10 py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black text-[11px] uppercase tracking-[0.2em] shadow-2xl shadow-indigo-600/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2">
+              <Plus className="w-4 h-4" /> Host Event
+            </button>
+            <button onClick={() => navigate('/scan')} className="flex-1 md:flex-none px-10 py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-[1.5rem] font-black text-[11px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 shadow-xl hover:scale-105 transition-all">
+              <QrCode className="w-4 h-4" /> Scanner
+            </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          <div className="p-8 bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-zinc-200 dark:border-zinc-800 shadow-sm">
-             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Managed Events</p>
-             <p className="text-4xl font-black dark:text-white">{stats.events}</p>
+        {/* STATS GRID */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+          <div className="p-10 bg-white dark:bg-zinc-900 rounded-[3rem] border border-zinc-100 dark:border-zinc-800 shadow-sm transition-all hover:shadow-indigo-500/5">
+             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Live Experiences</p>
+             <p className="text-5xl font-black dark:text-white tracking-tighter">{stats.events}</p>
           </div>
-          <div className="p-8 bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-zinc-200 dark:border-zinc-800 shadow-sm">
-             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Total Admissions</p>
-             <p className="text-4xl font-black dark:text-white">{stats.tickets}</p>
+          <div className="p-10 bg-white dark:bg-zinc-900 rounded-[3rem] border border-zinc-100 dark:border-zinc-800 shadow-sm transition-all hover:shadow-indigo-500/5">
+             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Campus Footfall</p>
+             <p className="text-5xl font-black dark:text-white tracking-tighter">{stats.tickets}</p>
           </div>
-          <div className="p-8 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-[2.5rem] shadow-2xl">
-             <p className="text-[10px] font-black opacity-40 uppercase tracking-widest mb-1">Gross Collections</p>
-             <p className="text-4xl font-black">₹{stats.funds}</p>
+          <div className="p-10 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-[3rem] shadow-[0_20px_50px_rgba(79,70,229,0.2)]">
+             <p className="text-[10px] font-black opacity-40 uppercase tracking-widest mb-2 italic">Gross Revenue</p>
+             <p className="text-5xl font-black tracking-tighter italic">₹{stats.funds}</p>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
-          <table className="w-full text-left">
-            <thead className="bg-zinc-50 dark:bg-black/40 text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em]">
-              <tr><th className="px-8 py-6">Event Context</th><th className="px-8 py-6">Admission Stat</th><th className="px-8 py-6 text-right">Moderation</th></tr>
+        {/* EVENT TABLE */}
+        <div className="bg-white dark:bg-zinc-900 rounded-[3.5rem] border border-zinc-100 dark:border-zinc-800 overflow-hidden shadow-2xl">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-zinc-50 dark:bg-black/40 text-[10px] font-black uppercase text-zinc-400 tracking-[0.3em]">
+              <tr>
+                <th className="px-10 py-8">Experience</th>
+                <th className="px-10 py-8">Admissions</th>
+                <th className="px-10 py-8 text-right">Moderation</th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 font-medium">
               {events.length === 0 ? (
-                <tr><td colSpan="3" className="px-8 py-20 text-center text-zinc-400 font-bold uppercase tracking-widest text-xs">No Events Found</td></tr>
+                <tr><td colSpan="3" className="px-10 py-20 text-center text-zinc-400 font-black uppercase tracking-widest italic">No experiences found in current scope</td></tr>
               ) : (
                 events.map((event) => (
-                  <tr key={event.id} className="hover:bg-zinc-50/50 dark:hover:bg-indigo-900/5 transition-colors">
-                    <td className="px-8 py-6">
-                      <p className="font-black text-zinc-900 dark:text-white uppercase tracking-tight">{event.title}</p>
-                      <p className="text-[10px] text-zinc-400 uppercase mt-1">{event.date} • {event.location}</p>
-                    </td>
-                    <td className="px-8 py-6">
-                      <div className="flex items-center gap-2">
-                         <span className="font-black dark:text-white text-lg">{event.ticketsSold}</span>
-                         <span className="text-zinc-400 text-[10px] font-bold uppercase">/ {event.totalTickets}</span>
+                  <tr key={event.id} className="hover:bg-zinc-50/80 dark:hover:bg-indigo-950/10 transition-colors">
+                    <td className="px-10 py-8">
+                      <p className="font-black text-zinc-900 dark:text-white uppercase tracking-tighter text-lg">{event.title}</p>
+                      <div className="flex gap-3 mt-1.5">
+                        <span className="text-[10px] text-indigo-600 font-black uppercase tracking-widest">{event.date}</span>
+                        <span className="text-[10px] text-zinc-400 font-black uppercase tracking-widest">@ {event.location}</span>
                       </div>
                     </td>
-                    <td className="px-8 py-6 text-right relative">
+                    <td className="px-10 py-8">
+                      <div className="flex items-center gap-3">
+                         <span className="font-black dark:text-white text-2xl tracking-tighter">{event.ticketsSold}</span>
+                         <span className="text-zinc-400 text-[11px] font-black uppercase tracking-widest">/ {event.totalTickets}</span>
+                      </div>
+                    </td>
+                    <td className="px-10 py-8 text-right relative">
                       <button 
                         onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === event.id ? null : event.id); }} 
-                        className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                        className="p-4 bg-zinc-100 dark:bg-zinc-800 rounded-[1.2rem] hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
                       >
-                        <MoreVertical className="w-4 h-4" />
+                        <MoreVertical className="w-5 h-5" />
                       </button>
+
                       {activeMenuId === event.id && (
-                        <div className="absolute right-10 top-16 w-56 bg-white dark:bg-zinc-800 rounded-[2rem] shadow-2xl border border-zinc-200 dark:border-zinc-700 z-50 overflow-hidden animate-in slide-in-from-top-2 duration-300">
-                          <button onClick={() => navigate(`/events/${event.id}`)} className="w-full text-left px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700 border-b border-zinc-50 dark:border-zinc-700 transition-colors">Explore Page</button>
-                          <button onClick={() => { setSelectedEvent(event); setIsParticipantsModalOpen(true); setActiveMenuId(null); }} className="w-full text-left px-6 py-4 text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:bg-zinc-50 dark:hover:bg-zinc-700 border-b border-zinc-50 dark:border-zinc-700 transition-colors">Manage Entry</button>
-                          <button onClick={() => { setSelectedEvent(event); setIsEditModalOpen(true); setActiveMenuId(null); }} className="w-full text-left px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">Adjust Terms</button>
-                          <button onClick={() => handleDelete(event.id)} className="w-full text-left px-6 py-4 text-[10px] font-black uppercase tracking-widest text-red-600 border-t border-zinc-100 dark:border-zinc-800 hover:bg-red-50 transition-colors">Purge Record</button>
+                        <div className="absolute right-12 top-20 w-64 bg-white dark:bg-zinc-800 rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.15)] border border-zinc-100 dark:border-zinc-700 z-[160] overflow-hidden animate-in slide-in-from-top-4 duration-300">
+                          <button onClick={() => navigate(`/events/${event.id}`)} className="w-full text-left px-8 py-5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700 border-b border-zinc-100 dark:border-zinc-700">Explore Public View</button>
+                          <button onClick={() => { setSelectedEvent(event); setIsParticipantsModalOpen(true); setActiveMenuId(null); }} className="w-full text-left px-8 py-5 text-[11px] font-black uppercase tracking-[0.1em] text-indigo-600 hover:bg-indigo-50 dark:hover:bg-zinc-700 border-b border-zinc-100 dark:border-zinc-700">Manage Entry Gate</button>
+                          <button onClick={() => { setSelectedEvent(event); setIsEditModalOpen(true); setActiveMenuId(null); }} className="w-full text-left px-8 py-5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700">Adjust Terms</button>
+                          <button onClick={() => handleDelete(event.id)} className="w-full text-left px-8 py-5 text-[11px] font-black uppercase tracking-[0.1em] text-red-600 border-t border-zinc-100 dark:border-zinc-800 hover:bg-red-50">Purge Experience</button>
                         </div>
                       )}
                     </td>
@@ -159,15 +203,10 @@ const AdminDashboard = () => {
           </table>
         </div>
       </div>
-      
-      {/* Modals */}
+
       <CreateEventModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
-      {selectedEvent && (
-        <>
-          <EditEventModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} event={selectedEvent} />
-          <EventParticipantsModal isOpen={isParticipantsModalOpen} onClose={() => setIsParticipantsModalOpen(false)} event={selectedEvent} />
-        </>
-      )}
+      <EditEventModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} event={selectedEvent} />
+      <EventParticipantsModal isOpen={isParticipantsModalOpen} onClose={() => setIsParticipantsModalOpen(false)} event={selectedEvent} />
     </div>
   );
 };
