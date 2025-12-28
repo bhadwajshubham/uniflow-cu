@@ -2,7 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import { ArrowLeft, Calendar, Clock, MapPin, Share2, Download, User, Users, ShieldAlert, Check } from 'lucide-react';
+import QRCode from 'react-qr-code';
+import { 
+  Calendar, MapPin, Clock, ArrowLeft, Download, ShieldCheck, 
+  Share2, Check, User, Users, ShieldAlert 
+} from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 
 const TicketPage = () => {
@@ -12,7 +16,7 @@ const TicketPage = () => {
   
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false); // 👈 Track copy state
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const fetchTicket = async () => {
@@ -31,13 +35,12 @@ const TicketPage = () => {
     fetchTicket();
   }, [ticketId]);
 
-  // 📱 NATIVE SHARE LOGIC
   const handleShare = async () => {
     if (navigator.share) {
       try {
         await navigator.share({
           title: ticket.eventTitle,
-          text: `I'm attending ${ticket.eventTitle}! Check out my ticket.`,
+          text: `Check out my ticket for ${ticket.eventTitle}!`,
           url: window.location.href,
         });
       } catch (err) { console.log("Share dismissed"); }
@@ -48,7 +51,7 @@ const TicketPage = () => {
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading Pass...</div>;
+  if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-indigo-500 font-black tracking-widest">GENERATING PASS...</div>;
   if (!ticket) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Ticket not found</div>;
 
   const isOwner = user && ticket.userId === user.uid;
@@ -58,86 +61,81 @@ const TicketPage = () => {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center text-red-500 p-4 text-center">
         <ShieldAlert className="w-16 h-16 mb-4" />
-        <h1 className="text-2xl font-bold">Access Denied</h1>
-        <p className="text-zinc-500 mt-2">You do not have permission to view this ticket.</p>
-        <button onClick={() => navigate('/')} className="mt-6 px-6 py-2 bg-zinc-800 text-white rounded-full">Go Home</button>
+        <h1 className="text-2xl font-black uppercase tracking-tighter">Access Denied</h1>
+        <p className="text-zinc-500 mt-2 font-medium">This encrypted ticket belongs to another student.</p>
+        <button onClick={() => navigate('/')} className="mt-8 px-8 py-3 bg-zinc-800 text-white rounded-2xl font-bold">Return Home</button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-[#FDFBF7] dark:bg-black flex flex-col items-center pt-24 pb-12 px-6 transition-colors duration-500">
       
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/20 to-purple-900/20 pointer-events-none"></div>
-      
-      <div className="absolute top-6 left-6 z-10">
-        <button onClick={() => navigate('/my-tickets')} className="p-3 bg-white/10 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition-all">
-          <ArrowLeft className="w-6 h-6" />
-        </button>
-      </div>
+      <button onClick={() => navigate('/my-tickets')} className="mb-8 flex items-center gap-2 text-zinc-500 font-bold hover:text-indigo-600 transition-colors">
+        <ArrowLeft className="w-4 h-4" /> Back to My Tickets
+      </button>
 
-      <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden relative z-10 animate-in zoom-in-95 duration-500">
+      {/* 🎫 PREMIUM WALLET TICKET */}
+      <div className="w-full max-w-sm bg-white dark:bg-zinc-900 rounded-[3rem] shadow-[0_30px_60px_rgba(0,0,0,0.12)] dark:shadow-none overflow-hidden border border-zinc-200 dark:border-zinc-800 relative animate-in slide-in-from-bottom-8">
         
-        <div className="h-48 bg-gradient-to-r from-indigo-600 to-purple-600 relative p-6 flex flex-col justify-end">
-          <div className="absolute top-6 right-6 px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-bold text-white border border-white/10">
-            {ticket.type === 'team_leader' || ticket.type === 'team_member' ? 'TEAM PASS' : 'SOLO PASS'}
-          </div>
-          <h1 className="text-3xl font-black text-white leading-tight drop-shadow-md">{ticket.eventTitle}</h1>
-          <p className="text-indigo-100 text-sm mt-1 flex items-center gap-2">Organized by {ticket.organizerName || 'UniFlow Club'}</p>
-        </div>
-
-        <div className="p-8">
-          <div className="grid grid-cols-2 gap-6 mb-8">
-            <div>
-              <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Date</p>
-              <p className="font-semibold text-zinc-900 flex items-center gap-2"><Calendar className="w-4 h-4 text-indigo-600" /> {ticket.eventDate}</p>
-            </div>
-            <div>
-              <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Time</p>
-              <p className="font-semibold text-zinc-900 flex items-center gap-2"><Clock className="w-4 h-4 text-indigo-600" /> TBA</p>
-            </div>
-            <div className="col-span-2">
-              <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Venue</p>
-              <p className="font-semibold text-zinc-900 flex items-center gap-2"><MapPin className="w-4 h-4 text-indigo-600" /> {ticket.eventLocation}</p>
-            </div>
-          </div>
-
-          <div className="bg-zinc-50 rounded-2xl p-4 mb-8 border border-zinc-100">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold"><User className="w-5 h-5" /></div>
-              <div><p className="text-sm font-bold text-zinc-900">{ticket.userName}</p><p className="text-xs text-zinc-500">{ticket.userEmail}</p></div>
-            </div>
-            {ticket.teamName && (
-              <div className="mt-3 pt-3 border-t border-zinc-200 flex items-center justify-between">
-                <span className="text-xs font-bold text-zinc-400 uppercase">Team</span>
-                <span className="text-sm font-bold text-purple-600 flex items-center gap-1"><Users className="w-3 h-3" /> {ticket.teamName} ({ticket.teamCode})</span>
+        {/* Top Section */}
+        <div className="p-8 bg-indigo-600 text-white relative">
+           <div className="flex justify-between items-start mb-8">
+              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center font-black">U</div>
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-white/10 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border border-white/10">
+                 <ShieldCheck className="w-3.5 h-3.5" /> {ticket.status === 'attended' ? 'VERIFIED' : 'ACTIVE'}
               </div>
-            )}
-          </div>
-
-          <div className="flex flex-col items-center justify-center">
-            <div className="p-4 bg-white border-4 border-zinc-900 rounded-3xl shadow-sm">
-              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${ticket.id}`} alt="Ticket QR" className="w-48 h-48 object-contain" />
-            </div>
-            <p className="text-[10px] font-mono text-zinc-400 mt-4 uppercase tracking-widest">Ticket ID: {ticket.id}</p>
-          </div>
+           </div>
+           <h2 className="text-3xl font-black leading-none uppercase tracking-tighter line-clamp-2">{ticket.eventTitle}</h2>
+           <p className="text-white/60 text-[10px] font-black mt-3 uppercase tracking-[0.3em]">
+             {ticket.type?.replace('_', ' ') || 'STANDARD PASS'} • {ticket.userName}
+           </p>
+           
+           <div className="absolute -bottom-3 -left-3 w-6 h-6 bg-[#FDFBF7] dark:bg-black rounded-full border-r border-zinc-200 dark:border-zinc-800"></div>
+           <div className="absolute -bottom-3 -right-3 w-6 h-6 bg-[#FDFBF7] dark:bg-black rounded-full border-l border-zinc-200 dark:border-zinc-800"></div>
         </div>
 
-        <div className="bg-zinc-50 p-6 flex gap-3 border-t border-zinc-100">
-          <button className="flex-1 py-3 bg-zinc-900 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-zinc-800 transition-colors">
-            <Download className="w-4 h-4" /> Save
-          </button>
-          
-          {/* 🚀 UPGRADED SHARE BUTTON */}
-          <button 
-            onClick={handleShare}
-            className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-900 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-zinc-50 transition-colors"
-          >
-            {copied ? <Check className="w-4 h-4 text-green-600" /> : <Share2 className="w-4 h-4" />}
-            {copied ? "Copied" : "Share"}
-          </button>
+        {/* Dashed Separator */}
+        <div className="border-t-2 border-dashed border-zinc-100 dark:border-zinc-800 mx-6"></div>
+
+        {/* QR Section */}
+        <div className="p-8 flex flex-col items-center">
+           <div className="p-5 bg-white rounded-[2.5rem] mb-8 shadow-inner border border-zinc-100">
+              <QRCode value={ticket.id} size={180} />
+           </div>
+           
+           <div className="grid grid-cols-2 gap-y-6 gap-x-4 w-full text-left mb-8">
+              <div><p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Date</p><p className="font-bold text-sm dark:text-white flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-indigo-500"/> {ticket.eventDate}</p></div>
+              <div className="text-right"><p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Entry Time</p><p className="font-bold text-sm dark:text-white flex items-center justify-end gap-1.5"><Clock className="w-3.5 h-3.5 text-indigo-500"/> {ticket.eventTime || 'TBA'}</p></div>
+              <div className="col-span-2 pt-4 border-t border-zinc-50 dark:border-zinc-800"><p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Venue</p><p className="font-bold text-sm dark:text-white flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-indigo-500"/> {ticket.eventLocation}</p></div>
+              
+              {ticket.teamName && (
+                <div className="col-span-2 pt-4 border-t border-zinc-50 dark:border-zinc-800 flex justify-between items-center">
+                  <div><p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Team</p><p className="font-bold text-sm text-purple-600">{ticket.teamName}</p></div>
+                  <div className="text-right"><p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Code</p><p className="font-mono text-xs font-black">{ticket.teamCode}</p></div>
+                </div>
+              )}
+           </div>
+
+           <div className="w-full py-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl flex items-center justify-center">
+              <p className="text-[10px] font-black text-zinc-400 dark:text-zinc-600 uppercase tracking-[0.4em]">PASS-ID: {ticket.id.substring(0,14).toUpperCase()}</p>
+           </div>
         </div>
 
+        <div className="p-4 bg-zinc-50 dark:bg-zinc-800 flex gap-3">
+          <button className="flex-1 py-4 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-black text-xs flex items-center justify-center gap-2">
+            <Download className="w-4 h-4" /> SAVE PASS
+          </button>
+          <button onClick={handleShare} className="flex-1 py-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-2xl font-black text-xs flex items-center justify-center gap-2">
+            {copied ? <Check className="w-4 h-4 text-green-500" /> : <Share2 className="w-4 h-4" />}
+            {copied ? "COPIED" : "SHARE"}
+          </button>
+        </div>
+      </div>
+      
+      <div className="mt-8 flex items-center gap-2 p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl">
+         <ShieldCheck className="w-4 h-4 text-indigo-600" />
+         <p className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-widest">Official Entry Document</p>
       </div>
     </div>
   );

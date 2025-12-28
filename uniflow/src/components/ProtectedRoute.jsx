@@ -7,28 +7,28 @@ const ProtectedRoute = ({ children, requireAdmin = false, superAdminOnly = false
   
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FDFBF7] dark:bg-[#0f0f10]">
+      <div className="min-h-screen flex items-center justify-center bg-[#FDFBF7] dark:bg-black">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
       </div>
     );
   }
   
-  // 1. Redirect to login if not authenticated
+  // 1. Must be logged in
   if (!user) {
     return <Navigate to="/login" />;
   }
   
-  // 👑 SUPER ADMIN BYPASS: If you are the owner, you can access EVERYTHING.
+  // 👑 GOD MODE: Super Admin passes EVERY check instantly
   if (profile?.role === 'super_admin') {
     return children;
   }
 
-  // 🛡️ ADMIN CHECK: If a route requires admin and user is just a student
+  // 🛡️ Standard Admin Check
   if (requireAdmin && profile?.role !== 'admin') {
     return <Navigate to="/" />;
   }
 
-  // ⛔ SUPER ADMIN ONLY: For the Command Center (Standard Admins can't enter)
+  // ⛔ Strict Super Admin Check (Command Center)
   if (superAdminOnly && profile?.role !== 'super_admin') {
     return <Navigate to="/" />;
   }
