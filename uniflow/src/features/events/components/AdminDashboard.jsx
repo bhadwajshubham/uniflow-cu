@@ -17,7 +17,7 @@ const AdminDashboard = () => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // 🔥 God Mode Logic: Default to 'all' if SuperAdmin
+  // God Mode Logic: Default to 'all' if SuperAdmin, else 'mine'
   const [filterMode, setFilterMode] = useState(profile?.role === 'super_admin' ? 'all' : 'mine');
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -30,13 +30,14 @@ const AdminDashboard = () => {
     if (!user) return;
     const eventsRef = collection(db, 'events');
     
-    // 🛡️ SUPERADMIN BYPASS: Access everything
+    // SuperAdmin bypass logic
     const q = (profile?.role === 'super_admin' && filterMode === 'all') 
       ? query(eventsRef) 
       : query(eventsRef, where('organizerId', '==', user.uid));
 
     const unsub = onSnapshot(q, (snapshot) => {
-      let tTickets = 0; let tFunds = 0;
+      let tTickets = 0; 
+      let tFunds = 0;
       const list = snapshot.docs.map(doc => {
         const d = doc.data();
         tTickets += (d.ticketsSold || 0);
@@ -58,6 +59,7 @@ const AdminDashboard = () => {
       const qT = query(collection(db, 'registrations'), where('eventId', '==', eventId));
       const sT = await getDocs(qT);
       sT.docs.forEach(d => docsToDelete.push(d.ref));
+      
       const qR = query(collection(db, 'reviews'), where('eventId', '==', eventId));
       const sR = await getDocs(qR);
       sR.docs.forEach(d => docsToDelete.push(d.ref));
@@ -68,15 +70,19 @@ const AdminDashboard = () => {
         await batch.commit();
       }
       await deleteDoc(doc(db, 'events', eventId));
-      alert("Purged.");
-    } catch (err) { alert("Failed to delete."); }
-    finally { setLoading(false); }
+      alert("Purged successfully.");
+    } catch (err) { 
+      console.error(err);
+      alert("Failed to delete."); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
-  if (loading) return <div className="min-h-screen bg-[#FDFBF7] dark:bg-black pt-32 text-center font-black text-indigo-600">UNIFLOW CORE...</div>;
+  if (loading) return <div className="min-h-screen bg-[#FDFBF7] dark:bg-black pt-32 text-center font-black text-indigo-600 tracking-widest uppercase">Initializing Core...</div>;
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] dark:bg-black pt-24 pb-24 px-4" onClick={() => setActiveMenuId(null)}>
+    <div className="min-h-screen bg-[#FDFBF7] dark:bg-black pt-24 pb-24 px-4 transition-colors duration-500" onClick={() => setActiveMenuId(null)}>
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
           <div>
@@ -95,12 +101,12 @@ const AdminDashboard = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          <div className="p-8 bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-zinc-100 dark:border-zinc-800 shadow-sm">
+          <div className="p-8 bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-zinc-200 dark:border-zinc-800 shadow-sm">
              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Managed Events</p>
              <p className="text-4xl font-black dark:text-white">{stats.events}</p>
           </div>
-          <div className="p-8 bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-zinc-100 dark:border-zinc-800 shadow-sm">
-             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Total Registrations</p>
+          <div className="p-8 bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-zinc-200 dark:border-zinc-800 shadow-sm">
+             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Total Admissions</p>
              <p className="text-4xl font-black dark:text-white">{stats.tickets}</p>
           </div>
           <div className="p-8 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-[2.5rem] shadow-2xl">
@@ -109,33 +115,61 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-zinc-100 dark:border-zinc-800 overflow-hidden">
+        <div className="bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
           <table className="w-full text-left">
             <thead className="bg-zinc-50 dark:bg-black/40 text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em]">
               <tr><th className="px-8 py-6">Event Context</th><th className="px-8 py-6">Admission Stat</th><th className="px-8 py-6 text-right">Moderation</th></tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 font-medium">
-              {events.map((event) => (
-                <tr key={event.id} className="hover:bg-zinc-50/50 dark:hover:bg-indigo-900/5 transition-colors">
-                  <td className="px-8 py-6">
-                    <p className="font-black text-zinc-900 dark:text-white uppercase tracking-tight">{event.title}</p>
-                    <p className="text-[10px] text-zinc-400 uppercase mt-1">{event.date} • {event.location}</p>
-                  </td>
-                  <td className="px-8 py-6">
-                    <div className="flex items-center gap-2">
-                       <span className="font-black dark:text-white text-lg">{event.ticketsSold}</span>
-                       <span className="text-zinc-400 text-[10px] font-bold uppercase">/ {event.totalTickets}</span>
-                    </div>
-                  </td>
-                  <td className="px-8 py-6 text-right relative">
-                    <button onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === event.id ? null : event.id); }} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all"><MoreVertical className="w-4 h-4" /></button>
-                    {activeMenuId === event.id && (
-                      <div className="absolute right-10 top-16 w-56 bg-white dark:bg-zinc-800 rounded-[2rem] shadow-2xl border border-zinc-100 dark:border-zinc-700 z-50 overflow-hidden animate-in slide-in-from-top-2">
-                        <button onClick={() => navigate(`/events/${event.id}`)} className="w-full text-left px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700 border-b border-zinc-50 dark:border-zinc-700">Explore Page</button>
-                        <button onClick={() => { setSelectedEvent(event); setIsParticipantsModalOpen(true); setActiveMenuId(null); }} className="w-full text-left px-6 py-4 text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:bg-zinc-50 dark:hover:bg-zinc-700 border-b border-zinc-50 dark:border-zinc-700">Manage Entry</button>
-                        <button onClick={() => { setSelectedEvent(event); setIsEditModalOpen(true); setActiveMenuId(null); }} className="w-full text-left px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700">Adjust Terms</button>
-                        <button onClick={() => handleDelete(event.id)} className="w-full text-left px-6 py-4 text-[10px] font-black uppercase tracking-widest text-red-600 border-t border-zinc-100 dark:border-zinc-800 hover:bg-red-50">Purge Record</button>
+              {events.length === 0 ? (
+                <tr><td colSpan="3" className="px-8 py-20 text-center text-zinc-400 font-bold uppercase tracking-widest text-xs">No Events Found</td></tr>
+              ) : (
+                events.map((event) => (
+                  <tr key={event.id} className="hover:bg-zinc-50/50 dark:hover:bg-indigo-900/5 transition-colors">
+                    <td className="px-8 py-6">
+                      <p className="font-black text-zinc-900 dark:text-white uppercase tracking-tight">{event.title}</p>
+                      <p className="text-[10px] text-zinc-400 uppercase mt-1">{event.date} • {event.location}</p>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-2">
+                         <span className="font-black dark:text-white text-lg">{event.ticketsSold}</span>
+                         <span className="text-zinc-400 text-[10px] font-bold uppercase">/ {event.totalTickets}</span>
                       </div>
-                    )}
-                  </td>
-                </tr>
+                    </td>
+                    <td className="px-8 py-6 text-right relative">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === event.id ? null : event.id); }} 
+                        className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                      {activeMenuId === event.id && (
+                        <div className="absolute right-10 top-16 w-56 bg-white dark:bg-zinc-800 rounded-[2rem] shadow-2xl border border-zinc-200 dark:border-zinc-700 z-50 overflow-hidden animate-in slide-in-from-top-2 duration-300">
+                          <button onClick={() => navigate(`/events/${event.id}`)} className="w-full text-left px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700 border-b border-zinc-50 dark:border-zinc-700 transition-colors">Explore Page</button>
+                          <button onClick={() => { setSelectedEvent(event); setIsParticipantsModalOpen(true); setActiveMenuId(null); }} className="w-full text-left px-6 py-4 text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:bg-zinc-50 dark:hover:bg-zinc-700 border-b border-zinc-50 dark:border-zinc-700 transition-colors">Manage Entry</button>
+                          <button onClick={() => { setSelectedEvent(event); setIsEditModalOpen(true); setActiveMenuId(null); }} className="w-full text-left px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">Adjust Terms</button>
+                          <button onClick={() => handleDelete(event.id)} className="w-full text-left px-6 py-4 text-[10px] font-black uppercase tracking-widest text-red-600 border-t border-zinc-100 dark:border-zinc-800 hover:bg-red-50 transition-colors">Purge Record</button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      {/* Modals */}
+      <CreateEventModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
+      {selectedEvent && (
+        <>
+          <EditEventModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} event={selectedEvent} />
+          <EventParticipantsModal isOpen={isParticipantsModalOpen} onClose={() => setIsParticipantsModalOpen(false)} event={selectedEvent} />
+        </>
+      )}
+    </div>
+  );
+};
+
+export default AdminDashboard;
