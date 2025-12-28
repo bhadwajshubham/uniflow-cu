@@ -17,8 +17,11 @@ const AdminDashboard = () => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // 🔥 SUPER ADMIN LOGIC: Default to 'all' if SuperAdmin
+  // 🛡️ SUPERADMIN LOGIC: Check if user is Root
   const isSuper = profile?.role === 'super_admin';
+  const isAdmin = profile?.role === 'admin';
+  
+  // Default to global view for SuperAdmin, local view for Admin
   const [filterMode, setFilterMode] = useState(isSuper ? 'all' : 'mine');
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -28,16 +31,21 @@ const AdminDashboard = () => {
   const [activeMenuId, setActiveMenuId] = useState(null);
 
   useEffect(() => {
+    // Security Guard: Prevent students from staying on this route
+    if (!loading && !isSuper && !isAdmin) {
+      navigate('/');
+      return;
+    }
+
     if (!user || !profile) return;
     
     const eventsRef = collection(db, 'events');
     let q;
 
-    // 🛡️ THE BYPASS: If SuperAdmin and mode is 'all', show everything without UID filter
+    // 🔥 THE BYPASS: SuperAdmin can fetch all documents without 'where' filter
     if (isSuper && filterMode === 'all') {
       q = query(eventsRef);
     } else {
-      // Normal Admins or SuperAdmin in 'mine' mode
       q = query(eventsRef, where('organizerId', '==', user.uid));
     }
 
@@ -47,49 +55,81 @@ const AdminDashboard = () => {
       const list = snapshot.docs.map(doc => {
         const d = doc.data();
         tTickets += (d.ticketsSold || 0);
+        // Calculate revenue based on price and tickets sold
         tFunds += ((d.ticketsSold || 0) * (Number(d.price) || 0));
         return { id: doc.id, ...d };
       });
       
       setStats({ events: snapshot.size, tickets: tTickets, funds: tFunds });
+      // Sort by newest creation date
       setEvents(list.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
       setLoading(false);
     }, (error) => {
-      console.error("Dashboard Listener Error:", error);
+      console.error("Critical: Dashboard Listener Failed", error);
       setLoading(false);
     });
 
     return () => unsub();
-  }, [user, profile, filterMode]);
+  }, [user, profile, filterMode, loading, isSuper, isAdmin, navigate]);
 
+  // 💥 THE CHUNKED PURGE LOGIC (Crucial for 500+ ticket events)
   const handleDelete = async (eventId) => {
-    if (!window.confirm("🚨 CRITICAL: Delete this event and ALL student tickets permanently?")) return;
+    const confirmation = window.confirm("🚨 WARNING: This will permanently delete the event AND wipe every student registration pass from the database. This cannot be undone. Proceed?");
+    
+    if (!confirmation) return;
+
     try {
       setLoading(true);
       const docsToDelete = [];
+
+      // 1. Collect all Registrations (Tickets)
       const qT = query(collection(db, 'registrations'), where('eventId', '==', eventId));
       const sT = await getDocs(qT);
       sT.docs.forEach(d => docsToDelete.push(d.ref));
 
+      // 2. Collect all Reviews
+      const qR = query(collection(db, 'reviews'), where('eventId', '==', eventId));
+      const sR = await getDocs(qR);
+      sR.docs.forEach(d => docsToDelete.push(d.ref));
+
+      // ⚡ TESTER FIX: Chunk Deletes (500 per batch limit)
+      // This prevents the "Too many writes" Firestore error
       for (let i = 0; i < docsToDelete.length; i += 500) {
         const batch = writeBatch(db);
         docsToDelete.slice(i, i + 500).forEach(ref => batch.delete(ref));
         await batch.commit();
       }
+
+      // 3. Delete the main event document
       await deleteDoc(doc(db, 'events', eventId));
-      alert("Event Purged.");
+      
+      alert("System Purge Complete. Event and data removed.");
     } catch (err) { 
-      alert("Delete failed: Check Firestore Rules."); 
+      console.error("Purge Error:", err);
+      alert("Purge Failed: Check Firestore Security Rules or Network."); 
     } finally { 
       setLoading(false); 
+      setActiveMenuId(null);
     }
+  };
+
+  const openParticipants = (event) => {
+    setSelectedEvent(event);
+    setIsParticipantsModalOpen(true);
+    setActiveMenuId(null);
+  };
+
+  const openEdit = (event) => {
+    setSelectedEvent(event);
+    setIsEditModalOpen(true);
+    setActiveMenuId(null);
   };
 
   if (loading) return (
     <div className="min-h-screen bg-[#FDFBF7] dark:bg-black flex items-center justify-center">
       <div className="text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-indigo-600 mx-auto mb-4"></div>
-        <p className="font-black text-xs uppercase tracking-widest text-indigo-600">Syncing UniFlow Core...</p>
+        <p className="font-black text-[10px] uppercase tracking-[0.3em] text-indigo-600 animate-pulse">Syncing UniFlow Core...</p>
       </div>
     </div>
   );
@@ -105,7 +145,6 @@ const AdminDashboard = () => {
               Console {isSuper && <span className="text-indigo-600">.Root</span>}
             </h1>
             
-            {/* 🔥 SUPERADMIN VIEW TOGGLE */}
             {isSuper && (
               <div className="flex gap-2 mt-6 bg-zinc-100 dark:bg-zinc-900 p-1.5 rounded-[1.2rem] w-fit border border-zinc-200 dark:border-zinc-800 shadow-inner">
                 <button 
@@ -136,17 +175,17 @@ const AdminDashboard = () => {
 
         {/* STATS GRID */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          <div className="p-10 bg-white dark:bg-zinc-900 rounded-[3rem] border border-zinc-100 dark:border-zinc-800 shadow-sm transition-all hover:shadow-indigo-500/5">
+          <div className="p-10 bg-white dark:bg-zinc-900 rounded-[3rem] border border-zinc-100 dark:border-zinc-800 shadow-sm">
              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Live Experiences</p>
              <p className="text-5xl font-black dark:text-white tracking-tighter">{stats.events}</p>
           </div>
-          <div className="p-10 bg-white dark:bg-zinc-900 rounded-[3rem] border border-zinc-100 dark:border-zinc-800 shadow-sm transition-all hover:shadow-indigo-500/5">
+          <div className="p-10 bg-white dark:bg-zinc-900 rounded-[3rem] border border-zinc-100 dark:border-zinc-800 shadow-sm">
              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Campus Footfall</p>
              <p className="text-5xl font-black dark:text-white tracking-tighter">{stats.tickets}</p>
           </div>
           <div className="p-10 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-[3rem] shadow-[0_20px_50px_rgba(79,70,229,0.2)]">
              <p className="text-[10px] font-black opacity-40 uppercase tracking-widest mb-2 italic">Gross Revenue</p>
-             <p className="text-5xl font-black tracking-tighter italic">₹{stats.funds}</p>
+             <p className="text-5xl font-black tracking-tighter italic">₹{stats.funds.toFixed(0)}</p>
           </div>
         </div>
 
@@ -155,19 +194,19 @@ const AdminDashboard = () => {
           <table className="w-full text-left border-collapse">
             <thead className="bg-zinc-50 dark:bg-black/40 text-[10px] font-black uppercase text-zinc-400 tracking-[0.3em]">
               <tr>
-                <th className="px-10 py-8">Experience</th>
+                <th className="px-10 py-8">Experience Identity</th>
                 <th className="px-10 py-8">Admissions</th>
                 <th className="px-10 py-8 text-right">Moderation</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 font-medium">
+            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {events.length === 0 ? (
                 <tr><td colSpan="3" className="px-10 py-20 text-center text-zinc-400 font-black uppercase tracking-widest italic">No experiences found in current scope</td></tr>
               ) : (
                 events.map((event) => (
                   <tr key={event.id} className="hover:bg-zinc-50/80 dark:hover:bg-indigo-950/10 transition-colors">
                     <td className="px-10 py-8">
-                      <p className="font-black text-zinc-900 dark:text-white uppercase tracking-tighter text-lg">{event.title}</p>
+                      <p className="font-black text-zinc-900 dark:text-white uppercase tracking-tighter text-lg leading-tight">{event.title}</p>
                       <div className="flex gap-3 mt-1.5">
                         <span className="text-[10px] text-indigo-600 font-black uppercase tracking-widest">{event.date}</span>
                         <span className="text-[10px] text-zinc-400 font-black uppercase tracking-widest">@ {event.location}</span>
@@ -176,7 +215,7 @@ const AdminDashboard = () => {
                     <td className="px-10 py-8">
                       <div className="flex items-center gap-3">
                          <span className="font-black dark:text-white text-2xl tracking-tighter">{event.ticketsSold}</span>
-                         <span className="text-zinc-400 text-[11px] font-black uppercase tracking-widest">/ {event.totalTickets}</span>
+                         <span className="text-zinc-400 text-[11px] font-black uppercase tracking-widest">/ {event.totalTickets} Passes</span>
                       </div>
                     </td>
                     <td className="px-10 py-8 text-right relative">
@@ -189,10 +228,18 @@ const AdminDashboard = () => {
 
                       {activeMenuId === event.id && (
                         <div className="absolute right-12 top-20 w-64 bg-white dark:bg-zinc-800 rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.15)] border border-zinc-100 dark:border-zinc-700 z-[160] overflow-hidden animate-in slide-in-from-top-4 duration-300">
-                          <button onClick={() => navigate(`/events/${event.id}`)} className="w-full text-left px-8 py-5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700 border-b border-zinc-100 dark:border-zinc-700">Explore Public View</button>
-                          <button onClick={() => { setSelectedEvent(event); setIsParticipantsModalOpen(true); setActiveMenuId(null); }} className="w-full text-left px-8 py-5 text-[11px] font-black uppercase tracking-[0.1em] text-indigo-600 hover:bg-indigo-50 dark:hover:bg-zinc-700 border-b border-zinc-100 dark:border-zinc-700">Manage Entry Gate</button>
-                          <button onClick={() => { setSelectedEvent(event); setIsEditModalOpen(true); setActiveMenuId(null); }} className="w-full text-left px-8 py-5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700">Adjust Terms</button>
-                          <button onClick={() => handleDelete(event.id)} className="w-full text-left px-8 py-5 text-[11px] font-black uppercase tracking-[0.1em] text-red-600 border-t border-zinc-100 dark:border-zinc-800 hover:bg-red-50">Purge Experience</button>
+                          <button onClick={() => navigate(`/events/${event.id}`)} className="w-full text-left px-8 py-5 text-[10px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700 border-b border-zinc-100 dark:border-zinc-700 flex items-center gap-3">
+                            <Ticket className="w-4 h-4" /> View Public Page
+                          </button>
+                          <button onClick={() => openParticipants(event)} className="w-full text-left px-8 py-5 text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:bg-indigo-50 dark:hover:bg-zinc-700 border-b border-zinc-100 dark:border-zinc-700 flex items-center gap-3">
+                            <Users className="w-4 h-4" /> Manage Entry Gate
+                          </button>
+                          <button onClick={() => openEdit(event)} className="w-full text-left px-8 py-5 text-[10px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700 flex items-center gap-3">
+                            <Edit className="w-4 h-4" /> Adjust Terms
+                          </button>
+                          <button onClick={() => handleDelete(event.id)} className="w-full text-left px-8 py-5 text-[10px] font-black uppercase tracking-widest text-red-600 border-t border-zinc-100 dark:border-zinc-800 hover:bg-red-50 flex items-center gap-3">
+                            <Trash2 className="w-4 h-4" /> Purge Experience
+                          </button>
                         </div>
                       )}
                     </td>
