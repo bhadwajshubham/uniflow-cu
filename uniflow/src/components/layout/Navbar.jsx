@@ -4,12 +4,12 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { 
   LogOut, User, Menu, X, Sun, Moon, 
-  Shield, Zap, Calendar, Ticket, Home, ScanLine, Settings, LayoutDashboard 
+  Shield, Zap, Calendar, Ticket, Home, LayoutDashboard 
 } from 'lucide-react';
 import UserProfile from '../../features/auth/components/UserProfile';
 
 const Navbar = () => {
-  const { user, profile, loading } = useAuth();
+  const { user, profile } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -17,13 +17,13 @@ const Navbar = () => {
 
   const isActive = (path) => location.pathname === path;
   
-  // 🛡️ CRITICAL ACCESS CHECK (Restores SuperAdmin visibility)
+  // 🛡️ ACCESS CHECK
   const canAccessConsole = profile?.role === 'admin' || profile?.role === 'super_admin';
   const isSuper = profile?.role === 'super_admin';
 
   return (
     <>
-      {/* 🖥️ DESKTOP NAVBAR */}
+      {/* 🖥️ DESKTOP NAVIGATION */}
       <nav className="hidden lg:flex fixed top-0 w-full z-[100] bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-zinc-200 dark:border-zinc-800 h-20 items-center justify-between px-8">
         <Link to="/" className="flex items-center gap-2">
           <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-indigo-500/20 italic">U</div>
@@ -31,11 +31,11 @@ const Navbar = () => {
         </Link>
 
         <div className="flex items-center gap-8">
-          <Link to="/" className={`text-xs font-black uppercase tracking-widest ${isActive('/') ? 'text-indigo-600' : 'text-zinc-500 hover:text-indigo-500'}`}>Feed</Link>
-          <Link to="/events" className={`text-xs font-black uppercase tracking-widest ${isActive('/events') ? 'text-indigo-600' : 'text-zinc-500 hover:text-indigo-500'}`}>Explore</Link>
-          <Link to="/my-tickets" className={`text-xs font-black uppercase tracking-widest ${isActive('/my-tickets') ? 'text-indigo-600' : 'text-zinc-500 hover:text-indigo-500'}`}>Passes</Link>
+          <Link to="/" className={`text-xs font-black uppercase tracking-widest ${isActive('/') ? 'text-indigo-600' : 'text-zinc-500 hover:text-indigo-500'}`}>Home</Link>
+          <Link to="/events" className={`text-xs font-black uppercase tracking-widest ${isActive('/events') ? 'text-indigo-600' : 'text-zinc-500 hover:text-indigo-500'}`}>Events</Link>
+          <Link to="/my-tickets" className={`text-xs font-black uppercase tracking-widest ${isActive('/my-tickets') ? 'text-indigo-600' : 'text-zinc-500 hover:text-indigo-500'}`}>Tickets</Link>
           
-          {/* 🔥 RESTORED DESKTOP LINK */}
+          {/* 🔥 ADMIN CONSOLE LINK */}
           {canAccessConsole && (
             <Link to="/admin" className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${isActive('/admin') ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-500/20' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 hover:bg-indigo-100'}`}>
               <LayoutDashboard className="w-4 h-4" /> Organizer Console
@@ -63,17 +63,18 @@ const Navbar = () => {
         </div>
       </nav>
 
-      {/* 📱 MOBILE BOTTOM NAVBAR (Restored and Fixed) */}
+      {/* 📱 MOBILE BOTTOM NAVIGATION */}
       <nav className="lg:hidden fixed bottom-0 w-full bg-white/90 dark:bg-zinc-950/90 backdrop-blur-2xl border-t border-zinc-200 dark:border-zinc-800 z-[100] pb-safe">
         <div className="flex justify-around items-center h-20 px-2">
           <Link to="/" className={`flex flex-col items-center gap-1.5 transition-all ${isActive('/') ? 'text-indigo-600 scale-110' : 'text-zinc-400'}`}>
             <Home className="w-6 h-6" /><span className="text-[8px] font-black uppercase tracking-tighter">Home</span>
           </Link>
+          
           <Link to="/events" className={`flex flex-col items-center gap-1.5 transition-all ${isActive('/events') ? 'text-indigo-600 scale-110' : 'text-zinc-400'}`}>
-            <Calendar className="w-6 h-6" /><span className="text-[8px] font-black uppercase tracking-tighter">Explore</span>
+            <Calendar className="w-6 h-6" /><span className="text-[8px] font-black uppercase tracking-tighter">Events</span>
           </Link>
           
-          {/* 🔥 RESTORED MOBILE ADMIN ICON */}
+          {/* 🔥 MOBILE CONSOLE LINK */}
           {canAccessConsole && (
             <Link to="/admin" className={`flex flex-col items-center gap-1.5 transition-all ${isActive('/admin') ? 'text-indigo-600 scale-110' : 'text-zinc-400'}`}>
               <Shield className="w-6 h-6" /><span className="text-[8px] font-black uppercase tracking-tighter">Console</span>
@@ -81,7 +82,7 @@ const Navbar = () => {
           )}
 
           <Link to="/my-tickets" className={`flex flex-col items-center gap-1.5 transition-all ${isActive('/my-tickets') ? 'text-indigo-600 scale-110' : 'text-zinc-400'}`}>
-            <Ticket className="w-6 h-6" /><span className="text-[8px] font-black uppercase tracking-tighter">Passes</span>
+            <Ticket className="w-6 h-6" /><span className="text-[8px] font-black uppercase tracking-tighter">Tickets</span>
           </Link>
 
           <button onClick={() => setIsProfileOpen(true)} className="flex flex-col items-center gap-1.5 text-zinc-400 active:scale-90 transition-transform">
