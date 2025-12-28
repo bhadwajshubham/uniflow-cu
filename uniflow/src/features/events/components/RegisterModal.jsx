@@ -60,7 +60,6 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
     setLoading(true);
 
     try {
-      // Pass the mandatory studentData along with existing registration calls
       if (mode === 'solo') {
         await registerForEvent(event.id, user, studentData);
         alert("✅ Registration Successful!");
@@ -84,13 +83,13 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in duration-200">
       <div className="bg-[#FDFBF7] dark:bg-zinc-900 w-full max-w-md rounded-[2rem] shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
         <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-white dark:bg-black/20">
           <div>
-            <h2 className="text-xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase">Secure Registration</h2>
+            <h2 className="text-xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase">Secure Entry</h2>
             <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">{event.title}</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
@@ -143,7 +142,6 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
               )}
             </div>
           ) : (
-            /* 📝 MANDATORY FORM SECTION */
             <form onSubmit={handleRegister} className="space-y-6">
               
               <div className="flex items-center justify-between">
@@ -153,12 +151,11 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
                 )}
               </div>
 
-              {/* STUDENT IDENTITY INPUTS */}
               <div className="space-y-4">
                 <div className="grid grid-cols-1 gap-4">
                   <div className="relative">
                     <Hash className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-                    <input required type="text" placeholder="University Roll Number" className="w-full pl-12 pr-4 py-4 bg-zinc-100 dark:bg-black border-none rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-600/20 dark:text-white"
+                    <input required type="text" placeholder="Roll Number" className="w-full pl-12 pr-4 py-4 bg-zinc-100 dark:bg-black border-none rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-600/20 dark:text-white"
                       value={studentData.rollNo} onChange={e => setStudentData({...studentData, rollNo: e.target.value})} />
                   </div>
                   
@@ -182,36 +179,34 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
                 </div>
               </div>
 
-              {/* TEAM SPECIFIC INPUTS */}
               {mode === 'create_team' && (
                 <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                  <label className="block text-[10px] font-black text-zinc-400 uppercase mb-2">Set Team Name</label>
-                  <input required type="text" placeholder="The Code Warriors" className="w-full px-4 py-4 bg-indigo-50 dark:bg-indigo-900/10 border-none rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 dark:text-white"
+                  <label className="block text-[10px] font-black text-zinc-400 uppercase mb-2">Team Name</label>
+                  <input required type="text" placeholder="The Code Warriors" className="w-full px-4 py-4 bg-indigo-50 dark:bg-indigo-900/10 border-none rounded-2xl text-sm font-bold outline-none dark:text-white"
                     value={teamName} onChange={e => setTeamName(e.target.value)} />
                 </div>
               )}
 
               {mode === 'join_team' && (
                 <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                  <label className="block text-[10px] font-black text-zinc-400 uppercase mb-2">Team Access Code</label>
-                  <input required type="text" placeholder="X7Y9Z" maxLength={6} className="w-full px-4 py-4 bg-purple-50 dark:bg-purple-900/10 border-none rounded-2xl text-lg font-black outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-white tracking-[0.5em] text-center"
+                  <label className="block text-[10px] font-black text-zinc-400 uppercase mb-2">Access Code</label>
+                  <input required type="text" placeholder="X7Y9Z" maxLength={6} className="w-full px-4 py-4 bg-purple-50 dark:bg-purple-900/10 border-none rounded-2xl text-lg font-black outline-none tracking-[0.5em] text-center dark:text-white"
                     value={teamCode} onChange={e => setTeamCode(e.target.value.toUpperCase())} />
                 </div>
               )}
 
-              {/* ELIGIBILITY & PRIVACY */}
               <div className="space-y-3">
                 {hasEligibility && (
                   <label className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-100 dark:border-amber-900/30 cursor-pointer">
                     <input type="checkbox" required checked={confirmedEligibility} onChange={e => setConfirmedEligibility(e.target.checked)} className="w-5 h-5 accent-amber-600 rounded" />
-                    <span className="text-[10px] font-bold text-amber-800 dark:text-amber-500 uppercase leading-tight">I meet the criteria: {event.eligibility}</span>
+                    <span className="text-[10px] font-bold text-amber-800 dark:text-amber-500 uppercase leading-tight">Eligibility: {event.eligibility}</span>
                   </label>
                 )}
 
                 <label className="flex items-center justify-between p-4 bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 rounded-2xl cursor-pointer">
                   <div className="flex flex-col">
-                    <span className="text-xs font-black dark:text-white">Social Presence</span>
-                    <span className="text-[10px] text-zinc-400 font-bold">Show me in "Who's Going"</span>
+                    <span className="text-xs font-black dark:text-white">Social Mode</span>
+                    <span className="text-[10px] text-zinc-400 font-bold">Show in "Who's Going"</span>
                   </div>
                   <input type="checkbox" checked={studentData.showPublicly} onChange={e => setStudentData({...studentData, showPublicly: e.target.checked})} className="w-6 h-6 accent-indigo-600 rounded-full" />
                 </label>

@@ -13,8 +13,10 @@ import {
 
 const generateTeamCode = () => Math.random().toString(36).substring(2, 6).toUpperCase();
 
-// 📧 REAL EMAIL LOGIC TRIGGER
-// This updates the global counter so your SuperAdmin Panel shows real-time stats
+/**
+ * 📧 SUPERADMIN STATS TRACKER
+ * Updates the global email counter within the current transaction
+ */
 const updateEmailStats = async (transaction) => {
   const statsRef = doc(db, "system_stats", "daily_emails");
   const statsSnap = await transaction.get(statsRef);
@@ -24,12 +26,14 @@ const updateEmailStats = async (transaction) => {
   }
 };
 
-// 1. INDIVIDUAL REGISTRATION
+/**
+ * 1. INDIVIDUAL REGISTRATION
+ * Uses runTransaction to prevent overbooking and double registration
+ */
 export const registerForEvent = async (eventId, user, studentData) => {
   if (!user) throw new Error("User must be logged in");
   
   const eventRef = doc(db, 'events', eventId);
-  // Unique ID: eventId + userId to prevent double registration
   const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
 
   try {
@@ -38,16 +42,16 @@ export const registerForEvent = async (eventId, user, studentData) => {
       if (!eventDoc.exists()) throw new Error("Event does not exist");
       const eventData = eventDoc.data();
       
-      // Check Capacity
+      // Capacity Guard
       if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) {
         throw new Error("Event is Sold Out!");
       }
 
-      // Check Duplicates
+      // Duplicate Guard
       const existingTicket = await transaction.get(registrationRef);
       if (existingTicket.exists()) throw new Error("You are already registered.");
 
-      // Set Registration with Mandatory Student Data
+      // Atomic Save
       transaction.set(registrationRef, {
         eventId,
         eventTitle: eventData.title,
@@ -59,7 +63,7 @@ export const registerForEvent = async (eventId, user, studentData) => {
         userEmail: user.email,
         userName: user.displayName,
         
-        // Mandatory Student Info from Modal 👇
+        // Mandatory Student Data 👇
         rollNo: studentData.rollNo,
         phone: studentData.phone,
         residency: studentData.residency,
@@ -71,7 +75,7 @@ export const registerForEvent = async (eventId, user, studentData) => {
         status: 'confirmed'
       });
 
-      // Increment Counts
+      // Atomic Update
       transaction.update(eventRef, { ticketsSold: (eventData.ticketsSold || 0) + 1 });
       await updateEmailStats(transaction);
     });
@@ -83,7 +87,9 @@ export const registerForEvent = async (eventId, user, studentData) => {
   }
 };
 
-// 2. REGISTER TEAM (LEADER)
+/**
+ * 2. CREATE TEAM (LEADER)
+ */
 export const registerTeam = async (eventId, user, teamName, studentData) => {
   if (!user) throw new Error("Login required");
 
@@ -98,18 +104,16 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
       const eventData = eventDoc.data();
       
       if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) throw new Error("Sold Out!");
-
-      const existingTicket = await transaction.get(registrationRef);
-      if (existingTicket.exists()) throw new Error("Already registered.");
+      if ((await transaction.get(registrationRef)).exists()) throw new Error("Already registered.");
       
       const code = generateTeamCode();
 
-      // Create Team Record
+      // Create Team Object
       transaction.set(teamRef, {
         eventId, teamName, teamCode: code, leaderId: user.uid, createdAt: serverTimestamp(), members: [user.uid]
       });
 
-      // Create Leader Registration
+      // Create Registration Pass
       transaction.set(registrationRef, {
         eventId,
         eventTitle: eventData.title,
@@ -120,14 +124,11 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
         userId: user.uid,
         userEmail: user.email,
         userName: user.displayName,
-        
-        // Mandatory Student Info from Modal 👇
         rollNo: studentData.rollNo,
         phone: studentData.phone,
         residency: studentData.residency,
         group: studentData.group,
         showPublicly: studentData.showPublicly,
-
         type: 'team_leader',
         teamId: teamRef.id,
         teamName, 
@@ -145,7 +146,9 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
   } catch (error) { throw error; }
 };
 
-// 3. JOIN TEAM (MEMBER)
+/**
+ * 3. JOIN TEAM (MEMBER)
+ */
 export const joinTeam = async (eventId, user, teamCode, studentData) => {
   const teamsRef = collection(db, 'teams');
   const q = query(teamsRef, where('teamCode', '==', teamCode.toUpperCase()), where('eventId', '==', eventId), limit(1));
@@ -164,18 +167,17 @@ export const joinTeam = async (eventId, user, teamCode, studentData) => {
       const eventDoc = await transaction.get(eventRef);
       const eventData = eventDoc.data();
       
-      const existingTicket = await transaction.get(registrationRef);
-      if (existingTicket.exists()) throw new Error("You are already registered for this event.");
+      if ((await transaction.get(registrationRef)).exists()) throw new Error("Already registered.");
       
       const freshTeam = await transaction.get(teamRef);
       const maxMembers = eventData.teamSize ? parseInt(eventData.teamSize) : 4;
       
       if ((freshTeam.data().members || []).length >= maxMembers) throw new Error("This team is already full!");
 
-      // Update Team List
+      // Update Team Membership
       transaction.update(teamRef, { members: [...freshTeam.data().members, user.uid] });
       
-      // Create Member Registration
+      // Save Member Pass
       transaction.set(registrationRef, {
         eventId,
         eventTitle: eventData.title,
@@ -186,14 +188,11 @@ export const joinTeam = async (eventId, user, teamCode, studentData) => {
         userId: user.uid,
         userEmail: user.email,
         userName: user.displayName,
-        
-        // Mandatory Student Info from Modal 👇
         rollNo: studentData.rollNo,
         phone: studentData.phone,
         residency: studentData.residency,
         group: studentData.group,
         showPublicly: studentData.showPublicly,
-
         type: 'team_member',
         teamId: teamDoc.id,
         teamName: teamData.teamName,

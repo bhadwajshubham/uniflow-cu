@@ -3,133 +3,112 @@ import { Html5QrcodeScanner } from 'html5-qrcode';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, AlertCircle, XCircle, Zap } from 'lucide-react'; // Added Zap icon
+import { useAuth } from '../../../context/AuthContext';
+import { ArrowLeft, CheckCircle, AlertCircle, XCircle, ShieldAlert } from 'lucide-react';
 
 const ScannerPage = () => {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const [scanResult, setScanResult] = useState(null); 
   const [message, setMessage] = useState('');
-  
-  // Refs for High-Speed State Management
-  const isProcessing = useRef(false);
   const lastScannedId = useRef(null);
-  const timerRef = useRef(null); 
+  const isProcessing = useRef(false);
 
   useEffect(() => {
-    // ⚡ TURBO CONFIGURATION
+    // 🛡️ SECURITY AUDIT FIX: Block non-admins from even initializing the camera
+    if (profile?.role !== 'admin' && profile?.role !== 'super_admin') {
+      return;
+    }
+
     const scanner = new Html5QrcodeScanner(
       "reader",
       { 
-        fps: 30, // 🚀 Checks 30 times per second (was 10)
-        qrbox: { width: 280, height: 280 }, // Slightly larger scan area
+        fps: 10, // ⚡ TESTER FIX: Optimized to 10fps to prevent heating
+        qrbox: { width: 280, height: 280 },
         aspectRatio: 1.0,
-        disableFlip: false,
-      },
-      false
+      }
     );
 
-    scanner.render(onScanSuccess, (error) => {});
-
-    async function onScanSuccess(decodedText) {
-      // 🔒 Debounce Logic
-      if (isProcessing.current) return; 
-      if (decodedText === lastScannedId.current) return; 
-
+    const onScanSuccess = async (decodedText) => {
+      if (isProcessing.current || decodedText === lastScannedId.current) return;
+      
       isProcessing.current = true;
       lastScannedId.current = decodedText;
-      
-      // Kill previous timers immediately
-      if (timerRef.current) clearTimeout(timerRef.current);
-
-      // 🎵 Fast Beep
-      new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg').play().catch(()=>{});
+      setScanResult('processing');
 
       try {
-        const ticketRef = doc(db, 'registrations', decodedText);
-        const ticketSnap = await getDoc(ticketRef);
+        const regRef = doc(db, 'registrations', decodedText);
+        const regSnap = await getDoc(regRef);
 
-        if (!ticketSnap.exists()) {
+        if (!regSnap.exists()) {
           setScanResult('error');
-          setMessage('Invalid ID');
-          // ⚡ Super Fast Reset for Errors (1s)
-          timerRef.current = setTimeout(() => { isProcessing.current = false; }, 1000);
-          return;
-        }
-
-        const data = ticketSnap.data();
-
-        if (data.status === 'attended' || data.status === 'used') {
-          setScanResult('warning');
-          setMessage(`USED: ${data.userName}`);
-        } else if (data.status === 'cancelled') {
-          setScanResult('error');
-          setMessage('CANCELLED');
+          setMessage('Invalid Ticket: Not found in database.');
         } else {
-          // ✅ Success!
-          // We fire the update but don't wait for it to finish UI update to make it feel instant
-          updateDoc(ticketRef, {
-            status: 'attended',
-            scannedAt: serverTimestamp()
-          });
-          setScanResult('success');
-          setMessage(`WELCOME: ${data.userName}`);
+          const data = regSnap.data();
+          if (data.status === 'attended' || data.status === 'used') {
+            setScanResult('warning');
+            setMessage(`Already Used: Scanned at ${data.attendedAt?.toDate().toLocaleTimeString()}`);
+          } else {
+            await updateDoc(regRef, {
+              status: 'attended',
+              attendedAt: serverTimestamp()
+            });
+            setScanResult('success');
+            setMessage(`Access Granted: Welcome, ${data.userName}!`);
+          }
         }
-
       } catch (err) {
         setScanResult('error');
-        setMessage('Error');
+        setMessage('Network Error: Could not verify.');
       } finally {
-        // ⚡ TURBO RESET: Ready for next person in 1.5 seconds
-        timerRef.current = setTimeout(() => {
+        setTimeout(() => {
           isProcessing.current = false;
+          lastScannedId.current = null;
           setScanResult(null);
-          setMessage('');
-          // Clear last scanned ID so we can scan the same person again if needed after delay
-          lastScannedId.current = null; 
-        }, 1500);
+        }, 3000);
       }
-    }
-
-    return () => {
-      scanner.clear().catch(console.error);
-      if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, []);
+
+    scanner.render(onScanSuccess, (err) => {});
+    return () => scanner.clear();
+  }, [profile]);
+
+  if (profile?.role !== 'admin' && profile?.role !== 'super_admin') {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center text-red-500">
+        <ShieldAlert className="w-20 h-20 mb-4" />
+        <h1 className="text-2xl font-black uppercase">Unauthorized Access</h1>
+        <button onClick={() => navigate('/')} className="mt-8 px-8 py-3 bg-zinc-800 text-white rounded-2xl">Return Home</button>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center">
-      <div className="w-full p-4 flex items-center justify-between bg-zinc-900 border-b border-zinc-800">
-        <button onClick={() => navigate('/admin')} className="p-2 bg-zinc-800 rounded-full hover:bg-zinc-700">
-          <ArrowLeft className="w-5 h-5" />
+    <div className="min-h-screen bg-zinc-950 text-white pt-24 pb-12 px-6">
+      <div className="max-w-md mx-auto">
+        <button onClick={() => navigate(-1)} className="mb-6 flex items-center gap-2 text-zinc-500 hover:text-white transition-colors">
+          <ArrowLeft className="w-5 h-5" /> Exit Scanner
         </button>
-        <h1 className="font-bold text-lg flex items-center gap-2">
-           Gate Scanner <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-500 text-[10px] rounded uppercase border border-yellow-500/30 flex items-center gap-1"><Zap className="w-3 h-3" /> Turbo</span>
-        </h1>
-        <div className="w-9"></div> 
-      </div>
 
-      <div className="w-full max-w-md p-4 flex-1 flex flex-col justify-center">
-        <div id="reader" className="w-full rounded-2xl overflow-hidden border-2 border-zinc-700 bg-black shadow-2xl"></div>
-        <p className="text-center text-zinc-500 text-sm mt-4 animate-pulse">Ready to scan...</p>
-      </div>
-
-      {scanResult && (
-        <div className={`fixed bottom-0 left-0 right-0 p-8 rounded-t-3xl shadow-2xl transition-transform duration-200 transform translate-y-0 ${
-          scanResult === 'success' ? 'bg-green-600' : 
-          scanResult === 'warning' ? 'bg-amber-500' : 'bg-red-600'
-        }`}>
-          <div className="flex flex-col items-center text-center text-white">
-            {scanResult === 'success' && <CheckCircle className="w-20 h-20 mb-2 animate-in zoom-in duration-200" />}
-            {scanResult === 'warning' && <AlertCircle className="w-20 h-20 mb-2 animate-in zoom-in duration-200" />}
-            {scanResult === 'error' && <XCircle className="w-20 h-20 mb-2 animate-in zoom-in duration-200" />}
-            
-            <h2 className="text-3xl font-black uppercase tracking-wide leading-none">
-              {scanResult === 'success' ? 'GO AHEAD' : scanResult === 'warning' ? 'STOP' : 'DENIED'}
-            </h2>
-            <p className="font-bold mt-2 text-xl truncate max-w-xs">{message}</p>
-          </div>
+        <div className="bg-zinc-900 rounded-[2.5rem] p-8 border border-zinc-800 shadow-2xl overflow-hidden relative">
+          <div id="reader" className="overflow-hidden rounded-3xl border-0"></div>
+          
+          {scanResult && (
+            <div className={`absolute inset-0 z-50 flex flex-col items-center justify-center p-6 text-center backdrop-blur-xl animate-in fade-in duration-300 ${
+              scanResult === 'success' ? 'bg-green-500/90' : 
+              scanResult === 'warning' ? 'bg-amber-500/90' : 
+              scanResult === 'processing' ? 'bg-indigo-600/90' : 'bg-red-600/90'
+            }`}>
+              {scanResult === 'success' && <CheckCircle className="w-20 h-20 mb-4 animate-bounce" />}
+              {scanResult === 'error' && <XCircle className="w-20 h-20 mb-4" />}
+              {scanResult === 'warning' && <AlertCircle className="w-20 h-20 mb-4" />}
+              <h2 className="text-2xl font-black uppercase tracking-tighter">{scanResult.toUpperCase()}</h2>
+              <p className="mt-2 font-bold leading-tight">{message}</p>
+            </div>
+          )}
         </div>
-      )}
+        <p className="mt-8 text-center text-zinc-500 text-xs font-bold uppercase tracking-widest">Gate Security Protocol v2.1</p>
+      </div>
     </div>
   );
 };

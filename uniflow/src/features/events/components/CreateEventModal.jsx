@@ -1,299 +1,129 @@
 import React, { useState } from 'react';
-import { 
-  X, Calendar, MapPin, DollarSign, Image as ImageIcon, 
-  Type, Ticket, Users, ShieldAlert, Sparkles 
-} from 'lucide-react';
-import { createEvent } from '../services/eventService'; 
+import { db } from '../../../lib/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../../../context/AuthContext';
+import { X, Calendar, MapPin, Clock, Tag, Users, Info, PlusCircle } from 'lucide-react';
 
-const CreateEventModal = ({ isOpen, onClose, onSuccess }) => {
+const CreateEventModal = ({ isOpen, onClose }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  
   const [formData, setFormData] = useState({
     title: '',
+    description: '',
     date: '',
     time: '',
     location: '',
-    price: 0,
-    totalTickets: 100,
-    description: '',
-    imageUrl: '', 
-    category: 'General',
-    type: 'solo', // 'solo' or 'team'
-    teamSize: 1,
-    allowedBranches: 'All',
-    isRestricted: false 
+    category: 'Tech',
+    price: '0',
+    totalTickets: '100',
+    imageUrl: '',
+    whatsappLink: '',
+    eligibility: '',
+    type: 'individual'
   });
 
   if (!isOpen) return null;
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({ 
-      ...prev, 
-      [name]: type === 'checkbox' ? checked : value 
-    }));
-  };
-
-  // 🪄 MAGIC: Auto-generate a Local Banner (No Third Party, No Storage)
-  const generateRandomImage = () => {
-    // 1. Get Text Details
-    const titleText = formData.title ? formData.title.trim() : "Event Name";
-    const clubName = user.displayName || "UniFlow Club"; 
-    
-    // 2. Define Professional Gradients based on Category
-    const gradients = {
-      'Tech': ['#1e3a8a', '#3b82f6'],      // Dark Blue -> Blue
-      'Cultural': ['#831843', '#db2777'],  // Dark Pink -> Pink
-      'Sports': ['#7c2d12', '#ea580c'],    // Dark Orange -> Orange
-      'Workshop': ['#064e3b', '#10b981'],  // Dark Green -> Emerald
-      'Seminar': ['#4c1d95', '#8b5cf6'],   // Dark Purple -> Violet
-      'Art': ['#78350f', '#d97706'],       // Dark Gold -> Amber
-      'General': ['#1f2937', '#4b5563']    // Dark Gray -> Gray
-    };
-
-    const [color1, color2] = gradients[formData.category] || gradients['General'];
-
-    // 3. Create the SVG XML String
-    const svgString = `
-      <svg width="800" height="450" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:${color1};stop-opacity:1" />
-            <stop offset="100%" style="stop-color:${color2};stop-opacity:1" />
-          </linearGradient>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#grad)" />
-        
-        <text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" 
-              font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="white">
-          ${titleText}
-        </text>
-        
-        <text x="50%" y="60%" dominant-baseline="middle" text-anchor="middle" 
-              font-family="Arial, sans-serif" font-size="24" fill="rgba(255,255,255,0.8)">
-          Organized by ${clubName}
-        </text>
-      </svg>
-    `;
-
-    // 4. Robust Base64 Conversion (Fixes "Invalid Character" errors)
-    try {
-      const base64Svg = btoa(unescape(encodeURIComponent(svgString)));
-      const dataUri = `data:image/svg+xml;base64,${base64Svg}`;
-      
-      setFormData(prev => ({ 
-        ...prev, 
-        imageUrl: dataUri
-      }));
-    } catch (err) {
-      console.error("Image generation failed", err);
-      // Fallback (Should rarely happen)
-      setFormData(prev => ({ ...prev, imageUrl: '' }));
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
-
     try {
-      if (!formData.title || !formData.date || !formData.location) {
-        throw new Error("Please fill in all required fields.");
-      }
-
-      // If user didn't click Auto-Gen, run it automatically now
-      let finalImageUrl = formData.imageUrl;
-      if (!finalImageUrl) {
-          const titleText = formData.title || "Event";
-          const clubName = user.displayName || "UniFlow Club";
-          const gradients = { 'Tech': ['#1e3a8a', '#3b82f6'], 'General': ['#1f2937', '#4b5563'] };
-          const [c1, c2] = gradients[formData.category] || gradients['General'];
-          
-          const svg = `
-            <svg width="800" height="450" xmlns="http://www.w3.org/2000/svg">
-              <defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:${c1}"/><stop offset="100%" style="stop-color:${c2}"/></linearGradient></defs>
-              <rect width="100%" height="100%" fill="url(#g)"/>
-              <text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="48" font-weight="bold" fill="white">${titleText}</text>
-              <text x="50%" y="60%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="24" fill="rgba(255,255,255,0.8)">Organized by ${clubName}</text>
-            </svg>`;
-          
-          finalImageUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
-      }
-
-      const eventPayload = {
+      await addDoc(collection(db, 'events'), {
         ...formData,
-        imageUrl: finalImageUrl,
         price: Number(formData.price),
         totalTickets: Number(formData.totalTickets),
-        teamSize: formData.type === 'team' ? Number(formData.teamSize) : 1,
         ticketsSold: 0,
         organizerId: user.uid,
-        organizerName: user.displayName || 'Admin',
-        organizerEmail: user.email,
-        createdAt: new Date()
-      };
-
-      await createEvent(eventPayload, user.uid);
-      if (onSuccess) onSuccess();
+        organizerName: user.displayName,
+        createdAt: serverTimestamp(),
+      });
+      alert("Event launched successfully!");
       onClose();
     } catch (err) {
-      console.error(err);
-      setError(err.message || "Failed to create event.");
+      alert("Error creating event: " + err.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-zinc-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white dark:bg-zinc-900 w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
         
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
-          <h2 className="text-xl font-black text-zinc-900 dark:text-white flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-indigo-600" /> Create Event
-          </h2>
+        <div className="p-8 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-black/20">
+          <div>
+            <h2 className="text-2xl font-black tracking-tighter dark:text-white uppercase">Host New Event</h2>
+            <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest mt-1">Fill in the campus experience details</p>
+          </div>
           <button onClick={onClose} className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full transition-colors">
-            <X className="w-5 h-5 text-zinc-500" />
+            <X className="h-6 w-6 text-zinc-500" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto custom-scrollbar">
-          {error && <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-xl font-medium text-center">{error}</div>}
-
-          <form id="create-event-form" onSubmit={handleSubmit} className="space-y-5">
-            
-            {/* Title */}
-            <div className="relative">
-              <Type className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-              <input name="title" value={formData.title} onChange={handleChange} className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white" required placeholder="Event Title" />
-            </div>
-
-            {/* Category */}
+        <form onSubmit={handleSubmit} className="p-8 overflow-y-auto custom-scrollbar space-y-6">
+          <div className="space-y-4">
             <div>
-               <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">Category</label>
-               <div className="grid grid-cols-3 gap-2">
-                  {['Tech', 'Cultural', 'Sports', 'Workshop', 'Seminar', 'General'].map(cat => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setFormData(prev => ({...prev, category: cat}))}
-                      className={`py-2 text-xs font-bold rounded-lg transition-all ${
-                        formData.category === cat 
-                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
-                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-               </div>
+              <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Event Title</label>
+              <input required type="text" className="w-full px-5 py-4 bg-zinc-100 dark:bg-black border-none rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-600/20 dark:text-white"
+                placeholder="e.g. Annual Hackathon 2025" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
             </div>
 
-            {/* 📸 BANNER SECTION (Auto-Gen) */}
-            <div className="space-y-2">
-               <label className="text-xs font-bold uppercase text-zinc-500">Event Poster</label>
-               <div className="flex gap-2">
-                 <div className="relative flex-1">
-                    <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                    <input 
-                      name="imageUrl" 
-                      value={formData.imageUrl} 
-                      onChange={handleChange} 
-                      className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white" 
-                      placeholder="Paste Image URL or use Auto" 
-                    />
-                 </div>
-                 {/* 🪄 MAGIC BUTTON */}
-                 <button 
-                   type="button"
-                   onClick={generateRandomImage}
-                   className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold rounded-xl text-xs flex items-center gap-2 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
-                 >
-                   <Sparkles className="w-4 h-4" /> Auto-Gen
-                 </button>
-               </div>
-               
-               {/* Preview */}
-               {formData.imageUrl && (
-                 <div className="h-48 w-full rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 mt-2 relative">
-                   <img src={formData.imageUrl} alt="Preview" className="w-full h-full object-cover" onError={(e) => e.target.src = 'https://via.placeholder.com/800x450?text=Invalid+Link'} />
-                 </div>
-               )}
+            <div>
+              <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Description</label>
+              <textarea required rows="3" className="w-full px-5 py-4 bg-zinc-100 dark:bg-black border-none rounded-2xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-600/20 dark:text-white"
+                placeholder="What is this event about?" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
             </div>
 
-            {/* Date/Time/Location */}
-            <div className="grid grid-cols-2 gap-4">
-              <input type="date" name="date" value={formData.date} onChange={handleChange} className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white" required />
-              <input type="time" name="time" value={formData.time} onChange={handleChange} className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white" required />
-            </div>
-            
-            <div className="relative">
-              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-              <input name="location" value={formData.location} onChange={handleChange} className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white" required placeholder="Location" />
-            </div>
-
-            {/* Team Configuration */}
-            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/30 rounded-xl border border-zinc-200 dark:border-zinc-700">
-               <label className="text-xs font-bold uppercase text-zinc-500 mb-2 block">Participation Type</label>
-               <div className="flex gap-4 mb-3">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="type" value="solo" checked={formData.type === 'solo'} onChange={handleChange} className="w-4 h-4 text-indigo-600" />
-                    <span className="text-sm font-medium dark:text-white">Individual</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="type" value="team" checked={formData.type === 'team'} onChange={handleChange} className="w-4 h-4 text-indigo-600" />
-                    <span className="text-sm font-medium dark:text-white">Team Event</span>
-                  </label>
-               </div>
-               {formData.type === 'team' && (
-                 <div className="mt-3">
-                   <label className="text-xs font-bold uppercase text-zinc-500 mb-1 block">Max Team Size</label>
-                   <div className="relative">
-                     <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                     <input type="number" name="teamSize" min="2" max="10" value={formData.teamSize} onChange={handleChange} className="w-full pl-10 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg outline-none dark:text-white" required />
-                   </div>
-                 </div>
-               )}
-            </div>
-
-            {/* Capacity & Price */}
-            <div className="grid grid-cols-2 gap-4">
-               <div className="relative">
-                  <Ticket className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                  <input type="number" name="totalTickets" value={formData.totalTickets} onChange={handleChange} className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white" required placeholder="Capacity" />
-               </div>
-               <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                  <input type="number" name="price" value={formData.price} onChange={handleChange} className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white" placeholder="Price (0 = Free)" />
-               </div>
-            </div>
-
-            {/* Restrictions */}
-            <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-xl">
-              <input type="checkbox" name="isRestricted" checked={formData.isRestricted} onChange={handleChange} className="w-5 h-5 rounded text-red-600 focus:ring-red-500" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <h4 className="text-sm font-bold text-red-900 dark:text-red-400 flex items-center gap-2"><ShieldAlert className="w-4 h-4" /> Chitkara Only</h4>
+                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Date</label>
+                <input required type="date" className="w-full px-5 py-4 bg-zinc-100 dark:bg-black border-none rounded-2xl text-sm font-bold outline-none dark:text-white"
+                  value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Time</label>
+                <input required type="time" className="w-full px-5 py-4 bg-zinc-100 dark:bg-black border-none rounded-2xl text-sm font-bold outline-none dark:text-white"
+                  value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} />
               </div>
             </div>
 
-            <textarea name="description" value={formData.description} onChange={handleChange} className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none min-h-[100px] dark:text-white" placeholder="Description..." />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Location / Venue</label>
+                <input required type="text" className="w-full px-5 py-4 bg-zinc-100 dark:bg-black border-none rounded-2xl text-sm font-bold outline-none dark:text-white"
+                  placeholder="e.g. Main Auditorium" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Category</label>
+                <select className="w-full px-5 py-4 bg-zinc-100 dark:bg-black border-none rounded-2xl text-sm font-bold outline-none dark:text-white appearance-none"
+                  value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
+                  <option value="Tech">Technology</option>
+                  <option value="Cultural">Cultural</option>
+                  <option value="Sports">Sports</option>
+                  <option value="Workshop">Workshop</option>
+                </select>
+              </div>
+            </div>
 
-          </form>
-        </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Price (₹)</label>
+                <input required type="number" className="w-full px-5 py-4 bg-zinc-100 dark:bg-black border-none rounded-2xl text-sm font-bold outline-none dark:text-white"
+                  placeholder="0 for Free" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Max Capacity</label>
+                <input required type="number" className="w-full px-5 py-4 bg-zinc-100 dark:bg-black border-none rounded-2xl text-sm font-bold outline-none dark:text-white"
+                  placeholder="e.g. 200" value={formData.totalTickets} onChange={e => setFormData({...formData, totalTickets: e.target.value})} />
+              </div>
+            </div>
+          </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex justify-end gap-3">
-          <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800">Cancel</button>
-          <button type="submit" form="create-event-form" disabled={loading} className="px-6 py-2.5 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
-            {loading ? "Creating..." : "Launch Event"}
+          <button type="submit" disabled={loading}
+            className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-xl shadow-indigo-600/20 hover:scale-[1.02] active:scale-95 transition-all">
+            {loading ? 'DEPLOYING TO CAMPUS...' : 'LAUNCH EVENT'}
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );
