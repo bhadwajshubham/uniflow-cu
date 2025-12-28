@@ -4,20 +4,20 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { 
   LogOut, User, Menu, X, Sun, Moon, 
-  Shield, Zap, Calendar, Ticket, Home, HelpCircle 
+  Shield, Zap, Calendar, Ticket, Home, ScanLine, Settings 
 } from 'lucide-react';
+import UserProfile from '../../features/auth/components/UserProfile';
 
 const Navbar = () => {
   const { user, profile, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
       await logout();
-      setIsMenuOpen(false);
       navigate('/');
     } catch (error) {
       console.error('Logout failed', error);
@@ -25,112 +25,101 @@ const Navbar = () => {
   };
 
   const isActive = (path) => location.pathname === path;
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
+
+  // 🧭 Navigation Items Configuration
+  const navItems = [
+    { name: 'Home', path: '/', icon: <Home className="w-6 h-6" /> },
+    { name: 'Events', path: '/events', icon: <Calendar className="w-6 h-6" /> },
+    { name: 'Tickets', path: '/my-tickets', icon: <Ticket className="w-6 h-6" /> },
+    ...(isAdmin ? [{ name: 'Scan', path: '/scan', icon: <ScanLine className="w-6 h-6" /> }] : []),
+    { name: 'About', path: '/about', icon: <Settings className="w-6 h-6" /> }
+  ];
 
   return (
-    <nav className="fixed top-0 w-full z-50 bg-white/70 dark:bg-black/70 backdrop-blur-2xl border-b border-zinc-200/50 dark:border-zinc-800 transition-all duration-300">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="flex justify-between h-20 items-center">
-          
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-xl shadow-indigo-500/20 group-hover:scale-110 transition-transform">
-              U
-            </div>
-            <span className="text-2xl font-black text-zinc-900 dark:text-white tracking-tighter">UniFlow.</span>
-          </Link>
+    <>
+      {/* 🖥️ DESKTOP TOP BAR */}
+      <nav className="hidden lg:flex fixed top-0 w-full z-50 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-zinc-200 dark:border-zinc-800 h-20 items-center justify-between px-8">
+        <Link to="/" className="flex items-center gap-2">
+          <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-indigo-500/20">U</div>
+          <span className="text-2xl font-black tracking-tighter">UniFlow.</span>
+        </Link>
 
-          {/* Desktop Links */}
-          <div className="hidden lg:flex items-center space-x-8">
-            <Link to="/events" className={`text-sm font-bold ${isActive('/events') ? 'text-indigo-600' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'}`}>Explore</Link>
-            
-            {user && (
-              <Link to="/my-tickets" className={`text-sm font-bold ${isActive('/my-tickets') ? 'text-indigo-600' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'}`}>My Tickets</Link>
-            )}
+        <div className="flex items-center gap-8">
+          {navItems.map((item) => (
+            <Link 
+              key={item.name} 
+              to={item.path} 
+              className={`text-sm font-bold transition-colors ${isActive(item.path) ? 'text-indigo-600' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'}`}
+            >
+              {item.name}
+            </Link>
+          ))}
+          {profile?.role === 'super_admin' && (
+            <Link to="/super-admin" className="text-xs font-black text-red-600 px-3 py-1 bg-red-50 dark:bg-red-900/20 rounded-lg animate-pulse">
+              SuperAdmin Panel
+            </Link>
+          )}
+        </div>
 
-            {/* Admin Console (Visible to Admin & Super Admin) */}
-            {(profile?.role === 'admin' || profile?.role === 'super_admin') && (
-              <Link to="/admin" className="text-sm font-black text-indigo-600 flex items-center gap-1.5 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl">
-                <Shield className="w-4 h-4" /> Organizer
-              </Link>
-            )}
-
-            {/* God Mode (Super Admin Only) */}
-            {profile?.role === 'super_admin' && (
-              <Link to="/super-admin" className="text-sm font-black text-red-600 flex items-center gap-1.5 px-4 py-2 bg-red-50 dark:bg-red-900/20 rounded-xl animate-pulse">
-                <Zap className="w-4 h-4" /> God Mode
-              </Link>
-            )}
-          </div>
-
-          {/* Right Actions */}
-          <div className="flex items-center gap-4">
-            <button onClick={toggleTheme} className="p-3 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:scale-110 transition-all">
-              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        <div className="flex items-center gap-4">
+          <button onClick={toggleTheme} className="p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800">
+            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
+          {user ? (
+            <button onClick={() => setIsProfileOpen(true)} className="w-10 h-10 rounded-full bg-indigo-600 text-white font-bold border-2 border-white shadow-md">
+              {user.displayName?.[0] || 'U'}
             </button>
+          ) : (
+            <Link to="/login" className="px-6 py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-xl font-bold text-sm">Login</Link>
+          )}
+        </div>
+      </nav>
 
-            {user ? (
-              <div className="hidden lg:flex items-center gap-4 border-l border-zinc-200 dark:border-zinc-800 pl-4 ml-2">
-                <div className="text-right">
-                  <p className="text-xs font-black text-zinc-900 dark:text-white leading-none">{user.displayName || 'Student'}</p>
-                  <p className="text-[10px] text-zinc-400 font-bold uppercase mt-1">{profile?.role || 'User'}</p>
-                </div>
-                <button onClick={handleLogout} className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-2xl hover:bg-red-600 hover:text-white transition-all">
-                  <LogOut className="w-5 h-5" />
-                </button>
+      {/* 📱 MOBILE BOTTOM NAVIGATION (RESTORED & IMPROVED) */}
+      <nav className="lg:hidden fixed bottom-0 w-full bg-white/90 dark:bg-zinc-950/90 backdrop-blur-xl border-t border-zinc-200 dark:border-zinc-800 z-[100] pb-safe">
+        <div className="flex justify-around items-center h-16">
+          {navItems.map((item) => (
+            <Link 
+              key={item.name} 
+              to={item.path} 
+              className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-all ${
+                isActive(item.path) ? 'text-indigo-600' : 'text-zinc-400'
+              }`}
+            >
+              <div className={`${isActive(item.path) ? 'scale-110' : 'scale-100'}`}>
+                {item.icon}
               </div>
-            ) : (
-              <Link to="/login" className="hidden lg:block px-8 py-3 bg-zinc-900 dark:bg-white text-white dark:text-black font-black rounded-2xl hover:scale-105 transition-all shadow-xl shadow-zinc-900/20">
-                Login
-              </Link>
-            )}
+              <span className="text-[10px] font-bold uppercase tracking-widest">{item.name}</span>
+              {isActive(item.path) && <div className="absolute bottom-1 w-1 h-1 bg-indigo-600 rounded-full"></div>}
+            </Link>
+          ))}
+          {/* Mobile Profile Toggle */}
+          <button 
+            onClick={() => user ? setIsProfileOpen(true) : navigate('/login')}
+            className="flex flex-col items-center justify-center w-full h-full space-y-1 text-zinc-400"
+          >
+            <User className="w-6 h-6" />
+            <span className="text-[10px] font-bold uppercase tracking-widest">{user ? 'Profile' : 'Login'}</span>
+          </button>
+        </div>
+      </nav>
 
-            {/* Mobile Menu Toggle */}
-            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="lg:hidden p-3 text-zinc-900 dark:text-white">
-              {isMenuOpen ? <X className="w-7 h-7" /> : <Menu className="w-7 h-7" />}
-            </button>
-          </div>
+      {/* 📱 MOBILE TOP BAR (Logo Only) */}
+      <div className="lg:hidden fixed top-0 w-full bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 z-[90] px-6 py-4 flex justify-between items-center">
+        <Link to="/" className="text-xl font-black tracking-tighter">UniFlow.</Link>
+        <div className="flex items-center gap-3">
+          <button onClick={toggleTheme}>{theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}</button>
+          {profile?.role === 'super_admin' && (
+            <Link to="/super-admin" className="p-2 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-lg">
+              <Zap className="w-4 h-4" />
+            </Link>
+          )}
         </div>
       </div>
 
-      {/* Mobile Menu */}
-      {isMenuOpen && (
-        <div className="lg:hidden fixed inset-0 top-20 bg-white/95 dark:bg-black/95 backdrop-blur-xl z-[60] p-6 space-y-4 animate-in slide-in-from-top-5">
-          <Link to="/events" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl bg-zinc-100 dark:bg-zinc-900 text-xl font-black">
-            <Calendar className="w-6 h-6 text-indigo-600" /> Explore
-          </Link>
-          
-          {user && (
-            <Link to="/my-tickets" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl bg-zinc-100 dark:bg-zinc-900 text-xl font-black">
-              <Ticket className="w-6 h-6 text-indigo-600" /> My Tickets
-            </Link>
-          )}
-
-          {(profile?.role === 'admin' || profile?.role === 'super_admin') && (
-            <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 text-xl font-black text-indigo-600">
-              <Shield className="w-6 h-6" /> Organizer Console
-            </Link>
-          )}
-
-          {profile?.role === 'super_admin' && (
-            <Link to="/super-admin" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl bg-red-50 dark:bg-red-900/30 text-xl font-black text-red-600">
-              <Zap className="w-6 h-6" /> God Mode
-            </Link>
-          )}
-
-          <div className="pt-8 space-y-4">
-            {user ? (
-              <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 py-5 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-[2rem] font-black text-xl">
-                <LogOut className="w-6 h-6" /> Logout
-              </button>
-            ) : (
-              <Link to="/login" onClick={() => setIsMenuOpen(false)} className="block w-full text-center py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-[2rem] font-black text-2xl">
-                Login / Join
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
-    </nav>
+      <UserProfile isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
+    </>
   );
 };
 
