@@ -1,30 +1,38 @@
+import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { Loader2 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
-const ProtectedRoute = ({ children, requireAdmin = false }) => {
-  const { currentUser, userRole, loading } = useAuth();
-
-  // 1. Wait for Auth to check status
+const ProtectedRoute = ({ children, requireAdmin = false, superAdminOnly = false }) => {
+  const { user, profile, loading } = useAuth();
+  
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+      <div className="min-h-screen flex items-center justify-center bg-[#FDFBF7] dark:bg-[#0f0f10]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
       </div>
     );
   }
-
-  // 2. Not Logged In? -> Go to Login
-  if (!currentUser) {
-    return <Navigate to="/login" replace />;
+  
+  // 1. Redirect to login if not authenticated
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+  
+  // 👑 SUPER ADMIN BYPASS: If you are the owner, you can access EVERYTHING.
+  if (profile?.role === 'super_admin') {
+    return children;
   }
 
-  // 3. Admin Route but User is NOT Admin? -> Go to Events
-  if (requireAdmin && userRole !== 'admin') {
-    return <Navigate to="/events" replace />;
+  // 🛡️ ADMIN CHECK: If a route requires admin and user is just a student
+  if (requireAdmin && profile?.role !== 'admin') {
+    return <Navigate to="/" />;
   }
 
-  // 4. Access Granted
+  // ⛔ SUPER ADMIN ONLY: For the Command Center (Standard Admins can't enter)
+  if (superAdminOnly && profile?.role !== 'super_admin') {
+    return <Navigate to="/" />;
+  }
+
   return children;
 };
 

@@ -1,93 +1,92 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { LogOut, User, Menu, X, Sun, Moon, Shield, Zap } from 'lucide-react'; // Added Zap icon
+import { 
+  LogOut, User, Menu, X, Sun, Moon, 
+  Shield, Zap, Calendar, Ticket, Home, HelpCircle 
+} from 'lucide-react';
 
 const Navbar = () => {
   const { user, profile, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/login');
       setIsMenuOpen(false);
+      navigate('/');
     } catch (error) {
-      console.error('Failed to log out', error);
+      console.error('Logout failed', error);
     }
   };
 
+  const isActive = (path) => location.pathname === path;
+
   return (
-    <nav className="fixed top-0 w-full z-50 bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 transition-colors duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16 items-center">
+    <nav className="fixed top-0 w-full z-50 bg-white/70 dark:bg-black/70 backdrop-blur-2xl border-b border-zinc-200/50 dark:border-zinc-800 transition-all duration-300">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="flex justify-between h-20 items-center">
           
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/30">
+          <Link to="/" className="flex items-center gap-2 group">
+            <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-xl shadow-indigo-500/20 group-hover:scale-110 transition-transform">
               U
             </div>
-            <span className="text-xl font-black text-zinc-900 dark:text-white tracking-tight">UniFlow</span>
+            <span className="text-2xl font-black text-zinc-900 dark:text-white tracking-tighter">UniFlow.</span>
           </Link>
 
-          {/* Desktop Nav */}
-          <div className="hidden md:flex items-center space-x-8">
-            <Link to="/events" className="text-sm font-medium text-zinc-500 hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400 transition-colors">Explore</Link>
-            <Link to="/about" className="text-sm font-medium text-zinc-500 hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400 transition-colors">About & Dev</Link>
+          {/* Desktop Links */}
+          <div className="hidden lg:flex items-center space-x-8">
+            <Link to="/events" className={`text-sm font-bold ${isActive('/events') ? 'text-indigo-600' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'}`}>Explore</Link>
             
             {user && (
-              <Link to="/my-tickets" className="text-sm font-medium text-zinc-500 hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400 transition-colors">My Tickets</Link>
+              <Link to="/my-tickets" className={`text-sm font-bold ${isActive('/my-tickets') ? 'text-indigo-600' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'}`}>My Tickets</Link>
             )}
 
-            {/* Organizer Link */}
+            {/* Admin Console (Visible to Admin & Super Admin) */}
             {(profile?.role === 'admin' || profile?.role === 'super_admin') && (
-              <Link to="/admin" className="text-sm font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+              <Link to="/admin" className="text-sm font-black text-indigo-600 flex items-center gap-1.5 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl">
                 <Shield className="w-4 h-4" /> Organizer
               </Link>
             )}
 
-            {/* 👑 GOD MODE LINK (Super Admin Only) */}
+            {/* God Mode (Super Admin Only) */}
             {profile?.role === 'super_admin' && (
-              <Link to="/super-admin" className="text-sm font-black text-red-600 dark:text-red-400 flex items-center gap-1 animate-pulse">
-                <Zap className="w-4 h-4" /> GOD MODE
+              <Link to="/super-admin" className="text-sm font-black text-red-600 flex items-center gap-1.5 px-4 py-2 bg-red-50 dark:bg-red-900/20 rounded-xl animate-pulse">
+                <Zap className="w-4 h-4" /> God Mode
               </Link>
             )}
           </div>
 
-          {/* Right Side Actions */}
-          <div className="hidden md:flex items-center space-x-4">
-            <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400 transition-colors">
+          {/* Right Actions */}
+          <div className="flex items-center gap-4">
+            <button onClick={toggleTheme} className="p-3 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:scale-110 transition-all">
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
 
             {user ? (
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold shadow-md">
-                    {user.displayName ? user.displayName[0].toUpperCase() : 'U'}
-                  </div>
+              <div className="hidden lg:flex items-center gap-4 border-l border-zinc-200 dark:border-zinc-800 pl-4 ml-2">
+                <div className="text-right">
+                  <p className="text-xs font-black text-zinc-900 dark:text-white leading-none">{user.displayName || 'Student'}</p>
+                  <p className="text-[10px] text-zinc-400 font-bold uppercase mt-1">{profile?.role || 'User'}</p>
                 </div>
-                <button onClick={handleLogout} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-600 rounded-full transition-colors">
+                <button onClick={handleLogout} className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-2xl hover:bg-red-600 hover:text-white transition-all">
                   <LogOut className="w-5 h-5" />
                 </button>
               </div>
             ) : (
-              <Link to="/login" className="px-5 py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-black text-sm font-bold rounded-xl hover:scale-105 transition-transform">
+              <Link to="/login" className="hidden lg:block px-8 py-3 bg-zinc-900 dark:bg-white text-white dark:text-black font-black rounded-2xl hover:scale-105 transition-all shadow-xl shadow-zinc-900/20">
                 Login
               </Link>
             )}
-          </div>
 
-          {/* Mobile Menu Button */}
-          <div className="md:hidden flex items-center gap-4">
-            <button onClick={toggleTheme} className="p-2 text-zinc-600 dark:text-zinc-400">
-              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 text-zinc-900 dark:text-white">
-              {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            {/* Mobile Menu Toggle */}
+            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="lg:hidden p-3 text-zinc-900 dark:text-white">
+              {isMenuOpen ? <X className="w-7 h-7" /> : <Menu className="w-7 h-7" />}
             </button>
           </div>
         </div>
@@ -95,27 +94,40 @@ const Navbar = () => {
 
       {/* Mobile Menu */}
       {isMenuOpen && (
-        <div className="md:hidden bg-white dark:bg-black border-t border-zinc-100 dark:border-zinc-800 p-4 space-y-4 animate-in slide-in-from-top-5">
-          <Link to="/events" className="block py-2 text-zinc-600 dark:text-zinc-300 font-medium" onClick={() => setIsMenuOpen(false)}>Explore Events</Link>
-          <Link to="/about" className="block py-2 text-zinc-600 dark:text-zinc-300 font-medium" onClick={() => setIsMenuOpen(false)}>About & Dev</Link>
+        <div className="lg:hidden fixed inset-0 top-20 bg-white/95 dark:bg-black/95 backdrop-blur-xl z-[60] p-6 space-y-4 animate-in slide-in-from-top-5">
+          <Link to="/events" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl bg-zinc-100 dark:bg-zinc-900 text-xl font-black">
+            <Calendar className="w-6 h-6 text-indigo-600" /> Explore
+          </Link>
           
           {user && (
-            <Link to="/my-tickets" className="block py-2 text-zinc-600 dark:text-zinc-300 font-medium" onClick={() => setIsMenuOpen(false)}>My Tickets</Link>
+            <Link to="/my-tickets" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl bg-zinc-100 dark:bg-zinc-900 text-xl font-black">
+              <Ticket className="w-6 h-6 text-indigo-600" /> My Tickets
+            </Link>
           )}
 
           {(profile?.role === 'admin' || profile?.role === 'super_admin') && (
-            <Link to="/admin" className="block py-2 text-indigo-600 font-bold" onClick={() => setIsMenuOpen(false)}>Organizer Dashboard</Link>
+            <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 text-xl font-black text-indigo-600">
+              <Shield className="w-6 h-6" /> Organizer Console
+            </Link>
           )}
 
           {profile?.role === 'super_admin' && (
-            <Link to="/super-admin" className="block py-2 text-red-600 font-black" onClick={() => setIsMenuOpen(false)}>⚡ GOD MODE</Link>
+            <Link to="/super-admin" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-4 p-4 rounded-2xl bg-red-50 dark:bg-red-900/30 text-xl font-black text-red-600">
+              <Zap className="w-6 h-6" /> God Mode
+            </Link>
           )}
 
-          {user ? (
-            <button onClick={handleLogout} className="w-full text-left py-2 text-red-500 font-medium">Logout</button>
-          ) : (
-            <Link to="/login" className="block w-full text-center py-3 bg-zinc-900 dark:bg-white text-white dark:text-black font-bold rounded-xl" onClick={() => setIsMenuOpen(false)}>Login</Link>
-          )}
+          <div className="pt-8 space-y-4">
+            {user ? (
+              <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 py-5 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-[2rem] font-black text-xl">
+                <LogOut className="w-6 h-6" /> Logout
+              </button>
+            ) : (
+              <Link to="/login" onClick={() => setIsMenuOpen(false)} className="block w-full text-center py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-[2rem] font-black text-2xl">
+                Login / Join
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </nav>
