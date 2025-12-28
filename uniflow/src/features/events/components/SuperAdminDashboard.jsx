@@ -5,7 +5,8 @@ import {
 import { db } from '../../../lib/firebase';
 import { 
   Shield, Users, Mail, Search, Zap, BarChart3, 
-  UserMinus, UserPlus, ShieldAlert, MailOff, ToggleLeft, ToggleRight
+  UserMinus, UserPlus, ShieldAlert, ToggleLeft, ToggleRight,
+  EyeOff // 💡 MailOff ki jagah EyeOff ya XCircle use kar rahe hain compatibility ke liye
 } from 'lucide-react';
 
 const SuperAdminDashboard = () => {
@@ -33,7 +34,7 @@ const SuperAdminDashboard = () => {
     return () => { unsubUsers(); unsubStats(); };
   }, []);
 
-  // 🚀 FEATURE 1: STOP EMAIL SERVICE (Quota Saver)
+  // 🚀 STOP EMAIL SERVICE (Quota Saver)
   const toggleEmailService = async () => {
     try {
       const newState = !systemStats.isEmailActive;
@@ -44,7 +45,7 @@ const SuperAdminDashboard = () => {
     } catch (err) { alert("Failed to toggle email system."); }
   };
 
-  // 🚀 FEATURE 2: PROMOTE / REVOKE ACCESS
+  // 🚀 PROMOTE / REVOKE ACCESS
   const updateUserRole = async (userId, newRole) => {
     const confirmMsg = newRole === 'admin' 
       ? "Promote this student to Organizer/Admin?" 
@@ -78,7 +79,7 @@ const SuperAdminDashboard = () => {
            <div className={`p-8 rounded-[2.5rem] border shadow-xl transition-all ${systemStats.isEmailActive ? 'bg-white border-zinc-200' : 'bg-red-50 border-red-200'} dark:bg-zinc-900`}>
               <div className="flex justify-between items-center mb-6">
                 <div className={`p-4 rounded-2xl ${systemStats.isEmailActive ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                  {systemStats.isEmailActive ? <Mail className="w-6 h-6" /> : <MailOff className="w-6 h-6" />}
+                  {systemStats.isEmailActive ? <Mail className="w-6 h-6" /> : <EyeOff className="w-6 h-6" />}
                 </div>
                 <button onClick={toggleEmailService}>
                    {systemStats.isEmailActive ? <ToggleRight className="w-10 h-10 text-green-500" /> : <ToggleLeft className="w-10 h-10 text-red-500" />}
