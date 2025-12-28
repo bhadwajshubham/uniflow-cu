@@ -26,12 +26,11 @@ const updateEmailStats = async (transaction) => {
 };
 
 /**
- * 🎓 EMAIL DOMAIN CHECKER
+ * 🎓 STRICT CHITKARA EMAIL VALIDATOR
  */
 const validateEmailDomain = (email) => {
-  const lowerEmail = email.toLowerCase();
-  if (!lowerEmail.endsWith('@chitkara.edu.in') && !lowerEmail.endsWith('@ca.chitkara.edu.in')) {
-    throw new Error("🚫 Access Denied: Use your Official Chitkara ID (@chitkara.edu.in) to register.");
+  if (!email.toLowerCase().endsWith('@chitkara.edu.in')) {
+    throw new Error("🚫 Access Denied: Please use your official @chitkara.edu.in email ID only.");
   }
 };
 
@@ -54,12 +53,14 @@ export const registerForEvent = async (eventId, user, studentData) => {
       // 🛡️ BRANCH ELIGIBILITY CHECK
       if (eventData.allowedBranches === 'CSE/AI Only') {
         if (studentData.branch !== 'B.E. (C.S.E.)' && studentData.branch !== 'B.E. (C.S.E. AI)') {
-          throw new Error("❌ Restricted: This event is exclusively for C.S.E. & C.S.E. AI branches.");
+          throw new Error("🚫 Restricted: This event is exclusively for C.S.E. & C.S.E. AI branches.");
         }
       }
 
       if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) throw new Error("Sold Out!");
-      if ((await transaction.get(registrationRef)).exists()) throw new Error("Already registered.");
+      
+      const existingTicket = await transaction.get(registrationRef);
+      if (existingTicket.exists()) throw new Error("You are already registered for this event.");
 
       transaction.set(registrationRef, {
         eventId,
@@ -68,11 +69,12 @@ export const registerForEvent = async (eventId, user, studentData) => {
         eventDate: eventData.date,
         eventTime: eventData.time || 'TBA',
         eventLocation: eventData.location,
+        whatsappLink: eventData.whatsappLink || '',
         userId: user.uid,
         userEmail: user.email,
         userName: user.displayName,
         
-        // Mandatory Student Data
+        // Mandatory Student Info from Modal
         rollNo: studentData.rollNo,
         phone: studentData.phone,
         residency: studentData.residency,
@@ -90,7 +92,10 @@ export const registerForEvent = async (eventId, user, studentData) => {
     });
 
     return { success: true };
-  } catch (error) { throw error; }
+  } catch (error) {
+    console.error("Registration Failed:", error);
+    throw error;
+  }
 };
 
 /**
@@ -112,7 +117,7 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
       
       if (eventData.allowedBranches === 'CSE/AI Only') {
         if (studentData.branch !== 'B.E. (C.S.E.)' && studentData.branch !== 'B.E. (C.S.E. AI)') {
-          throw new Error("❌ Team Lead Restricted: CSE/AI branches only.");
+          throw new Error("🚫 Restricted: CSE/AI branches only.");
         }
       }
 
@@ -128,6 +133,11 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
       transaction.set(registrationRef, {
         eventId,
         eventTitle: eventData.title,
+        organizerName: eventData.organizerName || 'UniFlow Club',
+        eventDate: eventData.date,
+        eventTime: eventData.time || 'TBA',
+        eventLocation: eventData.location,
+        whatsappLink: eventData.whatsappLink || '',
         userName: user.displayName,
         userEmail: user.email,
         userId: user.uid,
@@ -158,14 +168,17 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
  * 3. JOIN TEAM (MEMBER)
  */
 export const joinTeam = async (eventId, user, teamCode, studentData) => {
+  if (!user) throw new Error("Login required");
   validateEmailDomain(user.email);
+  
   const teamsRef = collection(db, 'teams');
   const q = query(teamsRef, where('teamCode', '==', teamCode.toUpperCase()), where('eventId', '==', eventId), limit(1));
   const querySnapshot = await getDocs(q);
   
-  if (querySnapshot.empty) throw new Error("Invalid Team Code for this event.");
+  if (querySnapshot.empty) throw new Error("Invalid Team Code. Ask your leader for the correct code.");
 
   const teamDoc = querySnapshot.docs[0];
+  const teamData = teamDoc.data();
   const teamRef = doc(db, 'teams', teamDoc.id);
   const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
   const eventRef = doc(db, 'events', eventId);
@@ -173,23 +186,31 @@ export const joinTeam = async (eventId, user, teamCode, studentData) => {
   try {
     await runTransaction(db, async (transaction) => {
       const eventDoc = await transaction.get(eventRef);
-      if (eventDoc.data().allowedBranches === 'CSE/AI Only') {
+      const eventData = eventDoc.data();
+
+      if (eventData.allowedBranches === 'CSE/AI Only') {
         if (studentData.branch !== 'B.E. (C.S.E.)' && studentData.branch !== 'B.E. (C.S.E. AI)') {
-          throw new Error("❌ Squad Entry Restricted: CSE/AI branches only.");
+          throw new Error("🚫 Restricted: CSE/AI branches only.");
         }
       }
       
       if ((await transaction.get(registrationRef)).exists()) throw new Error("Already registered.");
       
       const freshTeam = await transaction.get(teamRef);
-      const maxMembers = eventDoc.data().teamSize || 4;
-      if (freshTeam.data().members.length >= maxMembers) throw new Error("This team is already full!");
+      const maxMembers = eventData.teamSize ? parseInt(eventData.teamSize) : 4;
+      
+      if ((freshTeam.data().members || []).length >= maxMembers) throw new Error("This team is already full!");
 
       transaction.update(teamRef, { members: [...freshTeam.data().members, user.uid] });
       
       transaction.set(registrationRef, {
         eventId,
-        eventTitle: eventDoc.data().title,
+        eventTitle: eventData.title,
+        organizerName: eventData.organizerName || 'UniFlow Club',
+        eventDate: eventData.date,
+        eventTime: eventData.time || 'TBA',
+        eventLocation: eventData.location,
+        whatsappLink: eventData.whatsappLink || '',
         userName: user.displayName,
         userEmail: user.email,
         userId: user.uid,
@@ -201,16 +222,16 @@ export const joinTeam = async (eventId, user, teamCode, studentData) => {
         showPublicly: studentData.showPublicly,
         type: 'team_member',
         teamId: teamDoc.id,
-        teamName: freshTeam.data().teamName,
+        teamName: teamData.teamName,
         teamCode: teamCode.toUpperCase(),
         createdAt: serverTimestamp(),
         status: 'confirmed'
       });
 
-      transaction.update(eventRef, { ticketsSold: (eventDoc.data().ticketsSold || 0) + 1 });
+      transaction.update(eventRef, { ticketsSold: (eventData.ticketsSold || 0) + 1 });
       await updateEmailStats(transaction);
     });
 
-    return { success: true };
+    return { success: true, teamName: teamData.teamName };
   } catch (error) { throw error; }
 };
