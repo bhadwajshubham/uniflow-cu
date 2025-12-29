@@ -1,15 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   X, User, Users, Loader2, ArrowRight, ShieldCheck, 
   Hash, AlertTriangle, Smartphone, BookOpen, GraduationCap 
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { registerForEvent, registerTeam, joinTeam } from '../services/registrationService';
+import UserProfile from '../../auth/components/UserProfile'; // 🛡️ Import Profile Modal
 
 const RegisterModal = ({ event, onClose, isOpen }) => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   
+  // 1. Local state to trigger Profile Modal if data is missing
+  const [showProfileModal, setShowProfileModal] = useState(false);
+
   if (!isOpen || !event) return null;
+
+  // 2. 🛡️ GATEKEEPER: Check if profile is complete
+  const isProfileComplete = profile?.rollNo && profile?.phone && profile?.branch;
 
   const isTeamEvent = (event.type === 'team' || event.participationType === 'team');
   const hasEligibility = event.eligibility && event.eligibility.length > 0;
@@ -19,27 +26,40 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
   const [loading, setLoading] = useState(false);
   const [confirmedEligibility, setConfirmedEligibility] = useState(false);
   
+  // Auto-fill form from Profile (if available)
   const [studentData, setStudentData] = useState({
-    rollNo: '',
-    phone: '',
+    rollNo: profile?.rollNo || '',
+    phone: profile?.phone || '',
     residency: '', 
-    group: '',
-    branch: '',
+    group: profile?.group || '',
+    branch: profile?.branch || '',
     showPublicly: true
   });
 
   const [teamName, setTeamName] = useState('');
   const [teamCode, setTeamCode] = useState('');
 
+  // Update local state if profile changes (e.g. after they save profile)
+  useEffect(() => {
+    if (profile) {
+      setStudentData(prev => ({
+        ...prev,
+        rollNo: profile.rollNo || '',
+        phone: profile.phone || '',
+        branch: profile.branch || '',
+        group: profile.group || ''
+      }));
+    }
+  }, [profile]);
+
   const handleModeSelect = (selectedMode) => {
     setMode(selectedMode);
     setStep('form');
   };
 
-  // 🛡️ SECURITY PATCH: Strict 10-Digit Validation
   const isStudentInfoComplete = 
-    /^\d{10}$/.test(studentData.rollNo.trim()) && // Exactly 10 digits
-    /^\d{10}$/.test(studentData.phone.trim()) &&  // Exactly 10 digits
+    /^\d{10}$/.test(studentData.rollNo.trim()) && 
+    /^\d{10}$/.test(studentData.phone.trim()) && 
     studentData.branch !== '' &&
     studentData.residency !== '' && 
     studentData.group.trim() !== '';
@@ -67,6 +87,37 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
     }
   };
 
+  // 3. 🛡️ BLOCKING UI: If profile incomplete, show this instead of form
+  if (!isProfileComplete) {
+    return (
+      <>
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden text-center p-8">
+             <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-6 text-red-600">
+               <ShieldCheck className="w-8 h-8" />
+             </div>
+             <h2 className="text-2xl font-black text-zinc-900 dark:text-white uppercase italic tracking-tighter mb-2">Identity Required</h2>
+             <p className="text-zinc-500 font-medium text-sm mb-8">
+               To maintain campus security, you must complete your Student Profile (Roll No & Branch) before registering for any event.
+             </p>
+             <button 
+               onClick={() => setShowProfileModal(true)}
+               className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-xl active:scale-95 transition-all"
+             >
+               Complete Profile Now
+             </button>
+             <button onClick={onClose} className="mt-4 text-xs font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-600">
+               Cancel Registration
+             </button>
+          </div>
+        </div>
+        {/* Render Profile Modal on top if triggered */}
+        <UserProfile isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
+      </>
+    );
+  }
+
+  // 4. NORMAL FORM (If profile is complete)
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
       <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh]">
@@ -121,39 +172,33 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
           ) : (
             <form onSubmit={handleRegister} className="space-y-6">
               
-              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-2xl flex gap-3 shadow-sm">
-                 <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
-                 <p className="text-[10px] font-black text-red-700 dark:text-red-400 uppercase leading-tight">
-                    ELIGIBILITY: USE YOUR <span className="underline italic">10-DIGIT UNIVERSITY ROLL NO</span>. GARBAGE DATA WILL INVALIDATE YOUR TICKET.
+              <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl flex gap-3 shadow-sm">
+                 <ShieldCheck className="w-5 h-5 text-indigo-600 shrink-0" />
+                 <p className="text-[10px] font-black text-indigo-700 dark:text-indigo-400 uppercase leading-tight">
+                    IDENTITY VERIFIED: {studentData.rollNo}
                  </p>
               </div>
 
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Verify Information</p>
+                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Additional Details</p>
                 {isTeamEvent && (
-                  <button type="button" onClick={() => setStep('choice')} className="text-[10px] font-black text-zinc-400 hover:text-zinc-900 dark:hover:text-white uppercase transition-colors">← Change Participation</button>
+                  <button type="button" onClick={() => setStep('choice')} className="text-[10px] font-black text-zinc-400 hover:text-zinc-900 dark:hover:text-white uppercase transition-colors">← Change Mode</button>
                 )}
               </div>
 
-              <div className="space-y-4">
-                <div className="relative group">
-                  <Hash className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 group-focus-within:text-indigo-600 transition-colors" />
-                  {/* Pattern enforced for mobile keyboard & security */}
-                  <input required type="text" pattern="\d{10}" title="Exactly 10 digit Roll Number" placeholder="Roll Number (e.g. 231099xxxx)" className="w-full pl-12 pr-4 py-4 bg-zinc-100 dark:bg-black border-none rounded-2xl text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20"
-                    value={studentData.rollNo} onChange={e => setStudentData({...studentData, rollNo: e.target.value})} />
-                </div>
-                
-                <div className="relative group">
-                  <GraduationCap className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 group-focus-within:text-indigo-600 transition-colors" />
-                  <select required className="w-full pl-12 pr-4 py-4 bg-zinc-100 dark:bg-black border-none rounded-2xl text-sm font-bold dark:text-white appearance-none outline-none focus:ring-2 focus:ring-indigo-500/20"
-                    value={studentData.branch} onChange={e => setStudentData({...studentData, branch: e.target.value})}>
-                    <option value="">Choose Branch...</option>
-                    <option value="B.E. (C.S.E.)">B.E. (C.S.E.)</option>
-                    <option value="B.E. (C.S.E. AI)">B.E. (C.S.E. AI)</option>
-                    <option value="Other">Other Branch</option>
-                  </select>
-                </div>
+              {/* READ ONLY FIELDS (Auto-filled) */}
+              <div className="grid grid-cols-2 gap-4 opacity-70 pointer-events-none">
+                 <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-zinc-400">Roll No</label>
+                    <input readOnly value={studentData.rollNo} className="w-full px-4 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl font-bold text-xs dark:text-white" />
+                 </div>
+                 <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-zinc-400">Branch</label>
+                    <input readOnly value={studentData.branch} className="w-full px-4 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl font-bold text-xs dark:text-white" />
+                 </div>
+              </div>
 
+              <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="relative group">
                     <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 group-focus-within:text-indigo-600 transition-colors" />
