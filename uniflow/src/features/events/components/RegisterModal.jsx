@@ -1,45 +1,44 @@
 import { useState, useEffect } from 'react';
 import { 
   X, User, Users, Loader2, ArrowRight, ShieldCheck, 
-  Hash, AlertTriangle, Smartphone, BookOpen, GraduationCap 
+  Hash, AlertTriangle, Smartphone, GraduationCap 
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { registerForEvent, registerTeam, joinTeam } from '../services/registrationService';
-import UserProfile from '../../auth/components/UserProfile'; // 🛡️ Import Profile Modal
+import UserProfile from '../../auth/components/UserProfile';
 
 const RegisterModal = ({ event, onClose, isOpen }) => {
+  // 1. ✅ ALL HOOKS MUST BE AT THE TOP (Unconditional)
   const { user, profile } = useAuth();
-  
-  // 1. Local state to trigger Profile Modal if data is missing
   const [showProfileModal, setShowProfileModal] = useState(false);
-
-  if (!isOpen || !event) return null;
-
-  // 2. 🛡️ GATEKEEPER: Check if profile is complete
-  const isProfileComplete = profile?.rollNo && profile?.phone && profile?.branch;
-
-  const isTeamEvent = (event.type === 'team' || event.participationType === 'team');
-  const hasEligibility = event.eligibility && event.eligibility.length > 0;
-
-  const [step, setStep] = useState(isTeamEvent ? 'choice' : 'form'); 
-  const [mode, setMode] = useState(isTeamEvent ? null : 'solo');
   const [loading, setLoading] = useState(false);
   const [confirmedEligibility, setConfirmedEligibility] = useState(false);
-  
-  // Auto-fill form from Profile (if available)
-  const [studentData, setStudentData] = useState({
-    rollNo: profile?.rollNo || '',
-    phone: profile?.phone || '',
-    residency: '', 
-    group: profile?.group || '',
-    branch: profile?.branch || '',
-    showPublicly: true
-  });
-
   const [teamName, setTeamName] = useState('');
   const [teamCode, setTeamCode] = useState('');
 
-  // Update local state if profile changes (e.g. after they save profile)
+  // Safe checks for event properties (using optional chaining ?. to prevent crash if event is null)
+  const isTeamEvent = event?.type === 'team' || event?.participationType === 'team';
+  const hasEligibility = event?.eligibility && event.eligibility.length > 0;
+
+  const [step, setStep] = useState('form'); 
+  const [mode, setMode] = useState('solo');
+
+  // Auto-fill form from Profile
+  const [studentData, setStudentData] = useState({
+    rollNo: '', phone: '', residency: '', group: '', branch: '', showPublicly: true
+  });
+
+  // Sync state when props/profile change
+  useEffect(() => {
+    if (isTeamEvent) {
+       setStep('choice');
+       setMode(null);
+    } else {
+       setStep('form');
+       setMode('solo');
+    }
+  }, [isTeamEvent, isOpen]); // Reset when modal opens
+
   useEffect(() => {
     if (profile) {
       setStudentData(prev => ({
@@ -51,6 +50,12 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
       }));
     }
   }, [profile]);
+
+  // 2. 🛡️ NOW WE CAN DO CONDITIONAL RETURNS
+  if (!isOpen || !event) return null;
+
+  // 3. 🛡️ GATEKEEPER: Check if profile is complete
+  const isProfileComplete = profile?.rollNo && profile?.phone && profile?.branch;
 
   const handleModeSelect = (selectedMode) => {
     setMode(selectedMode);
@@ -87,7 +92,7 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
     }
   };
 
-  // 3. 🛡️ BLOCKING UI: If profile incomplete, show this instead of form
+  // 4. 🛡️ BLOCKING UI (Profile Incomplete)
   if (!isProfileComplete) {
     return (
       <>
@@ -98,7 +103,7 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
              </div>
              <h2 className="text-2xl font-black text-zinc-900 dark:text-white uppercase italic tracking-tighter mb-2">Identity Required</h2>
              <p className="text-zinc-500 font-medium text-sm mb-8">
-               To maintain campus security, you must complete your Student Profile (Roll No & Branch) before registering for any event.
+               To maintain campus security, you must complete your Student Profile (Roll No & Branch) before registering.
              </p>
              <button 
                onClick={() => setShowProfileModal(true)}
@@ -111,13 +116,12 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
              </button>
           </div>
         </div>
-        {/* Render Profile Modal on top if triggered */}
         <UserProfile isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
       </>
     );
   }
 
-  // 4. NORMAL FORM (If profile is complete)
+  // 5. NORMAL FORM
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
       <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh]">
@@ -172,6 +176,7 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
           ) : (
             <form onSubmit={handleRegister} className="space-y-6">
               
+              {/* Profile Badge */}
               <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl flex gap-3 shadow-sm">
                  <ShieldCheck className="w-5 h-5 text-indigo-600 shrink-0" />
                  <p className="text-[10px] font-black text-indigo-700 dark:text-indigo-400 uppercase leading-tight">
@@ -186,7 +191,7 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
                 )}
               </div>
 
-              {/* READ ONLY FIELDS (Auto-filled) */}
+              {/* READ ONLY FIELDS (Auto-filled from Profile) */}
               <div className="grid grid-cols-2 gap-4 opacity-70 pointer-events-none">
                  <div className="space-y-1">
                     <label className="text-[9px] font-black uppercase text-zinc-400">Roll No</label>
