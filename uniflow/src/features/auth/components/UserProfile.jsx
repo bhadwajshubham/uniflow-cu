@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { db } from '../../../lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore'; // 🛡️ Changed to setDoc for safety
-import { X, User, Hash, Phone, GraduationCap, Save, Loader2, LogOut, ShieldCheck } from 'lucide-react';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { X, User, Hash, Phone, GraduationCap, Save, Loader2, LogOut } from 'lucide-react';
 
 const UserProfile = ({ isOpen, onClose }) => {
   const { user, logout, profile } = useAuth();
@@ -14,6 +14,10 @@ const UserProfile = ({ isOpen, onClose }) => {
     branch: '',
     group: ''
   });
+
+  // 🛡️ CRASH FIX: If user logs out, kill this component immediately
+  if (!user) return null; 
+  if (!isOpen) return null;
 
   // Load data when modal opens
   useEffect(() => {
@@ -33,7 +37,7 @@ const UserProfile = ({ isOpen, onClose }) => {
               group: data.group || ''
             });
           } else {
-            // Pre-fill from Google Auth if Firestore is empty
+            // Pre-fill from Google Auth
             setFormData(prev => ({
               ...prev,
               displayName: user.displayName || '',
@@ -47,13 +51,10 @@ const UserProfile = ({ isOpen, onClose }) => {
     }
   }, [user, isOpen]);
 
-  if (!isOpen) return null;
-
   const handleSave = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    // 🛡️ VALIDATION: 10-Digits for Roll No & Phone
     if (formData.rollNo && !/^\d{10}$/.test(formData.rollNo)) {
       alert("Roll Number must be exactly 10 digits.");
       setLoading(false);
@@ -66,26 +67,29 @@ const UserProfile = ({ isOpen, onClose }) => {
     }
 
     try {
-      // 🛡️ CRITICAL FIX: Use setDoc with merge: true
-      // This creates the document if it doesn't exist (fixing the "No document to update" error)
       await setDoc(doc(db, 'users', user.uid), {
         ...formData,
         email: user.email,
         photoURL: user.photoURL,
-        role: profile?.role || 'student', // Preserve role
+        role: profile?.role || 'student',
         isProfileComplete: true,
         updatedAt: new Date()
       }, { merge: true });
 
       alert("✅ Profile Saved Successfully!");
       onClose();
-      window.location.reload(); // Refresh to update context
+      window.location.reload(); 
     } catch (err) {
-      console.error(err);
       alert("Save Failed: " + err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  // 🛡️ SAFE LOGOUT WRAPPER
+  const handleLogout = async () => {
+    onClose(); // Close modal FIRST
+    await logout(); // Then destroy session
   };
 
   return (
@@ -108,7 +112,8 @@ const UserProfile = ({ isOpen, onClose }) => {
         <form onSubmit={handleSave} className="p-8 overflow-y-auto custom-scrollbar space-y-5">
           
           <div className="flex justify-center mb-6">
-             {user.photoURL ? (
+             {/* 🛡️ SAFE GUARD: Check user existence again (Double Safety) */}
+             {user && user.photoURL ? (
                <img src={user.photoURL} alt="Profile" className="w-24 h-24 rounded-full border-4 border-white dark:border-zinc-900 shadow-xl" />
              ) : (
                <div className="w-24 h-24 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-4xl font-black text-indigo-600 border-4 border-white dark:border-zinc-900 shadow-xl">
@@ -170,7 +175,7 @@ const UserProfile = ({ isOpen, onClose }) => {
             {loading ? <Loader2 className="animate-spin" /> : <><Save className="w-4 h-4" /> SAVE PROFILE</>}
           </button>
 
-          <button type="button" onClick={logout} className="w-full py-4 text-red-500 font-bold text-xs uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-all flex items-center justify-center gap-2">
+          <button type="button" onClick={handleLogout} className="w-full py-4 text-red-500 font-bold text-xs uppercase tracking-widest hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-all flex items-center justify-center gap-2">
              <LogOut className="w-4 h-4" /> Sign Out
           </button>
 

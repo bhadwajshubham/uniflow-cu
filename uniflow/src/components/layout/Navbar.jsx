@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -11,10 +11,14 @@ import UserProfile from '../../features/auth/components/UserProfile';
 const Navbar = () => {
   const { user, profile } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const location = useLocation(); // 1. Hook for path checking
+  const location = useLocation();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  // 2. UX FIX: "Starts With" Logic for Active State
+  // Close profile modal immediately if user becomes null (Logout)
+  useEffect(() => {
+    if (!user) setIsProfileOpen(false);
+  }, [user]);
+
   const isActive = (path) => {
     if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path);
@@ -51,13 +55,17 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* 3. A11Y FIX: Added aria-label */}
           <button onClick={toggleTheme} aria-label="Toggle Theme" className="p-3 rounded-2xl bg-zinc-100 dark:bg-zinc-900 text-zinc-500 hover:text-indigo-600 transition-all">
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
+          
           {user ? (
-            <button onClick={() => setIsProfileOpen(true)} aria-label="Open Profile" className="w-11 h-11 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-black font-black border-4 border-white dark:border-zinc-800 shadow-xl uppercase transition-transform active:scale-90">
-              {user.displayName?.[0] || 'U'}
+            <button onClick={() => setIsProfileOpen(true)} aria-label="Open Profile" className="w-11 h-11 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-black font-black border-4 border-white dark:border-zinc-800 shadow-xl uppercase transition-transform active:scale-90 overflow-hidden">
+              {user.photoURL ? (
+                <img src={user.photoURL} alt="" className="w-full h-full object-cover" />
+              ) : (
+                user.displayName?.[0] || 'U'
+              )}
             </button>
           ) : (
             <Link to="/login" className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-500/20">Login</Link>
@@ -86,12 +94,18 @@ const Navbar = () => {
             <Ticket className="w-6 h-6" /><span className="text-[8px] font-black uppercase tracking-tighter">Tickets</span>
           </Link>
 
-          <button onClick={() => setIsProfileOpen(true)} aria-label="Open Profile" className="flex flex-col items-center gap-1.5 text-zinc-400 active:scale-90 transition-transform">
-            <div className="w-7 h-7 rounded-full bg-zinc-800 dark:bg-white flex items-center justify-center text-[10px] font-black text-white dark:text-black uppercase">
-               {user?.displayName?.[0] || 'U'}
-            </div>
-            <span className="text-[8px] font-black uppercase tracking-tighter">Profile</span>
-          </button>
+          {user && (
+            <button onClick={() => setIsProfileOpen(true)} aria-label="Open Profile" className="flex flex-col items-center gap-1.5 text-zinc-400 active:scale-90 transition-transform">
+              <div className="w-7 h-7 rounded-full bg-zinc-800 dark:bg-white flex items-center justify-center text-[10px] font-black text-white dark:text-black uppercase overflow-hidden">
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  user.displayName?.[0] || 'U'
+                )}
+              </div>
+              <span className="text-[8px] font-black uppercase tracking-tighter">Profile</span>
+            </button>
+          )}
         </div>
       </nav>
 
