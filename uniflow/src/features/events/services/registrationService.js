@@ -1,18 +1,7 @@
 import { db } from '../../../lib/firebase';
 import { doc, runTransaction, serverTimestamp, collection, query, where, getDocs, limit } from 'firebase/firestore';
 
-// Helper to track daily emails
-const updateEmailStats = async (transaction) => {
-  const statsRef = doc(db, "system_stats", "daily_emails");
-  const statsSnap = await transaction.get(statsRef);
-  if (statsSnap.exists()) {
-    transaction.update(statsRef, { count: (statsSnap.data().count || 0) + 1 });
-  } else {
-    transaction.set(statsRef, { count: 1, isEmailActive: true });
-  }
-};
-
-// Helper: Strict Validation Logic
+// Helper: Strict Validation Logic (Pure Logic, No DB calls)
 const validateRestrictions = (eventData, user, studentData) => {
   // 1. University ID Check
   if (eventData.isUniversityOnly) {
@@ -36,22 +25,27 @@ export const registerForEvent = async (eventId, user, studentData) => {
   
   const eventRef = doc(db, 'events', eventId);
   const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
+  const statsRef = doc(db, "system_stats", "daily_emails");
 
   try {
     await runTransaction(db, async (transaction) => {
+      // ---------------- READ PHASE (MUST BE FIRST) ----------------
       const eventDoc = await transaction.get(eventRef);
+      const existingReg = await transaction.get(registrationRef);
+      const statsSnap = await transaction.get(statsRef);
+
+      // ---------------- LOGIC PHASE ----------------
       if (!eventDoc.exists()) throw new Error("Event does not exist");
-      
       const eventData = eventDoc.data();
       
-      // 🛡️ SECURITY: Run Checks
       validateRestrictions(eventData, user, studentData);
 
       if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) throw new Error("Sold Out!");
-      
-      const existingReg = await transaction.get(registrationRef);
       if (existingReg.exists()) throw new Error("You are already registered for this event.");
 
+      // ---------------- WRITE PHASE (MUST BE LAST) ----------------
+      
+      // 1. Create Ticket
       transaction.set(registrationRef, {
         eventId,
         eventTitle: eventData.title,
@@ -63,7 +57,6 @@ export const registerForEvent = async (eventId, user, studentData) => {
         userEmail: user.email,
         userName: user.displayName,
         
-        // Student Info
         rollNo: studentData.rollNo,
         phone: studentData.phone,
         residency: studentData.residency,
@@ -76,8 +69,15 @@ export const registerForEvent = async (eventId, user, studentData) => {
         createdAt: serverTimestamp(),
       });
 
+      // 2. Update Ticket Count
       transaction.update(eventRef, { ticketsSold: (eventData.ticketsSold || 0) + 1 });
-      await updateEmailStats(transaction);
+
+      // 3. Update Email Stats
+      if (statsSnap.exists()) {
+        transaction.update(statsRef, { count: (statsSnap.data().count || 0) + 1 });
+      } else {
+        transaction.set(statsRef, { count: 1, isEmailActive: true });
+      }
     });
     return { success: true };
   } catch (error) { throw error; }
@@ -90,28 +90,27 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
 
   const eventRef = doc(db, 'events', eventId);
   const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
-  // Generate a unique 6-char team code
+  const statsRef = doc(db, "system_stats", "daily_emails");
+  
   const teamCode = Math.random().toString(36).substring(2, 8).toUpperCase(); 
 
   try {
     await runTransaction(db, async (transaction) => {
+      // ---------------- READ PHASE ----------------
       const eventDoc = await transaction.get(eventRef);
-      if (!eventDoc.exists()) throw new Error("Event does not exist");
+      const existingReg = await transaction.get(registrationRef);
+      const statsSnap = await transaction.get(statsRef);
 
+      // ---------------- LOGIC PHASE ----------------
+      if (!eventDoc.exists()) throw new Error("Event does not exist");
       const eventData = eventDoc.data();
 
-      // 🛡️ SECURITY: Run Checks
       validateRestrictions(eventData, user, studentData);
 
       if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) throw new Error("Sold Out!");
-
-      const existingReg = await transaction.get(registrationRef);
       if (existingReg.exists()) throw new Error("You are already registered.");
 
-      // Check for duplicate team name (Simple check via query would be expensive inside transaction, 
-      // relying on uniqueness probability or post-creation validation is safer for cost. 
-      // For strictness, we'd query 'registrations' where teamName == newName, but omitting for speed/cost here)
-
+      // ---------------- WRITE PHASE ----------------
       transaction.set(registrationRef, {
         eventId,
         eventTitle: eventData.title,
@@ -131,15 +130,20 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
         type: 'team_leader',
         teamName: teamName.trim(),
         teamCode: teamCode,
-        teamSize: 1, // Starts with 1
-        maxTeamSize: eventData.teamSize || 4, // Default to 4 if not set
+        teamSize: 1,
+        maxTeamSize: eventData.teamSize || 4,
         
         status: 'confirmed',
         createdAt: serverTimestamp(),
       });
 
       transaction.update(eventRef, { ticketsSold: (eventData.ticketsSold || 0) + 1 });
-      await updateEmailStats(transaction);
+      
+      if (statsSnap.exists()) {
+        transaction.update(statsRef, { count: (statsSnap.data().count || 0) + 1 });
+      } else {
+        transaction.set(statsRef, { count: 1, isEmailActive: true });
+      }
     });
     return { success: true, teamCode };
   } catch (error) { throw error; }
@@ -152,8 +156,9 @@ export const joinTeam = async (eventId, user, teamCode, studentData) => {
 
   const eventRef = doc(db, 'events', eventId);
   const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
+  const statsRef = doc(db, "system_stats", "daily_emails");
   
-  // Find the Team Leader using the code
+  // Query for leader (Outside transaction because query inside is complex/limited)
   const q = query(
     collection(db, 'registrations'), 
     where('eventId', '==', eventId),
@@ -162,52 +167,32 @@ export const joinTeam = async (eventId, user, teamCode, studentData) => {
     limit(1)
   );
 
+  const leaderQuerySnap = await getDocs(q);
+  if (leaderQuerySnap.empty) throw new Error("Invalid Team Code");
+  const leaderRef = leaderQuerySnap.docs[0].ref;
+
   try {
     await runTransaction(db, async (transaction) => {
-      // 1. Get Event Data
+      // ---------------- READ PHASE ----------------
       const eventDoc = await transaction.get(eventRef);
-      if (!eventDoc.exists()) throw new Error("Event does not exist");
-      const eventData = eventDoc.data();
-
-      // 🛡️ SECURITY: Run Checks (Even for joining members!)
-      validateRestrictions(eventData, user, studentData);
-
-      if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) throw new Error("Event is Sold Out!");
-
-      // 2. Get User Registration Status
       const existingReg = await transaction.get(registrationRef);
-      if (existingReg.exists()) throw new Error("You are already registered.");
-
-      // 3. Get Team Leader Doc (We have to fetch it inside transaction to ensure consistency)
-      const querySnapshot = await getDocs(q); // Note: Queries inside transactions are tricky, usually we fetch refs. 
-      // Better approach for strict transaction:
-      // Since we can't query inside a transaction object easily without the new SDK features, 
-      // we usually fetch the leader doc first OUTSIDE, then get() it inside.
-      // However, for this MVP, we will assume the query above is safe enough or use the ref found.
-    });
-
-    // ⚠️ RE-WRITING TRANSACTION FOR SAFETY:
-    // Fetch leader first to get ID, then run transaction on specific IDs.
-    const leaderQuerySnap = await getDocs(q);
-    if (leaderQuerySnap.empty) throw new Error("Invalid Team Code");
-    const leaderDocSnap = leaderQuerySnap.docs[0];
-    const leaderRef = leaderDocSnap.ref;
-
-    await runTransaction(db, async (transaction) => {
       const leaderDoc = await transaction.get(leaderRef);
+      const statsSnap = await transaction.get(statsRef);
+
+      // ---------------- LOGIC PHASE ----------------
       if (!leaderDoc.exists()) throw new Error("Team disbanded.");
-      
       const leaderData = leaderDoc.data();
       if (leaderData.teamSize >= leaderData.maxTeamSize) throw new Error("Team is full!");
 
-      const eventDoc = await transaction.get(eventRef);
+      if (!eventDoc.exists()) throw new Error("Event does not exist");
       const eventData = eventDoc.data();
 
-      // Final check on user
-      const existingReg = await transaction.get(registrationRef);
+      validateRestrictions(eventData, user, studentData);
+
+      if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) throw new Error("Event is Sold Out!");
       if (existingReg.exists()) throw new Error("Already registered.");
 
-      // Register the Member
+      // ---------------- WRITE PHASE ----------------
       transaction.set(registrationRef, {
         eventId,
         eventTitle: eventData.title,
@@ -223,19 +208,20 @@ export const joinTeam = async (eventId, user, teamCode, studentData) => {
         
         type: 'team_member',
         teamName: leaderData.teamName,
-        teamCode: leaderData.teamCode, // Store code for reference
+        teamCode: leaderData.teamCode,
         
         status: 'confirmed',
         createdAt: serverTimestamp(),
       });
 
-      // Update Leader's Team Size
       transaction.update(leaderRef, { teamSize: leaderData.teamSize + 1 });
-
-      // Update Global Ticket Count
       transaction.update(eventRef, { ticketsSold: (eventData.ticketsSold || 0) + 1 });
       
-      await updateEmailStats(transaction);
+      if (statsSnap.exists()) {
+        transaction.update(statsRef, { count: (statsSnap.data().count || 0) + 1 });
+      } else {
+        transaction.set(statsRef, { count: 1, isEmailActive: true });
+      }
     });
 
     return { success: true };
