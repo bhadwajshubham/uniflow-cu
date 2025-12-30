@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { db } from '../../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { X, User, Hash, Phone, GraduationCap, Save, Loader2, LogOut } from 'lucide-react';
+import { X, User, Hash, Phone, GraduationCap, Save, Loader2, LogOut, Home } from 'lucide-react';
 
 const UserProfile = ({ isOpen, onClose }) => {
+  // 1. ✅ ALL HOOKS AT THE TOP (No conditional returns before hooks)
   const { user, logout, profile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -12,12 +13,9 @@ const UserProfile = ({ isOpen, onClose }) => {
     rollNo: '',
     phone: '',
     branch: '',
-    group: ''
+    group: '',
+    residency: '' // 🆕 Added Residency
   });
-
-  // 🛡️ CRASH FIX: If user logs out, kill this component immediately
-  if (!user) return null; 
-  if (!isOpen) return null;
 
   // Load data when modal opens
   useEffect(() => {
@@ -34,14 +32,11 @@ const UserProfile = ({ isOpen, onClose }) => {
               rollNo: data.rollNo || '',
               phone: data.phone || '',
               branch: data.branch || '',
-              group: data.group || ''
+              group: data.group || '',
+              residency: data.residency || '' // 🆕 Load Residency
             });
           } else {
-            // Pre-fill from Google Auth
-            setFormData(prev => ({
-              ...prev,
-              displayName: user.displayName || '',
-            }));
+            setFormData(prev => ({ ...prev, displayName: user.displayName || '' }));
           }
         } catch (err) {
           console.error("Profile Fetch Error:", err);
@@ -50,6 +45,12 @@ const UserProfile = ({ isOpen, onClose }) => {
       fetchProfile();
     }
   }, [user, isOpen]);
+
+  // 2. 🛡️ SAFE LOGOUT
+  const handleLogout = async () => {
+    onClose(); 
+    await logout(); 
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -86,17 +87,13 @@ const UserProfile = ({ isOpen, onClose }) => {
     }
   };
 
-  // 🛡️ SAFE LOGOUT WRAPPER
-  const handleLogout = async () => {
-    onClose(); // Close modal FIRST
-    await logout(); // Then destroy session
-  };
+  // 3. 🛡️ CONDITIONAL RENDER (Only after hooks are defined)
+  if (!user || !isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-white dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh]">
         
-        {/* Header */}
         <div className="p-8 pb-4 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-black/20 flex justify-between items-center">
           <div>
             <h2 className="text-xl font-black tracking-tighter uppercase dark:text-white italic">Student Identity</h2>
@@ -112,8 +109,7 @@ const UserProfile = ({ isOpen, onClose }) => {
         <form onSubmit={handleSave} className="p-8 overflow-y-auto custom-scrollbar space-y-5">
           
           <div className="flex justify-center mb-6">
-             {/* 🛡️ SAFE GUARD: Check user existence again (Double Safety) */}
-             {user && user.photoURL ? (
+             {user.photoURL ? (
                <img src={user.photoURL} alt="Profile" className="w-24 h-24 rounded-full border-4 border-white dark:border-zinc-900 shadow-xl" />
              ) : (
                <div className="w-24 h-24 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-4xl font-black text-indigo-600 border-4 border-white dark:border-zinc-900 shadow-xl">
@@ -159,6 +155,20 @@ const UserProfile = ({ isOpen, onClose }) => {
                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Group</label>
                <input required type="text" placeholder="G1" className="w-full px-4 py-4 bg-zinc-100 dark:bg-black border-none rounded-2xl font-bold dark:text-white outline-none text-center"
                   value={formData.group} onChange={e => setFormData({...formData, group: e.target.value})} />
+             </div>
+          </div>
+
+          {/* 🆕 RESIDENCY FIELD */}
+          <div className="space-y-1">
+             <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Residency Status</label>
+             <div className="relative group">
+                <Home className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 group-focus-within:text-indigo-600" />
+                <select required className="w-full pl-12 pr-4 py-4 bg-zinc-100 dark:bg-black border-none rounded-2xl font-bold dark:text-white outline-none appearance-none focus:ring-2 focus:ring-indigo-500/20"
+                  value={formData.residency} onChange={e => setFormData({...formData, residency: e.target.value})}>
+                  <option value="">Select Status...</option>
+                  <option value="Hosteller">Hosteller</option>
+                  <option value="Day Scholar">Day Scholar</option>
+                </select>
              </div>
           </div>
 
