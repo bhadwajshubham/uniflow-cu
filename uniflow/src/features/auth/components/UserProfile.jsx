@@ -4,8 +4,8 @@ import { db } from '../../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { X, User, Hash, Phone, GraduationCap, Save, Loader2, LogOut, Home, Camera, Sparkles, Shield, QrCode } from 'lucide-react';
 
-// ✅ IMPORT THE CLOUDINARY SERVICE
-import { uploadImage } from '../../../lib/uploadService';
+// ✅ CORRECT IMPORT PATH (Points to where your file actually exists)
+import { uploadImage } from '../../events/services/uploadService';
 
 const UserProfile = ({ isOpen, onClose }) => {
   const { user, logout, profile } = useAuth();
@@ -102,7 +102,6 @@ const UserProfile = ({ isOpen, onClose }) => {
         ...formData,
         email: user.email,
         photoURL: finalPhotoURL,
-        // Ensure role doesn't get overwritten if it exists in context profile
         role: profile?.role || 'student',
         isProfileComplete: true,
         updatedAt: new Date()
@@ -110,8 +109,6 @@ const UserProfile = ({ isOpen, onClose }) => {
 
       alert("✅ Profile Updated Successfully!");
       onClose();
-      // Optional: Reload to force Navbar update if context doesn't sync fast enough
-      // window.location.reload(); 
     } catch (err) {
       alert("Save Failed: " + err.message);
     } finally {
