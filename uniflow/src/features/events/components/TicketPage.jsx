@@ -1,156 +1,147 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import { useAuth } from '../../../context/AuthContext';
-import { Loader2, Calendar, MapPin, Clock, User, ArrowLeft, Download, Share2 } from 'lucide-react';
+import { doc, getDoc } from 'firebase/firestore';
+import { QRCodeSVG } from 'qrcode.react'; // npm install qrcode.react
+import { Loader2, Calendar, MapPin, Clock, Download, ArrowLeft, Ticket as TicketIcon } from 'lucide-react';
+import CertificateModal from '../../tickets/components/CertificateModal';
 
 const TicketPage = () => {
   const { ticketId } = useParams();
-  const { user } = useAuth();
   const navigate = useNavigate();
   
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [isCertificateOpen, setIsCertificateOpen] = useState(false);
 
   useEffect(() => {
     const fetchTicket = async () => {
-      if (!user || !ticketId) return;
-      
       try {
-        const docRef = doc(db, 'registrations', ticketId);
-        const docSnap = await getDoc(docRef);
+        const ticketRef = doc(db, 'registrations', ticketId);
+        const ticketSnap = await getDoc(ticketRef);
 
-        if (!docSnap.exists()) {
-          setError('Ticket not found.');
-          return;
+        if (ticketSnap.exists()) {
+          setTicket({ id: ticketSnap.id, ...ticketSnap.data() });
+        } else {
+          alert("Ticket not found!");
+          navigate('/my-tickets');
         }
-
-        const data = docSnap.data();
-
-        // Security Check: Ensure this ticket belongs to the user
-        if (data.userId !== user.uid) {
-           setError('Unauthorized: This ticket does not belong to you.');
-           return;
-        }
-
-        setTicket({ id: docSnap.id, ...data });
       } catch (err) {
-        console.error("Ticket fetch error:", err);
-        setError(err.message);
+        console.error("Error fetching ticket:", err);
       } finally {
         setLoading(false);
       }
     };
-
     fetchTicket();
-  }, [ticketId, user]);
+  }, [ticketId, navigate]);
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black">
-      <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      <div className="flex flex-col items-center gap-4">
+        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+        <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Loading Access Pass...</p>
+      </div>
     </div>
   );
 
-  if (error) return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-black p-4 text-center">
-      <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-        <User className="w-8 h-8 text-red-500" />
-      </div>
-      <h2 className="text-xl font-black text-zinc-900 dark:text-white uppercase">Access Denied</h2>
-      <p className="text-zinc-500 mt-2 mb-6">{error}</p>
-      <button onClick={() => navigate('/my-tickets')} className="px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-xl font-bold text-sm uppercase tracking-widest">
-        Back to My Tickets
-      </button>
-    </div>
-  );
+  if (!ticket) return null;
+
+  // 🕒 Logic: Only show certificate if event is passed OR user checked in
+  // For demo/MVP, we can also check if date < today
+  const eventDateObj = new Date(ticket.eventDate);
+  const today = new Date();
+  const isEventCompleted = today > eventDateObj || ticket.checkedIn === true;
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-4">
-      <div className="max-w-md mx-auto relative">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black p-6 flex flex-col items-center justify-center relative">
+      
+      {/* Back Button */}
+      <button onClick={() => navigate('/my-tickets')} className="absolute top-6 left-6 p-3 bg-white dark:bg-zinc-900 rounded-full shadow-sm hover:scale-105 transition-transform z-10">
+        <ArrowLeft className="w-5 h-5 dark:text-white" />
+      </button>
+
+      <div className="w-full max-w-sm bg-white dark:bg-zinc-900 rounded-[2.5rem] shadow-2xl overflow-hidden border border-zinc-100 dark:border-zinc-800 relative">
         
-        {/* Back Button */}
-        <button onClick={() => navigate('/my-tickets')} className="absolute -top-12 left-0 flex items-center gap-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
-          <ArrowLeft className="w-4 h-4" /> Back
-        </button>
-
-        {/* TICKET CARD */}
-        <div className="bg-white dark:bg-zinc-900 rounded-[2rem] overflow-hidden shadow-2xl border border-zinc-200 dark:border-zinc-800 relative">
-          
-          {/* Status Bar */}
-          <div className={`h-3 w-full ${
-             ticket.status === 'attended' ? 'bg-green-500' : 
-             ticket.status === 'cancelled' ? 'bg-red-500' : 'bg-indigo-600'
-          }`}></div>
-
-          <div className="p-8 text-center">
-            <h1 className="text-2xl font-black text-zinc-900 dark:text-white uppercase leading-tight mb-2">
-              {ticket.eventTitle}
-            </h1>
-            <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-8">
-              Official Entry Pass
-            </p>
-
-            {/* QR CODE */}
-            <div className="bg-white p-4 rounded-2xl shadow-inner border border-zinc-100 inline-block mb-8">
-              <img 
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${ticket.id}`} 
-                alt="Ticket QR" 
-                className="w-48 h-48 object-contain mix-blend-multiply"
-              />
-            </div>
-            
-            <p className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest mb-8">
-              ID: {ticket.id}
-            </p>
-
-            {/* DETAILS GRID */}
-            <div className="grid grid-cols-2 gap-4 text-left bg-zinc-50 dark:bg-zinc-950/50 p-6 rounded-2xl border border-zinc-100 dark:border-zinc-800">
-               <div>
-                 <p className="text-[9px] font-black text-zinc-400 uppercase mb-1">Date</p>
-                 <div className="flex items-center gap-2 text-zinc-900 dark:text-white font-bold text-sm">
-                   <Calendar className="w-3 h-3 text-indigo-500" /> {ticket.eventDate}
-                 </div>
-               </div>
-               <div>
-                 <p className="text-[9px] font-black text-zinc-400 uppercase mb-1">Time</p>
-                 <div className="flex items-center gap-2 text-zinc-900 dark:text-white font-bold text-sm">
-                   <Clock className="w-3 h-3 text-indigo-500" /> {ticket.eventTime}
-                 </div>
-               </div>
-               <div className="col-span-2">
-                 <p className="text-[9px] font-black text-zinc-400 uppercase mb-1">Venue</p>
-                 <div className="flex items-center gap-2 text-zinc-900 dark:text-white font-bold text-sm">
-                   <MapPin className="w-3 h-3 text-indigo-500" /> {ticket.eventLocation}
-                 </div>
-               </div>
-               <div className="col-span-2 pt-2 border-t border-zinc-200 dark:border-zinc-800 mt-2">
-                 <p className="text-[9px] font-black text-zinc-400 uppercase mb-1">Attendee</p>
-                 <div className="flex items-center gap-2 text-zinc-900 dark:text-white font-bold text-sm">
-                   <User className="w-3 h-3 text-indigo-500" /> {ticket.userName}
-                 </div>
-                 <p className="text-[10px] text-zinc-500 mt-1 pl-5">{ticket.rollNo} • {ticket.branch}</p>
-               </div>
-            </div>
-          </div>
-
-          {/* Footer Actions */}
-          <div className="bg-zinc-50 dark:bg-black p-6 flex gap-3 border-t border-zinc-200 dark:border-zinc-800">
-             <button className="flex-1 py-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors dark:text-white">
-               <Share2 className="w-3 h-3" /> Share
-             </button>
-             <button className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/20">
-               <Download className="w-3 h-3" /> Save
-             </button>
-          </div>
+        {/* Ticket Header */}
+        <div className="bg-indigo-600 p-8 text-center relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+          <h1 className="text-2xl font-black text-white uppercase italic tracking-tighter relative z-10">
+            {ticket.eventTitle}
+          </h1>
+          <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest mt-2 relative z-10">Official Entry Pass</p>
         </div>
-        
-        <p className="text-center text-[10px] font-bold text-zinc-400 uppercase mt-8 tracking-widest">
-          Show this QR code at the entrance
-        </p>
+
+        {/* Ticket Body */}
+        <div className="p-8 flex flex-col items-center gap-6">
+           
+           {/* QR Code Section */}
+           <div className="p-4 bg-white rounded-2xl border-2 border-dashed border-zinc-200 shadow-sm">
+              <QRCodeSVG value={ticket.id} size={180} />
+           </div>
+           <p className="text-[10px] text-zinc-400 font-mono uppercase tracking-widest">ID: {ticket.id}</p>
+
+           {/* Event Details */}
+           <div className="w-full space-y-4">
+              <div className="flex items-center gap-4">
+                 <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600">
+                    <Calendar className="w-5 h-5" />
+                 </div>
+                 <div>
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase">Date</p>
+                    <p className="font-bold dark:text-white">{ticket.eventDate}</p>
+                 </div>
+              </div>
+              
+              <div className="flex items-center gap-4">
+                 <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600">
+                    <MapPin className="w-5 h-5" />
+                 </div>
+                 <div>
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase">Venue</p>
+                    <p className="font-bold dark:text-white">{ticket.eventLocation || "On Campus"}</p>
+                 </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                 <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600">
+                    <Clock className="w-5 h-5" />
+                 </div>
+                 <div>
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase">Time</p>
+                    <p className="font-bold dark:text-white">{ticket.eventTime || "TBA"}</p>
+                 </div>
+              </div>
+           </div>
+        </div>
+
+        {/* Action Footer */}
+        <div className="p-6 bg-zinc-50 dark:bg-black/20 border-t border-zinc-100 dark:border-zinc-800">
+           {isEventCompleted ? (
+             <button 
+               onClick={() => setIsCertificateOpen(true)}
+               className="w-full py-4 bg-[#D4AF37] hover:bg-yellow-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-yellow-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+             >
+               <Download className="w-4 h-4" /> Download Certificate
+             </button>
+           ) : (
+             <div className="w-full py-4 bg-zinc-200 dark:bg-zinc-800 text-zinc-400 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 cursor-not-allowed">
+               <TicketIcon className="w-4 h-4" /> Certificate Locked
+             </div>
+           )}
+        </div>
 
       </div>
+
+      {/* 📜 CERTIFICATE MODAL */}
+      <CertificateModal 
+        isOpen={isCertificateOpen}
+        onClose={() => setIsCertificateOpen(false)}
+        userName={ticket.userName}
+        eventTitle={ticket.eventTitle}
+        eventDate={ticket.eventDate}
+        ticketId={ticket.id}
+      />
+
     </div>
   );
 };
