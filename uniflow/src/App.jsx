@@ -1,92 +1,100 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import Navbar from './components/layout/Navbar';
-import { AuthProvider } from './context/AuthContext';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
-import ProtectedRoute from './components/layout/ProtectedRoute';
+
+// Layouts
+import Navbar from './components/layout/Navbar';
 
 // Pages
-import HomePage from './features/events/components/HomePage';
-import LoginPage from './features/auth/components/LoginPage';
-import HelpPage from './features/events/components/HelpPage';
-import AboutPage from './features/auth/AboutPage';
+import HomePage from './features/home/pages/HomePage';
+import EventsPage from './features/events/pages/EventsPage';
+import EventDetailsPage from './features/events/pages/EventDetailsPage';
+import LoginPage from './features/auth/pages/LoginPage';
+import MyTicketsPage from './features/tickets/pages/MyTicketsPage';
+import TicketPage from './features/tickets/pages/TicketPage'; // 🆕 IMPORT THIS
 
-import EventsPage from './features/events/components/EventsPage';
-import EventDetailsPage from './features/events/components/EventDetailsPage';
-import MyTicketsPage from './features/events/components/MyTicketsPage';
-import TicketPage from './features/events/components/TicketPage'; 
+// Admin Pages
+import AdminDashboard from './features/admin/pages/AdminDashboard';
+import SuperAdminDashboard from './features/super-admin/pages/SuperAdminDashboard';
 
-import AdminDashboard from './features/events/components/AdminDashboard';
-import ScannerPage from './features/events/components/ScannerPage';
-import SuperAdminDashboard from './features/events/components/SuperAdminDashboard'; // 👈 NEW IMPORT
+// 🛡️ Protected Route Component
+const ProtectedRoute = ({ children, requiredRole }) => {
+  const { user, profile, loading } = useAuth();
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+    </div>
+  );
+  
+  if (!user) return <Navigate to="/login" />;
+
+  // Role Check
+  if (requiredRole) {
+    if (requiredRole === 'admin' && profile?.role !== 'admin' && profile?.role !== 'super_admin') {
+      return <Navigate to="/" />;
+    }
+    if (requiredRole === 'super_admin' && profile?.role !== 'super_admin') {
+      return <Navigate to="/" />;
+    }
+  }
+
+  return children;
+};
 
 const App = () => {
   return (
-    <AuthProvider>
-      <ThemeProvider>
-        <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-white transition-colors duration-300">
-          <Navbar />
-          <Routes>
-            {/* 🏠 PUBLIC ROUTES */}
-            <Route path="/" element={<HomePage />} />
-            <Route path="/events" element={<EventsPage />} />
-            <Route path="/events/:id" element={<EventDetailsPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/help" element={<HelpPage />} />
-            <Route path="/about" element={<AboutPage />} />
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+          <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-white transition-colors duration-300">
+            <Navbar />
             
-            {/* 🔒 PROTECTED STUDENT ROUTES */}
-            <Route 
-              path="/my-tickets" 
-              element={
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/" element={<HomePage />} />
+              <Route path="/login" element={<LoginPage />} />
+              
+              {/* Event Routes */}
+              <Route path="/events" element={<EventsPage />} />
+              <Route path="/events/:id" element={<EventDetailsPage />} />
+
+              {/* User Routes (Protected) */}
+              <Route path="/my-tickets" element={
                 <ProtectedRoute>
                   <MyTicketsPage />
                 </ProtectedRoute>
-              } 
-            />
-            
-            <Route 
-              path="/tickets/:ticketId" 
-              element={
+              } />
+              
+              {/* 🆕 THE MISSING TICKET VIEW ROUTE */}
+              <Route path="/tickets/:ticketId" element={
                 <ProtectedRoute>
                   <TicketPage />
                 </ProtectedRoute>
-              } 
-            />
+              } />
 
-            {/* 🛡️ ADMIN ROUTES */}
-            <Route 
-              path="/admin" 
-              element={
-                <ProtectedRoute requireAdmin={true}>
+              {/* Admin Routes */}
+              <Route path="/admin" element={
+                <ProtectedRoute requiredRole="admin">
                   <AdminDashboard />
                 </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/scan" 
-              element={
-                <ProtectedRoute requireAdmin={true}>
-                  <ScannerPage />
-                </ProtectedRoute>
-              } 
-            />
+              } />
 
-            {/* 👑 SUPER ADMIN ROUTE (GOD MODE) */}
-            <Route 
-              path="/super-admin" 
-              element={
-                <ProtectedRoute superAdminOnly={true}>
+              {/* Super Admin Routes */}
+              <Route path="/super-admin" element={
+                <ProtectedRoute requiredRole="super_admin">
                   <SuperAdminDashboard />
                 </ProtectedRoute>
-              } 
-            />
-            
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </div>
-      </ThemeProvider>
-    </AuthProvider>
+              } />
+
+              {/* Fallback */}
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+          </div>
+        </Router>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 
