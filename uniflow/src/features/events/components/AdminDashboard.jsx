@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../../../lib/firebase';
-import { collection, query, where, getDocs, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '../../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { 
-  Users, Calendar, CheckCircle, Clock, Search, 
-  Download, Filter, Trash2, RefreshCw, XCircle, FileSpreadsheet 
+  Users, Calendar, CheckCircle, Clock, RefreshCw, 
+  FileSpreadsheet, Edit3, Trash2, ShieldCheck, Zap, Camera 
 } from 'lucide-react';
 
 const AdminDashboard = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalEvents: 0,
     totalRegistrations: 0,
@@ -19,7 +21,7 @@ const AdminDashboard = () => {
   const [filterEvent, setFilterEvent] = useState('All');
   const [eventsList, setEventsList] = useState([]);
 
-  // 1. Fetch Data
+  // 1. FETCH DATA Logic
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -28,10 +30,8 @@ const AdminDashboard = () => {
       const events = eventsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setEventsList(events);
 
-      // Fetch Registrations
+      // Fetch All Registrations for Master Stats
       let q = query(collection(db, 'registrations'), orderBy('purchasedAt', 'desc'));
-      
-      // Apply Filter if selected
       if (filterEvent !== 'All') {
         q = query(collection(db, 'registrations'), where('eventTitle', '==', filterEvent));
       }
@@ -39,18 +39,14 @@ const AdminDashboard = () => {
       const regSnap = await getDocs(q);
       const registrations = regSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      // Calculate Stats
-      const checkedInCount = registrations.filter(r => r.checkedIn).length;
-
       setStats({
         totalEvents: events.length,
         totalRegistrations: registrations.length,
-        totalCheckedIn: checkedInCount,
+        totalCheckedIn: registrations.filter(r => r.checkedIn || r.status === 'attended').length,
         recentRegistrations: registrations
       });
-
     } catch (err) {
-      console.error("Admin Data Error:", err);
+      console.error("Admin Dashboard Error:", err);
     } finally {
       setLoading(false);
     }
@@ -60,192 +56,149 @@ const AdminDashboard = () => {
     fetchData();
   }, [filterEvent]);
 
-  // 2. 📊 EXPORT MASTER LIST (The Logic You Asked For)
-  const handleExportMasterCSV = () => {
-    if (stats.recentRegistrations.length === 0) {
-      alert("No data to export!");
-      return;
-    }
-
-    // Define Headers
-    const headers = [
-      "Ticket ID", 
-      "Student Name", 
-      "Roll No", 
-      "Phone",
-      "Email", 
-      "Event Name", 
-      "STATUS", // <--- The Important Column
-      "Registration Date"
-    ];
+  // 2. CSV EXPORT (Master & Filtered)
+  const handleExportCSV = () => {
+    if (stats.recentRegistrations.length === 0) return alert("No data!");
     
-    // Map Data
-    const rows = stats.recentRegistrations.map(reg => [
-      reg.id,
-      `"${reg.userName}"`, // Quote names to handle commas
-      reg.userRollNo || "N/A",
-      reg.userPhone || "N/A",
-      reg.userEmail,
-      `"${reg.eventTitle}"`,
-      reg.checkedIn ? "✅ PRESENT" : "❌ ABSENT", // <--- Master List Logic
-      new Date(reg.purchasedAt?.toDate()).toLocaleDateString()
+    const headers = ["Ticket ID", "Name", "Roll No", "Email", "Event", "Status"];
+    const rows = stats.recentRegistrations.map(r => [
+      r.id, r.userName, r.userRollNo || 'N/A', r.userEmail, r.eventTitle, 
+      (r.checkedIn || r.status === 'attended') ? "PRESENT" : "ABSENT"
     ]);
 
-    // Build CSV String
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-
-    // Trigger Download
-    const encodedUri = encodeURI(csvContent);
+    const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].map(e => e.join(",")).join("\n");
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `UniFlow_Master_List_${new Date().toISOString().slice(0,10)}.csv`);
-    document.body.appendChild(link);
+    link.href = encodeURI(csvContent);
+    link.download = `UniFlow_${filterEvent}_List.csv`;
     link.click();
-    document.body.removeChild(link);
-  };
-
-  // 3. Delete Ticket (Super Admin Safety)
-  const handleDeleteTicket = async (ticketId) => {
-    if(!window.confirm("⚠️ DANGER: This will permanently delete this ticket. Are you sure?")) return;
-    try {
-      await deleteDoc(doc(db, 'registrations', ticketId));
-      fetchData(); // Refresh
-    } catch (err) {
-      alert("Delete failed: " + err.message);
-    }
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-4 sm:px-8">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-6">
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        {/* HEADER AREA - BUTTONS ARE HERE */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div>
-            <h1 className="text-3xl font-black text-zinc-900 dark:text-white uppercase tracking-tighter">Organizer Console</h1>
-            <p className="text-zinc-500 font-medium">Real-time campus analytics.</p>
+            <h1 className="text-4xl font-black dark:text-white uppercase tracking-tighter italic">Console</h1>
+            <p className="text-zinc-500 font-bold text-xs uppercase tracking-widest flex items-center gap-2">
+               <ShieldCheck className="w-4 h-4 text-indigo-500" /> Admin Access: {profile?.role}
+            </p>
           </div>
-          
-          <div className="flex gap-2">
-            <button onClick={fetchData} className="p-3 bg-white dark:bg-zinc-900 rounded-xl hover:scale-105 transition-transform shadow-sm">
-              <RefreshCw className={`w-5 h-5 text-indigo-600 ${loading ? 'animate-spin' : ''}`} />
-            </button>
+
+          <div className="flex flex-wrap gap-3">
+            {/* 📸 SCANNER BUTTON (Wapas Agaya!) */}
             <button 
-              onClick={handleExportMasterCSV}
-              className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-green-900/20 active:scale-95 transition-all"
+              onClick={() => navigate('/scan')}
+              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-indigo-500/20 transition-all active:scale-95"
             >
-              <FileSpreadsheet className="w-4 h-4" /> Export Master List
+              <Camera className="w-4 h-4" /> Open Scanner
+            </button>
+
+            {/* 📊 EXPORT BUTTON */}
+            <button 
+              onClick={handleExportCSV}
+              className="px-6 py-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-zinc-50 transition-all shadow-sm"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-green-500" /> {filterEvent === 'All' ? 'Master CSV' : 'Event CSV'}
             </button>
           </div>
         </div>
 
-        {/* Stats Grid */}
+        {/* STATS CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-100 dark:border-zinc-800 shadow-xl">
-            <div className="flex items-center gap-4 mb-2">
-              <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl text-indigo-600"><Calendar className="w-6 h-6" /></div>
-              <span className="text-xs font-black uppercase text-zinc-400 tracking-widest">Active Events</span>
+            <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2rem] border border-zinc-100 dark:border-zinc-800 shadow-xl relative overflow-hidden group">
+                <Zap className="absolute -right-4 -top-4 w-24 h-24 text-indigo-500/5 group-hover:scale-110 transition-transform" />
+                <p className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] mb-2">Total Bookings</p>
+                <h2 className="text-5xl font-black dark:text-white tracking-tighter">{stats.totalRegistrations}</h2>
             </div>
-            <h3 className="text-4xl font-black dark:text-white">{stats.totalEvents}</h3>
-          </div>
-
-          <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-100 dark:border-zinc-800 shadow-xl">
-             <div className="flex items-center gap-4 mb-2">
-              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-2xl text-blue-600"><Users className="w-6 h-6" /></div>
-              <span className="text-xs font-black uppercase text-zinc-400 tracking-widest">Registrations</span>
+            <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2rem] border border-zinc-100 dark:border-zinc-800 shadow-xl">
+                <p className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] mb-2">Checked In</p>
+                <h2 className="text-5xl font-black text-green-500 tracking-tighter">{stats.totalCheckedIn}</h2>
             </div>
-            <h3 className="text-4xl font-black dark:text-white">{stats.totalRegistrations}</h3>
-          </div>
-
-          <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-100 dark:border-zinc-800 shadow-xl">
-             <div className="flex items-center gap-4 mb-2">
-              <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-2xl text-green-600"><CheckCircle className="w-6 h-6" /></div>
-              <span className="text-xs font-black uppercase text-zinc-400 tracking-widest">Present Today</span>
+            <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2rem] border border-zinc-100 dark:border-zinc-800 shadow-xl">
+                <p className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] mb-2">Live Events</p>
+                <h2 className="text-5xl font-black text-indigo-600 tracking-tighter">{stats.totalEvents}</h2>
             </div>
-            <h3 className="text-4xl font-black dark:text-white">{stats.totalCheckedIn}</h3>
-          </div>
         </div>
 
-        {/* Filter Bar */}
-        <div className="flex items-center gap-4 overflow-x-auto pb-2">
-          <div className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
-            <Filter className="w-4 h-4 text-zinc-400" />
-            <span className="text-xs font-bold uppercase text-zinc-500">Filter By:</span>
-          </div>
-          <button 
-            onClick={() => setFilterEvent('All')}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all ${filterEvent === 'All' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-zinc-900 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
-          >
-            All Events
-          </button>
-          {eventsList.map(ev => (
-            <button 
-              key={ev.id} 
-              onClick={() => setFilterEvent(ev.title)}
-              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all ${filterEvent === ev.title ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-zinc-900 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
-            >
-              {ev.title}
-            </button>
-          ))}
+        {/* MANAGE EVENTS SECTION (Wapas Agaya!) */}
+        <div className="space-y-4">
+           <h3 className="text-xl font-black dark:text-white uppercase tracking-tight flex items-center gap-2">
+             <Calendar className="w-5 h-5 text-indigo-500" /> Your Hosted Events
+           </h3>
+           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {eventsList.map(ev => {
+                // 🛡️ PERMISSION CHECK: Sirf Creator ya SuperAdmin edit kar sakte hain
+                const canEdit = ev.createdBy === user.uid || profile?.role === 'super_admin';
+                
+                return (
+                  <div key={ev.id} className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-lg group">
+                    <div className="flex justify-between items-start mb-4">
+                       <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${canEdit ? 'bg-indigo-50 text-indigo-600' : 'bg-zinc-100 text-zinc-400'}`}>
+                         {canEdit ? 'Full Access' : 'View Only'}
+                       </span>
+                       <div className="flex gap-2">
+                          {canEdit && (
+                            <>
+                              <button onClick={() => navigate(`/admin/edit/${ev.id}`)} className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:bg-indigo-600 hover:text-white transition-all">
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              <button onClick={() => { if(window.confirm("Delete?")) deleteDoc(doc(db, 'events', ev.id)).then(()=>fetchData()) }} className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:bg-red-600 hover:text-white transition-all">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                       </div>
+                    </div>
+                    <h4 className="font-black text-lg dark:text-white leading-tight mb-1 truncate">{ev.title}</h4>
+                    <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">{ev.date} • {ev.location}</p>
+                    
+                    <button 
+                      onClick={() => setFilterEvent(ev.title)} 
+                      className={`w-full mt-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${filterEvent === ev.title ? 'bg-indigo-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'}`}
+                    >
+                      Filter Registrations
+                    </button>
+                  </div>
+                );
+              })}
+           </div>
         </div>
 
-        {/* Data Table */}
+        {/* REGISTRATION TABLE */}
         <div className="bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-zinc-50 dark:bg-black border-b border-zinc-200 dark:border-zinc-800">
-                <tr>
-                  <th className="p-6 text-[10px] font-black uppercase tracking-widest text-zinc-400">Student</th>
-                  <th className="p-6 text-[10px] font-black uppercase tracking-widest text-zinc-400">Event</th>
-                  <th className="p-6 text-[10px] font-black uppercase tracking-widest text-zinc-400">Ticket ID</th>
-                  <th className="p-6 text-[10px] font-black uppercase tracking-widest text-zinc-400">Status</th>
-                  <th className="p-6 text-[10px] font-black uppercase tracking-widest text-zinc-400 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {stats.recentRegistrations.length > 0 ? (
-                  stats.recentRegistrations.map((reg) => (
-                    <tr key={reg.id} className="group hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                      <td className="p-6">
-                        <p className="font-bold dark:text-white">{reg.userName}</p>
-                        <p className="text-xs text-zinc-500">{reg.userEmail}</p>
-                        <p className="text-[10px] text-indigo-500 font-mono mt-1">{reg.userRollNo}</p>
-                      </td>
-                      <td className="p-6">
-                        <span className="inline-block px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-wide">
-                          {reg.eventTitle}
-                        </span>
-                      </td>
-                      <td className="p-6 font-mono text-xs text-zinc-500">{reg.id.slice(0,8)}...</td>
-                      <td className="p-6">
-                        {reg.checkedIn ? (
-                          <div className="flex items-center gap-2 text-green-600">
-                            <CheckCircle className="w-4 h-4" /> <span className="text-xs font-bold uppercase">Present</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 text-zinc-400">
-                            <Clock className="w-4 h-4" /> <span className="text-xs font-bold uppercase">Pending</span>
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-6 text-right">
-                        <button onClick={() => handleDeleteTicket(reg.id)} className="p-2 text-zinc-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all" title="Delete Ticket">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
+            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+               <h3 className="font-black dark:text-white uppercase tracking-widest text-xs">Recent Records ({filterEvent})</h3>
+               {filterEvent !== 'All' && <button onClick={() => setFilterEvent('All')} className="text-[10px] font-black uppercase text-indigo-500 underline">Clear Filter</button>}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-zinc-50 dark:bg-black text-[10px] font-black uppercase tracking-widest text-zinc-400">
                   <tr>
-                    <td colSpan="5" className="p-12 text-center text-zinc-400 font-medium">
-                      No registrations found for this filter.
-                    </td>
+                    <th className="p-6">Student</th>
+                    <th className="p-6">Event</th>
+                    <th className="p-6">Status</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                   {stats.recentRegistrations.slice(0, 10).map(reg => (
+                     <tr key={reg.id} className="text-sm dark:text-zinc-300">
+                        <td className="p-6">
+                           <p className="font-bold">{reg.userName}</p>
+                           <p className="text-[10px] opacity-60 uppercase">{reg.userRollNo}</p>
+                        </td>
+                        <td className="p-6 font-bold text-xs uppercase text-indigo-500">{reg.eventTitle}</td>
+                        <td className="p-6">
+                           <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${(reg.checkedIn || reg.status === 'attended') ? 'bg-green-100 text-green-600' : 'bg-zinc-100 text-zinc-400'}`}>
+                             {(reg.checkedIn || reg.status === 'attended') ? 'Present' : 'Pending'}
+                           </span>
+                        </td>
+                     </tr>
+                   ))}
+                </tbody>
+              </table>
+            </div>
         </div>
 
       </div>
