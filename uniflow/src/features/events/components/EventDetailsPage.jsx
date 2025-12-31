@@ -1,299 +1,268 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  doc, getDoc, deleteDoc, collection, query, where, getDocs, writeBatch 
-} from 'firebase/firestore'; 
 import { db } from '../../../lib/firebase';
+import { doc, getDoc, addDoc, collection, serverTimestamp, updateDoc, increment } from 'firebase/firestore';
 import { useAuth } from '../../../context/AuthContext';
-import { 
-  Calendar, MapPin, Clock, ArrowLeft, Edit, List, 
-  ShieldCheck, MessageCircle, Building2, Users, Trash2, Ticket, Share2, ScanLine, AlertTriangle
-} from 'lucide-react';
-
-import RegisterModal from './RegisterModal';
-import EditEventModal from './EditEventModal';
-import EventParticipantsModal from './EventParticipantsModal';
+import { Calendar, MapPin, Clock, Users, ArrowLeft, Share2, Ticket, Loader2, ShieldCheck } from 'lucide-react';
 
 const EventDetailsPage = () => {
   const { id } = useParams();
-  const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
   
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [imageError, setImageError] = useState(false);
-  
-  const [isRegistered, setIsRegistered] = useState(false);
-  const [userTicketId, setUserTicketId] = useState(null);
-  
-  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
+  const [registering, setRegistering] = useState(false);
 
   useEffect(() => {
     const fetchEvent = async () => {
       try {
-        const docRef = doc(db, 'events', id);
-        const docSnap = await getDoc(docRef);
+        const docSnap = await getDoc(doc(db, 'events', id));
         if (docSnap.exists()) {
           setEvent({ id: docSnap.id, ...docSnap.data() });
+        } else {
+          navigate('/events');
         }
-      } catch (error) { console.error(error); } finally { setLoading(false); }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchEvent();
-  }, [id]);
+  }, [id, navigate]);
 
-  useEffect(() => {
-    const checkStatus = async () => {
-      if (user && event) {
-        const q = query(collection(db, 'registrations'), where('eventId', '==', event.id), where('userId', '==', user.uid));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          setIsRegistered(true);
-          setUserTicketId(snap.docs[0].id);
-        }
+  const handleRegister = async () => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+
+    if (!profile?.isProfileComplete) {
+      alert("Please complete your profile first!");
+      // You should theoretically open the profile modal here, 
+      // but for now let's alert them.
+      return;
+    }
+
+    if (event.ticketsSold >= event.totalTickets) {
+      alert("Housefull! No tickets left.");
+      return;
+    }
+
+    // Strict Mode Check
+    if (event.isUniversityOnly) {
+      if (!user.email.endsWith('@chitkara.edu.in')) {
+        alert("🔒 Restricted Event: Only Chitkara Emails allowed.");
+        return;
       }
-    };
-    checkStatus();
-  }, [user, event]);
+    }
 
-  const handleShare = async () => {
+    setRegistering(true);
+
     try {
-      if (navigator.share) {
-        await navigator.share({ title: event.title, url: window.location.href });
-      } else {
-        navigator.clipboard.writeText(window.location.href);
-        alert("Link copied to clipboard!");
-      }
-    } catch (err) { console.error(err); }
-  };
+      // 1. Create Ticket Object
+      const newTicket = {
+        eventId: event.id,
+        eventTitle: event.title,
+        eventDate: event.date,
+        eventTime: event.time,
+        eventLocation: event.location,
+        userId: user.uid,
+        userName: user.displayName,
+        userEmail: user.email,
+        userRollNo: profile.rollNo || 'N/A',
+        userPhone: profile.phone || 'N/A',
+        userPhoto: user.photoURL || '', // 📸 Saving User Photo to Ticket for Security
+        purchasedAt: serverTimestamp(),
+        checkedIn: false,
+        price: event.price
+      };
 
-  // 💣 CHUNKED DELETION LOGIC (The "Anti-Crash" Fix)
-  const handleDelete = async () => {
-    if (!window.confirm("🚨 CRITICAL ACTION: This will purge the event and ALL student passes permanently. This cannot be undone. Proceed?")) return;
-    
-    try {
-      setLoading(true);
-      const docsToDelete = [];
-
-      // 1. Collect Tickets
-      const qT = query(collection(db, 'registrations'), where('eventId', '==', id));
-      const snapshotT = await getDocs(qT);
-      snapshotT.docs.forEach(doc => docsToDelete.push(doc.ref));
-
-      // 2. Collect Reviews (Fixing Orphans)
-      const qR = query(collection(db, 'reviews'), where('eventId', '==', id));
-      const snapshotR = await getDocs(qR);
-      snapshotR.docs.forEach(doc => docsToDelete.push(doc.ref));
-
-      // 3. 🛡️ STABILITY PATCH: Chunked Deletion (500 limit)
-      for (let i = 0; i < docsToDelete.length; i += 500) {
-        const batch = writeBatch(db);
-        docsToDelete.slice(i, i + 500).forEach(ref => batch.delete(ref));
-        await batch.commit();
-      }
-
-      // 4. Delete Event Doc
-      await deleteDoc(doc(db, 'events', id));
+      // 2. Save to Firestore
+      const docRef = await addDoc(collection(db, 'registrations'), newTicket);
       
-      alert("✅ System Purged Successfully.");
-      navigate('/events');
-    } catch (error) { 
-      console.error(error);
-      alert("Failed to delete event data."); 
-      setLoading(false); 
+      // 3. Update Event Count
+      await updateDoc(doc(db, 'events', event.id), {
+        ticketsSold: increment(1)
+      });
+
+      // 4. 📧 SEND EMAIL (Background Process)
+      // This calls your /api/send-email.js file
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+          <h2 style="color: #4F46E5;">Ticket Confirmed! 🎟️</h2>
+          <p>Hi <strong>${user.displayName}</strong>,</p>
+          <p>You are officially registered for <strong>${event.title}</strong>.</p>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+          <p><strong>Date:</strong> ${event.date}</p>
+          <p><strong>Time:</strong> ${event.time}</p>
+          <p><strong>Venue:</strong> ${event.location}</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <p style="font-size: 12px; color: #888;">SHOW THIS QR CODE AT ENTRY</p>
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${docRef.id}" alt="QR" style="width: 150px;" />
+            <p style="font-family: monospace; font-size: 16px; font-weight: bold;">${docRef.id}</p>
+          </div>
+          <p style="font-size: 12px; color: #999;">Powered by UniFlow</p>
+        </div>
+      `;
+
+      fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: user.email,
+          subject: `🎟️ Ticket: ${event.title}`,
+          html: emailHtml
+        })
+      }).catch(err => console.error("Email send failed (UI updated anyway):", err));
+
+      alert("✅ Ticket Booked Successfully! Check your email.");
+      navigate('/my-tickets');
+
+    } catch (err) {
+      console.error("Booking Error:", err);
+      alert("Booking failed: " + err.message);
+    } finally {
+      setRegistering(false);
     }
   };
 
-  if (loading) return (
-    <div className="min-h-screen bg-[#FDFBF7] dark:bg-black flex flex-col items-center justify-center p-8">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-indigo-600 border-zinc-200"></div>
-      <p className="mt-4 text-[10px] font-black uppercase tracking-[0.3em] text-indigo-600 animate-pulse">Synchronizing Engine...</p>
-    </div>
-  );
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-indigo-600" /></div>;
+  if (!event) return null;
 
-  if (!event) return <div className="min-h-screen pt-24 text-center">Event not found</div>;
-
-  const isOrganizer = user && (event.organizerId === user.uid || profile?.role === 'super_admin');
+  const isSoldOut = event.ticketsSold >= event.totalTickets;
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] dark:bg-black pb-32 transition-colors duration-500">
-      
-      {/* 📸 CINEMATIC HEADER */}
-      <div className="relative h-[55vh] md:h-[65vh] w-full overflow-hidden">
-        {!imageError && event.imageUrl ? (
-          <img 
-            src={event.imageUrl} 
-            alt={event.title} 
-            className="w-full h-full object-cover scale-105" 
-            onError={() => setImageError(true)} 
-          />
-        ) : (
-          <div className="w-full h-full bg-zinc-900 flex flex-col items-center justify-center p-12 text-center relative">
-             <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]"></div>
-             <h1 className="text-4xl md:text-8xl font-black text-white uppercase tracking-tighter drop-shadow-2xl italic leading-none">{event.title}</h1>
-             <p className="text-indigo-400 font-black mt-6 uppercase tracking-[0.4em] text-[10px] bg-white/5 px-6 py-2 rounded-full backdrop-blur-md">Organized by {event.organizerName || 'UniFlow Club'}</p>
-          </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#FDFBF7] dark:from-black via-transparent to-black/40"></div>
+    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-6">
+      <div className="max-w-4xl mx-auto">
         
-        {/* Banner Controls */}
-        <div className="absolute top-24 left-6 md:left-12 flex gap-4 z-20">
-          <button onClick={() => navigate(-1)} className="p-4 bg-black/20 backdrop-blur-2xl rounded-2xl text-white border border-white/10 hover:bg-white/40 transition-all group">
-            <ArrowLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
-          </button>
-        </div>
-        <button onClick={handleShare} className="absolute top-24 right-6 md:right-12 p-4 bg-black/20 backdrop-blur-2xl rounded-2xl text-white border border-white/10 z-20 active:scale-95 transition-all">
-          <Share2 className="w-6 h-6" />
+        {/* Back Button */}
+        <button onClick={() => navigate('/events')} className="mb-6 flex items-center gap-2 text-zinc-500 hover:text-indigo-600 transition-colors font-bold text-xs uppercase tracking-widest">
+          <ArrowLeft className="w-4 h-4" /> Back to Events
         </button>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 md:px-8 relative z-10 -mt-16">
-        
-        {/* 🛡️ ADMIN QUICK ACTIONS */}
-        {isOrganizer && (
-          <div className="mb-8 p-8 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-3xl border border-zinc-200 dark:border-zinc-800 rounded-[3rem] shadow-2xl flex flex-wrap items-center justify-between gap-6 animate-in slide-in-from-bottom-4 duration-500">
-            <div className="flex items-center gap-4">
-              <div className="p-4 bg-indigo-600 text-white rounded-[1.5rem] shadow-xl shadow-indigo-600/20"><ShieldCheck className="w-6 h-6" /></div>
-              <div>
-                <h3 className="font-black text-zinc-900 dark:text-white uppercase tracking-tighter">Root Console</h3>
-                <div className="flex items-center gap-2 mt-0.5">
-                   <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                   <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Experience Management Active</p>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => navigate('/scan')} className="p-4 bg-zinc-50 dark:bg-zinc-800 text-indigo-600 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm group relative">
-                 <ScanLine className="w-5 h-5" />
-              </button>
-              <button onClick={() => setIsParticipantsOpen(true)} className="p-4 bg-zinc-50 dark:bg-zinc-800 text-indigo-600 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
-                 <List className="w-5 h-5" />
-              </button>
-              <button onClick={() => setIsEditOpen(true)} className="p-4 bg-zinc-50 dark:bg-zinc-800 text-indigo-600 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
-                 <Edit className="w-5 h-5" />
-              </button>
-              <button onClick={handleDelete} className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-2xl hover:bg-red-600 hover:text-white transition-all shadow-sm">
-                 <Trash2 className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 🍱 BENTO GRID LAYOUT */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="bg-white dark:bg-zinc-900 rounded-[3rem] shadow-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800">
           
-          {/* Main Info Column */}
-          <div className="lg:col-span-2 space-y-8">
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-10 rounded-[3.5rem] shadow-sm relative overflow-hidden">
-               <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-                  <Building2 className="w-32 h-32" />
-               </div>
-               <div className="flex flex-wrap gap-3 mb-8">
-                 <span className="px-4 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-indigo-100 dark:border-indigo-900/50">{event.category || 'Featured'}</span>
-                 {event.type === 'team' && <span className="px-4 py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2"><Users className="w-3.5 h-3.5"/> Team Event</span>}
-                 {event.allowedBranches === 'CSE/AI Only' && <span className="px-4 py-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2"><ShieldAlert className="w-3.5 h-3.5"/> CSE Restricted</span>}
-               </div>
-               <h1 className="text-5xl md:text-7xl font-black mb-8 tracking-tighter leading-[0.9] uppercase italic">{event.title}</h1>
-               <div className="prose prose-zinc dark:prose-invert max-w-none">
-                  <p className="text-zinc-600 dark:text-zinc-400 font-medium leading-relaxed whitespace-pre-line text-lg md:text-xl">
-                    {event.description}
-                  </p>
-               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-8 rounded-[2.5rem] flex items-center gap-6 shadow-sm">
-                <div className="p-5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-3xl"><Calendar className="w-8 h-8"/></div>
-                <div>
-                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Experience Date</p>
-                   <p className="text-xl font-black dark:text-white leading-tight">{event.date}</p>
-                   <p className="text-xs font-bold text-zinc-500 mt-1 uppercase flex items-center gap-2"><Clock className="w-3 h-3"/> {event.time}</p>
-                </div>
+          {/* Hero Image */}
+          <div className="h-64 sm:h-96 w-full bg-zinc-200 dark:bg-zinc-800 relative">
+            {event.imageUrl ? (
+              <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600">
+                <Ticket className="w-20 h-20 text-white/50" />
               </div>
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-8 rounded-[2.5rem] flex items-center gap-6 shadow-sm">
-                <div className="p-5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 rounded-3xl"><MapPin className="w-8 h-8"/></div>
-                <div className="overflow-hidden">
-                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Campus Venue</p>
-                   <p className="text-xl font-black dark:text-white leading-tight uppercase truncate">{event.location}</p>
-                   <p className="text-xs font-bold text-indigo-600 mt-1 uppercase tracking-tighter">Verified Location</p>
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+            
+            <div className="absolute bottom-8 left-8 right-8">
+              <span className="px-3 py-1 bg-indigo-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest mb-3 inline-block">
+                {event.category}
+              </span>
+              <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tighter mb-2">{event.title}</h1>
+              {event.isUniversityOnly && (
+                <div className="flex items-center gap-2 text-indigo-200">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span className="text-xs font-bold uppercase tracking-wide">Chitkara University Exclusive</span>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
-          {/* Action Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="bg-zinc-900 dark:bg-white text-white dark:text-black p-10 rounded-[3.5rem] shadow-[0_30px_60px_rgba(0,0,0,0.3)] sticky top-24 space-y-10 border border-white/5">
-               <div className="text-center">
-                  <p className="text-[10px] font-black uppercase opacity-50 tracking-[0.3em] mb-4">Official Entry Pass</p>
-                  <div className="flex items-center justify-center gap-2">
-                     <p className="text-7xl font-black tracking-tighter">{event.price > 0 ? `₹${event.price}` : 'FREE'}</p>
-                  </div>
-               </div>
+          <div className="grid grid-cols-1 md:grid-cols-3">
+            {/* Details Column */}
+            <div className="md:col-span-2 p-8 sm:p-12 space-y-8">
+              <div className="flex flex-wrap gap-6">
+                 <div className="flex items-center gap-3">
+                   <div className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-2xl"><Calendar className="w-5 h-5 text-indigo-600" /></div>
+                   <div>
+                     <p className="text-[10px] font-black uppercase text-zinc-400">Date</p>
+                     <p className="font-bold dark:text-white">{event.date}</p>
+                   </div>
+                 </div>
+                 <div className="flex items-center gap-3">
+                   <div className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-2xl"><Clock className="w-5 h-5 text-indigo-600" /></div>
+                   <div>
+                     <p className="text-[10px] font-black uppercase text-zinc-400">Time</p>
+                     <p className="font-bold dark:text-white">{event.time}</p>
+                   </div>
+                 </div>
+                 <div className="flex items-center gap-3">
+                   <div className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-2xl"><MapPin className="w-5 h-5 text-indigo-600" /></div>
+                   <div>
+                     <p className="text-[10px] font-black uppercase text-zinc-400">Venue</p>
+                     <p className="font-bold dark:text-white">{event.location}</p>
+                   </div>
+                 </div>
+              </div>
 
-               <div className="space-y-4">
-                 {isRegistered ? (
-                   <button onClick={() => navigate(`/tickets/${userTicketId}`)} className="w-full py-6 bg-indigo-500 text-white rounded-3xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl hover:scale-[1.02] transition-all">
-                     <Ticket className="w-5 h-5" /> View Your Pass
-                   </button>
+              <div>
+                <h3 className="text-lg font-black uppercase tracking-tight mb-4 dark:text-white">About Experience</h3>
+                <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed whitespace-pre-line">
+                  {event.description}
+                </p>
+              </div>
+
+              {event.whatsappLink && (
+                 <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-900/50 rounded-2xl flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                       <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">W</div>
+                       <div>
+                         <p className="text-xs font-black uppercase text-green-700 dark:text-green-400">Official Group</p>
+                         <p className="text-[10px] text-green-600/70 dark:text-green-500/70">Join for updates</p>
+                       </div>
+                    </div>
+                    <a href={event.whatsappLink} target="_blank" rel="noreferrer" className="px-4 py-2 bg-white dark:bg-black text-green-600 font-bold text-xs uppercase tracking-widest rounded-xl shadow-sm">Join</a>
+                 </div>
+              )}
+            </div>
+
+            {/* Action Sidebar */}
+            <div className="bg-zinc-50 dark:bg-black/40 p-8 sm:p-12 border-l border-zinc-100 dark:border-zinc-800 flex flex-col justify-between">
+               <div className="space-y-6">
+                 <div>
+                   <p className="text-[10px] font-black uppercase text-zinc-400 mb-2">Price</p>
+                   <p className="text-4xl font-black text-indigo-600">{Number(event.price) === 0 ? 'FREE' : `₹${event.price}`}</p>
+                 </div>
+                 
+                 <div>
+                   <div className="flex justify-between text-xs font-bold mb-2 dark:text-zinc-400">
+                     <span>Capacity</span>
+                     <span>{event.ticketsSold} / {event.totalTickets}</span>
+                   </div>
+                   <div className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                     <div 
+                       className="h-full bg-indigo-600 transition-all duration-1000" 
+                       style={{ width: `${(event.ticketsSold / event.totalTickets) * 100}%` }}
+                     ></div>
+                   </div>
+                 </div>
+
+                 {isSoldOut ? (
+                   <div className="w-full py-4 bg-zinc-200 dark:bg-zinc-800 text-zinc-400 rounded-2xl font-black text-center uppercase tracking-widest cursor-not-allowed">
+                     Sold Out
+                   </div>
                  ) : (
                    <button 
-                     onClick={() => setIsRegisterOpen(true)}
-                     disabled={event.ticketsSold >= event.totalTickets}
-                     className={`w-full py-6 rounded-3xl font-black text-xs uppercase tracking-[0.3em] transition-all shadow-2xl shadow-indigo-600/30 ${
-                       event.ticketsSold >= event.totalTickets 
-                       ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' 
-                       : 'bg-indigo-600 text-white hover:scale-105 active:scale-95'
-                     }`}
+                     onClick={handleRegister}
+                     disabled={registering}
+                     className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-indigo-500/30 active:scale-95 transition-all flex items-center justify-center gap-2"
                    >
-                     {event.ticketsSold >= event.totalTickets ? 'Sold Out' : 'Claim Pass'}
+                     {registering ? <Loader2 className="animate-spin" /> : <><Ticket className="w-5 h-5" /> Book Now</>}
                    </button>
                  )}
                </div>
 
-               <div className="pt-8 border-t border-white/10 dark:border-black/10">
-                  <div className="flex justify-between items-center text-[10px] font-black uppercase opacity-50 mb-4 tracking-widest">
-                     <span>Passes Claimed</span>
-                     <span>{event.ticketsSold} / {event.totalTickets}</span>
-                  </div>
-                  <div className="w-full h-4 bg-white/10 dark:bg-black/10 rounded-full overflow-hidden p-1">
-                     <div className="h-full bg-white dark:bg-zinc-900 rounded-full transition-all duration-1000 shadow-[0_0_15px_rgba(255,255,255,0.5)]" style={{ width: `${(event.ticketsSold / event.totalTickets) * 100}%` }}></div>
-                  </div>
+               <div className="mt-8 text-center">
+                 <p className="text-[10px] text-zinc-400 font-medium">
+                   By booking, you agree to the <span className="underline decoration-zinc-300">Terms of Service</span>.
+                 </p>
                </div>
-
-               {event.whatsappLink && (
-                 <a href={event.whatsappLink} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest text-green-500 hover:text-green-400 py-2 border-2 border-green-500/20 rounded-2xl transition-all">
-                    <MessageCircle className="w-4 h-4" /> Join Vibe Group
-                 </a>
-               )}
             </div>
           </div>
 
         </div>
       </div>
-
-      {/* MODALS */}
-      <RegisterModal isOpen={isRegisterOpen} onClose={() => setIsRegisterOpen(false)} event={event} />
-      
-      {isOrganizer && (
-        <>
-          <EditEventModal 
-            isOpen={isEditOpen} 
-            onClose={() => setIsEditOpen(false)} 
-            event={event} 
-            onSuccess={() => {
-               // Soft reload
-               const fetchUpdate = async () => {
-                 const snap = await getDoc(doc(db, 'events', id));
-                 setEvent({ id: snap.id, ...snap.data() });
-               };
-               fetchUpdate();
-            }} 
-          />
-          <EventParticipantsModal isOpen={isParticipantsOpen} onClose={() => setIsParticipantsOpen(false)} event={event} />
-        </>
-      )}
     </div>
   );
 };
