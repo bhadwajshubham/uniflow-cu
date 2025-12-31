@@ -18,7 +18,6 @@ export const uploadImage = async (file) => {
       formData
     );
     
-    // Return the secure HTTPS URL
     return response.data.secure_url;
   } catch (error) {
     console.error("Cloudinary Upload Error:", error);

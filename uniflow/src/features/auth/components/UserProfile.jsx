@@ -3,13 +3,15 @@ import { useAuth } from '../../../context/AuthContext';
 import { db } from '../../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { X, User, Hash, Phone, GraduationCap, Save, Loader2, LogOut, Home, Camera } from 'lucide-react';
-import { uploadImage } from '../../common/services/uploadService'; // 👈 Importing the new service
+
+// 👇 UPDATED IMPORT: Now pointing to src/lib/uploadService.js
+import { uploadImage } from '../../../lib/uploadService'; 
 
 const UserProfile = ({ isOpen, onClose }) => {
   const { user, logout, profile } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [previewImage, setPreviewImage] = useState(null); // To show selected image before uploading
-  const [selectedFile, setSelectedFile] = useState(null); // To store the file for upload
+  const [previewImage, setPreviewImage] = useState(null); 
+  const [selectedFile, setSelectedFile] = useState(null); 
 
   const [formData, setFormData] = useState({
     displayName: '',
@@ -38,7 +40,6 @@ const UserProfile = ({ isOpen, onClose }) => {
               group: data.group || '',
               residency: data.residency || ''
             });
-            // Reset image states
             setPreviewImage(null);
             setSelectedFile(null);
           } else {
@@ -89,7 +90,7 @@ const UserProfile = ({ isOpen, onClose }) => {
     try {
       let finalPhotoURL = user.photoURL;
 
-      // ☁️ 1. UPLOAD IMAGE IF SELECTED
+      // ☁️ 1. UPLOAD IMAGE IF SELECTED (Using the new lib service)
       if (selectedFile) {
         finalPhotoURL = await uploadImage(selectedFile);
       }
@@ -98,7 +99,7 @@ const UserProfile = ({ isOpen, onClose }) => {
       await setDoc(doc(db, 'users', user.uid), {
         ...formData,
         email: user.email,
-        photoURL: finalPhotoURL, // Save the Cloudinary URL
+        photoURL: finalPhotoURL, 
         role: profile?.role || 'student',
         isProfileComplete: true,
         updatedAt: new Date()
