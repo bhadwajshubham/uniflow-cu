@@ -1,9 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Zap, Trophy, Users, Star, ShieldCheck, Ticket } from 'lucide-react';
+import { useAuth } from '../../../context/AuthContext';
+import { ArrowRight, Zap, Trophy, Users, Star, ShieldCheck, Ticket, LayoutDashboard } from 'lucide-react';
 
 const HomePage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] dark:bg-black text-zinc-900 dark:text-white pb-24 relative overflow-x-hidden selection:bg-indigo-500 selection:text-white">
@@ -24,7 +26,7 @@ const HomePage = () => {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
           </span>
-          <span className="text-xs md:text-sm font-bold tracking-wide text-zinc-600 dark:text-zinc-300">
+          <span className="text-xs md:text-sm font-bold tracking-wide text-zinc-600 dark:text-zinc-300 uppercase">
             Live on Campus
           </span>
         </div>
@@ -50,17 +52,26 @@ const HomePage = () => {
             Explore Events <ArrowRight className="w-5 h-5" />
           </button>
           
-          <button 
-            onClick={() => navigate('/login')}
-            className="w-full sm:w-auto px-8 py-4 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white rounded-2xl font-bold text-lg hover:bg-white dark:hover:bg-zinc-800 active:scale-95 transition-all"
-          >
-            Login / Sign Up
-          </button>
+          {user ? (
+            <button 
+              onClick={() => navigate('/my-tickets')}
+              className="w-full sm:w-auto px-8 py-4 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white rounded-2xl font-bold text-lg hover:bg-white dark:hover:bg-zinc-800 active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              <LayoutDashboard className="w-5 h-5" /> My Dashboard
+            </button>
+          ) : (
+            <button 
+              onClick={() => navigate('/login')}
+              className="w-full sm:w-auto px-8 py-4 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white rounded-2xl font-bold text-lg hover:bg-white dark:hover:bg-zinc-800 active:scale-95 transition-all"
+            >
+              Login / Sign Up
+            </button>
+          )}
         </div>
       </div>
 
       {/* 🍱 BENTO GRID (The "Impressive" Part) */}
-      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-12">
+      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-12 animate-in slide-in-from-bottom-12 duration-1000 delay-500">
         <h2 className="text-center text-xs font-bold uppercase tracking-widest text-zinc-400 mb-8">Everything you need</h2>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
@@ -117,9 +128,11 @@ const HomePage = () => {
                <p className="text-indigo-100 font-medium mb-6">
                  Thousands of students use UniFlow to discover their next passion.
                </p>
-               <button onClick={() => navigate('/login')} className="px-6 py-3 bg-white text-indigo-600 rounded-xl font-bold text-sm shadow-xl hover:bg-zinc-50 transition-colors">
-                 Create Account
-               </button>
+               {!user && (
+                 <button onClick={() => navigate('/login')} className="px-6 py-3 bg-white text-indigo-600 rounded-xl font-bold text-sm shadow-xl hover:bg-zinc-50 transition-colors">
+                   Create Account
+                 </button>
+               )}
             </div>
             
             <div className="relative z-10 flex -space-x-4">
