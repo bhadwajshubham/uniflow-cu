@@ -3,124 +3,153 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
-// 🛡️ FIXED: Correct Library Name
-import { QRCodeSVG } from 'qrcode.react'; 
-import { 
-  ArrowLeft, Download, Share2, MapPin, Calendar, 
-  Clock, ShieldCheck, ShieldAlert, Zap 
-} from 'lucide-react';
+import { Loader2, Calendar, MapPin, Clock, User, ArrowLeft, Download, Share2 } from 'lucide-react';
 
 const TicketPage = () => {
   const { ticketId } = useParams();
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchTicket = async () => {
-      // 🛡️ Wait for auth to be ready
-      if (!user && !profile) return; 
-
+      if (!user || !ticketId) return;
+      
       try {
         const docRef = doc(db, 'registrations', ticketId);
         const docSnap = await getDoc(docRef);
 
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          
-          // 🛡️ SECURITY PATCH: Verify ownership before setting state
-          const isOwner = user?.uid === data.userId;
-          const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
-
-          if (isOwner || isAdmin) {
-            setTicket({ id: docSnap.id, ...data });
-          }
+        if (!docSnap.exists()) {
+          setError('Ticket not found.');
+          return;
         }
+
+        const data = docSnap.data();
+
+        // Security Check: Ensure this ticket belongs to the user
+        if (data.userId !== user.uid) {
+           setError('Unauthorized: This ticket does not belong to you.');
+           return;
+        }
+
+        setTicket({ id: docSnap.id, ...data });
       } catch (err) {
-        console.error("QR Fetch Error:", err);
+        console.error("Ticket fetch error:", err);
+        setError(err.message);
       } finally {
         setLoading(false);
       }
     };
+
     fetchTicket();
-  }, [ticketId, user, profile]);
+  }, [ticketId, user]);
 
   if (loading) return (
-    <div className="min-h-screen bg-[#FDFBF7] dark:bg-black flex items-center justify-center">
-      <div className="text-center">
-        <Zap className="w-12 h-12 text-indigo-600 animate-pulse mx-auto mb-4" />
-        <p className="font-black text-[10px] uppercase tracking-[0.3em] text-indigo-600">Syncing Secure Pass...</p>
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black">
+      <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
     </div>
   );
 
-  if (!ticket) {
-    return (
-      <div className="min-h-screen bg-[#FDFBF7] dark:bg-black flex flex-col items-center justify-center p-6 text-center">
-        <ShieldAlert className="w-20 h-20 text-red-500 mb-4" />
-        <h1 className="text-2xl font-black text-zinc-900 dark:text-white uppercase tracking-tighter">Access Denied</h1>
-        <p className="text-zinc-500 text-sm mt-2">Unauthorized attempt to view this pass.</p>
-        <button onClick={() => navigate('/my-tickets')} className="mt-8 px-8 py-4 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-black text-xs uppercase tracking-widest">Return to Tickets</button>
+  if (error) return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-black p-4 text-center">
+      <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+        <User className="w-8 h-8 text-red-500" />
       </div>
-    );
-  }
+      <h2 className="text-xl font-black text-zinc-900 dark:text-white uppercase">Access Denied</h2>
+      <p className="text-zinc-500 mt-2 mb-6">{error}</p>
+      <button onClick={() => navigate('/my-tickets')} className="px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-xl font-bold text-sm uppercase tracking-widest">
+        Back to My Tickets
+      </button>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] dark:bg-black pt-24 pb-12 px-6">
-      <div className="max-w-md mx-auto">
-        <button onClick={() => navigate(-1)} className="mb-8 flex items-center gap-2 text-zinc-400 font-black text-[10px] uppercase tracking-widest">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-4">
+      <div className="max-w-md mx-auto relative">
+        
+        {/* Back Button */}
+        <button onClick={() => navigate('/my-tickets')} className="absolute -top-12 left-0 flex items-center gap-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
 
-        {/* PREMIUM WALLET UI */}
-        <div className="bg-white dark:bg-zinc-900 rounded-[3rem] shadow-2xl overflow-hidden border border-zinc-100 dark:border-zinc-800 relative animate-in slide-in-from-bottom-8 duration-700">
+        {/* TICKET CARD */}
+        <div className="bg-white dark:bg-zinc-900 rounded-[2rem] overflow-hidden shadow-2xl border border-zinc-200 dark:border-zinc-800 relative">
           
-          <div className="p-10 pb-6 text-center border-b border-dashed border-zinc-200 dark:border-zinc-800 relative">
-            <div className="absolute -left-4 -bottom-4 w-8 h-8 bg-[#FDFBF7] dark:bg-black rounded-full border border-zinc-100 dark:border-zinc-800"></div>
-            <div className="absolute -right-4 -bottom-4 w-8 h-8 bg-[#FDFBF7] dark:bg-black rounded-full border border-zinc-100 dark:border-zinc-800"></div>
+          {/* Status Bar */}
+          <div className={`h-3 w-full ${
+             ticket.status === 'attended' ? 'bg-green-500' : 
+             ticket.status === 'cancelled' ? 'bg-red-500' : 'bg-indigo-600'
+          }`}></div>
+
+          <div className="p-8 text-center">
+            <h1 className="text-2xl font-black text-zinc-900 dark:text-white uppercase leading-tight mb-2">
+              {ticket.eventTitle}
+            </h1>
+            <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-8">
+              Official Entry Pass
+            </p>
+
+            {/* QR CODE */}
+            <div className="bg-white p-4 rounded-2xl shadow-inner border border-zinc-100 inline-block mb-8">
+              <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${ticket.id}`} 
+                alt="Ticket QR" 
+                className="w-48 h-48 object-contain mix-blend-multiply"
+              />
+            </div>
             
-            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.4em] mb-2">Chitkara University</p>
-            <h1 className="text-3xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase">{ticket.eventTitle}</h1>
-            <div className="mt-4 flex items-center justify-center gap-2 px-4 py-2 bg-zinc-50 dark:bg-black/40 rounded-xl w-fit mx-auto">
-               <ShieldCheck className="w-4 h-4 text-green-500" />
-               <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{ticket.status}</span>
+            <p className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest mb-8">
+              ID: {ticket.id}
+            </p>
+
+            {/* DETAILS GRID */}
+            <div className="grid grid-cols-2 gap-4 text-left bg-zinc-50 dark:bg-zinc-950/50 p-6 rounded-2xl border border-zinc-100 dark:border-zinc-800">
+               <div>
+                 <p className="text-[9px] font-black text-zinc-400 uppercase mb-1">Date</p>
+                 <div className="flex items-center gap-2 text-zinc-900 dark:text-white font-bold text-sm">
+                   <Calendar className="w-3 h-3 text-indigo-500" /> {ticket.eventDate}
+                 </div>
+               </div>
+               <div>
+                 <p className="text-[9px] font-black text-zinc-400 uppercase mb-1">Time</p>
+                 <div className="flex items-center gap-2 text-zinc-900 dark:text-white font-bold text-sm">
+                   <Clock className="w-3 h-3 text-indigo-500" /> {ticket.eventTime}
+                 </div>
+               </div>
+               <div className="col-span-2">
+                 <p className="text-[9px] font-black text-zinc-400 uppercase mb-1">Venue</p>
+                 <div className="flex items-center gap-2 text-zinc-900 dark:text-white font-bold text-sm">
+                   <MapPin className="w-3 h-3 text-indigo-500" /> {ticket.eventLocation}
+                 </div>
+               </div>
+               <div className="col-span-2 pt-2 border-t border-zinc-200 dark:border-zinc-800 mt-2">
+                 <p className="text-[9px] font-black text-zinc-400 uppercase mb-1">Attendee</p>
+                 <div className="flex items-center gap-2 text-zinc-900 dark:text-white font-bold text-sm">
+                   <User className="w-3 h-3 text-indigo-500" /> {ticket.userName}
+                 </div>
+                 <p className="text-[10px] text-zinc-500 mt-1 pl-5">{ticket.rollNo} • {ticket.branch}</p>
+               </div>
             </div>
           </div>
 
-          <div className="p-10 bg-zinc-50/50 dark:bg-black/20 flex flex-col items-center border-b border-dashed border-zinc-200 dark:border-zinc-800 relative">
-             <div className="absolute -left-4 -bottom-4 w-8 h-8 bg-[#FDFBF7] dark:bg-black rounded-full"></div>
-             <div className="absolute -right-4 -bottom-4 w-8 h-8 bg-[#FDFBF7] dark:bg-black rounded-full"></div>
-             
-             <div className="p-6 bg-white rounded-[2.5rem] shadow-xl">
-                {/* 🎯 Corrected Component Usage */}
-                <QRCodeSVG value={ticket.id} size={180} level="H" includeMargin={false} />
-             </div>
-             <p className="mt-6 font-mono text-[10px] text-zinc-400 tracking-[0.5em] uppercase">{ticket.id.substring(0, 15)}</p>
-          </div>
-
-          <div className="p-10 space-y-6">
-             <div className="grid grid-cols-2 gap-8">
-                <div>
-                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Attendee</p>
-                   <p className="font-bold text-zinc-900 dark:text-white uppercase truncate">{ticket.userName}</p>
-                </div>
-                <div>
-                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Roll No</p>
-                   <p className="font-bold text-zinc-900 dark:text-white">{ticket.rollNo}</p>
-                </div>
-             </div>
-
-             <div className="flex items-center gap-4 p-4 bg-zinc-50 dark:bg-black/40 rounded-2xl border border-zinc-100 dark:border-zinc-800">
-                <MapPin className="w-5 h-5 text-indigo-600" />
-                <div>
-                   <p className="text-[10px] font-black text-zinc-400 uppercase">Venue</p>
-                   <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300 truncate max-w-[200px]">{ticket.eventLocation}</p>
-                </div>
-             </div>
+          {/* Footer Actions */}
+          <div className="bg-zinc-50 dark:bg-black p-6 flex gap-3 border-t border-zinc-200 dark:border-zinc-800">
+             <button className="flex-1 py-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors dark:text-white">
+               <Share2 className="w-3 h-3" /> Share
+             </button>
+             <button className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/20">
+               <Download className="w-3 h-3" /> Save
+             </button>
           </div>
         </div>
-        <p className="mt-8 text-center text-zinc-500 text-[9px] font-bold uppercase tracking-[0.3em]">SECURED BY UNIFLOW ROOT ENGINE</p>
+        
+        <p className="text-center text-[10px] font-bold text-zinc-400 uppercase mt-8 tracking-widest">
+          Show this QR code at the entrance
+        </p>
+
       </div>
     </div>
   );
