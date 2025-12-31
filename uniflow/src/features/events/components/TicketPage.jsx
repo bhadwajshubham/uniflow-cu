@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { QRCodeSVG } from 'qrcode.react'; // npm install qrcode.react
+import { QRCodeSVG } from 'qrcode.react'; 
 import { Loader2, Calendar, MapPin, Clock, Download, ArrowLeft, Ticket as TicketIcon } from 'lucide-react';
-import CertificateModal from '../../tickets/components/CertificateModal';
+
+// ✅ FIXED IMPORT: Now looks in the SAME folder (./)
+import CertificateModal from './CertificateModal';
 
 const TicketPage = () => {
   const { ticketId } = useParams();
@@ -47,7 +49,6 @@ const TicketPage = () => {
   if (!ticket) return null;
 
   // 🕒 Logic: Only show certificate if event is passed OR user checked in
-  // For demo/MVP, we can also check if date < today
   const eventDateObj = new Date(ticket.eventDate);
   const today = new Date();
   const isEventCompleted = today > eventDateObj || ticket.checkedIn === true;
