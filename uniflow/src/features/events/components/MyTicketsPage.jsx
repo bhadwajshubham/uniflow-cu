@@ -4,7 +4,10 @@ import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { Ticket, Calendar, Clock, Search, MapPin, XCircle, Users, CheckCircle, Award, Star, ExternalLink, ArrowRight, Copy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import CertificateModal from './CertificateModal';
+
+// Import Both Modals
+import CertificateModal from '../components/CertificateModal';
+import RateEventModal from '../components/RateEventModal'; 
 
 const MyTicketsPage = () => {
   const { user } = useAuth();
@@ -16,77 +19,64 @@ const MyTicketsPage = () => {
 
   // 🎓 CERTIFICATE STATE
   const [isCertificateOpen, setIsCertificateOpen] = useState(false);
-  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [selectedTicketForCert, setSelectedTicketForCert] = useState(null);
+
+  // ⭐ RATING STATE
+  const [isRateOpen, setIsRateOpen] = useState(false);
+  const [selectedTicketForRating, setSelectedTicketForRating] = useState(null);
 
   useEffect(() => {
     const fetchTickets = async () => {
       if (!user) return;
       try {
-        // Query: Get tickets where userId matches current user
         const q = query(collection(db, 'registrations'), where('userId', '==', user.uid));
         const snapshot = await getDocs(q);
-        
-        const ticketData = snapshot.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data() 
-        }));
-        
-        // Sort manually (Newest first) based on createdAt timestamp
+        const ticketData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Sort Newest First
         ticketData.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-        
         setTickets(ticketData);
-      } catch (err) { 
-        console.error("Error fetching tickets:", err); 
-      } finally { 
-        setLoading(false); 
-      }
+      } catch (err) { console.error("Error fetching tickets:", err); } 
+      finally { setLoading(false); }
     };
-
     fetchTickets();
   }, [user]);
 
-  // 🛡️ ROBUST FILTER LOGIC
+  // Filter Logic
   const filteredTickets = tickets.filter(ticket => {
-    // 1. Safe Date Parsing
-    let eventDate = new Date(); // Default to today if missing
-    if (ticket.eventDate) {
-      eventDate = new Date(ticket.eventDate);
-    }
+    let eventDate = new Date();
+    if (ticket.eventDate) eventDate = new Date(ticket.eventDate);
 
-    // 2. Normalize Time (Compare Dates Only)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     eventDate.setHours(0, 0, 0, 0);
 
-    // 3. Status Checks
-    const isPast = eventDate < today; // Strictly before today
+    const isPast = eventDate < today;
     const isCompleted = ticket.status === 'attended' || ticket.status === 'used';
     const isCancelled = ticket.status === 'cancelled';
 
-    // 4. Tab Logic
     let matchesTab = false;
-    if (activeTab === 'upcoming') {
-      // Show if Future/Today AND Not Completed AND Not Cancelled
-      matchesTab = !isPast && !isCompleted && !isCancelled;
-    } else {
-      // Show if Past OR Completed OR Cancelled
-      matchesTab = isPast || isCompleted || isCancelled;
-    }
+    if (activeTab === 'upcoming') matchesTab = !isPast && !isCompleted && !isCancelled;
+    else matchesTab = isPast || isCompleted || isCancelled;
 
-    // 5. Search Logic
     const matchesSearch = (ticket.eventTitle || '').toLowerCase().includes(searchTerm.toLowerCase());
-    
     return matchesTab && matchesSearch;
   });
 
+  // Open Certificate Handler
   const openCertificate = (ticket) => {
-    setSelectedTicket(ticket);
+    setSelectedTicketForCert(ticket);
     setIsCertificateOpen(true);
+  };
+
+  // Open Rating Handler
+  const openRating = (ticket) => {
+    setSelectedTicketForRating(ticket);
+    setIsRateOpen(true);
   };
 
   const copyTeamCode = (code) => {
     navigator.clipboard.writeText(code);
-    alert(`Team Code ${code} copied to clipboard!`); 
+    alert(`Team Code ${code} copied!`); 
   };
 
   if (loading) return (
@@ -173,13 +163,11 @@ const MyTicketsPage = () => {
                      </div>
                    ) : (
                      <>
-                        {/* QR IMAGE */}
                         <img 
                           src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${ticket.id}`} 
                           alt="Ticket QR" 
                           className="w-24 h-24 object-contain mix-blend-multiply dark:mix-blend-screen opacity-90 group-hover:scale-105 transition-transform"
                         />
-                        {/* 👁️ VIEW PASS BUTTON (Desktop) */}
                         <button 
                           onClick={() => navigate(`/tickets/${ticket.id}`)}
                           className="mt-3 hidden md:flex text-[9px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700 items-center gap-1"
@@ -194,7 +182,6 @@ const MyTicketsPage = () => {
                 <div className="flex-1 flex flex-col justify-center">
                   <div>
                     {ticket.teamCode && (
-                       // 📋 Team Code
                        <div 
                          onClick={() => copyTeamCode(ticket.teamCode)} 
                          className="cursor-pointer active:scale-95 transition-transform inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 text-[10px] font-black uppercase tracking-widest mb-2 w-fit hover:bg-purple-100 dark:hover:bg-purple-900/40"
@@ -226,13 +213,18 @@ const MyTicketsPage = () => {
                     )}
                   </div>
                   
-                  {/* Desktop ID / Review Footer */}
+                  {/* Footer Actions */}
                   <div className="hidden md:flex pt-4 items-center justify-between border-t border-zinc-100 dark:border-zinc-800 mt-auto">
                     <span className="text-[9px] font-mono text-zinc-400 uppercase tracking-widest">
                       ID: {ticket.id.slice(0, 8)}...
                     </span>
+                    
+                    {/* ⭐ RATE EVENT BUTTON (Visible in History or Attended) */}
                     {(activeTab === 'past' || ticket.status === 'attended') && (
-                      <button className="text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-indigo-600 flex items-center gap-1 transition-colors">
+                      <button 
+                        onClick={() => openRating(ticket)}
+                        className="text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-indigo-600 flex items-center gap-1 transition-colors"
+                      >
                         <Star className="w-3 h-3" /> Rate Event
                       </button>
                     )}
@@ -247,10 +239,18 @@ const MyTicketsPage = () => {
         <CertificateModal 
           isOpen={isCertificateOpen}
           onClose={() => setIsCertificateOpen(false)}
-          userName={selectedTicket?.userName}
-          eventTitle={selectedTicket?.eventTitle}
-          eventDate={selectedTicket?.eventDate}
-          ticketId={selectedTicket?.id}
+          userName={selectedTicketForCert?.userName}
+          eventTitle={selectedTicketForCert?.eventTitle}
+          eventDate={selectedTicketForCert?.eventDate}
+          ticketId={selectedTicketForCert?.id}
+        />
+
+        {/* ⭐ MOUNT RATING MODAL */}
+        <RateEventModal 
+          isOpen={isRateOpen}
+          onClose={() => setIsRateOpen(false)}
+          eventTitle={selectedTicketForRating?.eventTitle}
+          eventId={selectedTicketForRating?.eventId}
         />
 
       </div>
