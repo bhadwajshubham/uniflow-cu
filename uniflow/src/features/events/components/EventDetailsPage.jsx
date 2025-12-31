@@ -40,8 +40,6 @@ const EventDetailsPage = () => {
 
     if (!profile?.isProfileComplete) {
       alert("Please complete your profile first!");
-      // You should theoretically open the profile modal here, 
-      // but for now let's alert them.
       return;
     }
 
@@ -50,7 +48,6 @@ const EventDetailsPage = () => {
       return;
     }
 
-    // Strict Mode Check
     if (event.isUniversityOnly) {
       if (!user.email.endsWith('@chitkara.edu.in')) {
         alert("🔒 Restricted Event: Only Chitkara Emails allowed.");
@@ -61,22 +58,22 @@ const EventDetailsPage = () => {
     setRegistering(true);
 
     try {
-      // 1. Create Ticket Object
+      // 1. Create Ticket Object with SAFETY CHECKS (|| "TBA")
       const newTicket = {
         eventId: event.id,
-        eventTitle: event.title,
-        eventDate: event.date,
-        eventTime: event.time,
-        eventLocation: event.location,
+        eventTitle: event.title || "Untitled Event",
+        eventDate: event.date || "Date TBA",
+        eventTime: event.time || "Time TBA", // 🛡️ FIX: Agar time undefined hai toh "Time TBA" use karega
+        eventLocation: event.location || "Location TBA", // 🛡️ FIX: Location ke liye bhi safety
         userId: user.uid,
-        userName: user.displayName,
+        userName: user.displayName || "Student",
         userEmail: user.email,
         userRollNo: profile.rollNo || 'N/A',
         userPhone: profile.phone || 'N/A',
-        userPhoto: user.photoURL || '', // 📸 Saving User Photo to Ticket for Security
+        userPhoto: user.photoURL || '', 
         purchasedAt: serverTimestamp(),
         checkedIn: false,
-        price: event.price
+        price: event.price || 0
       };
 
       // 2. Save to Firestore
@@ -87,17 +84,16 @@ const EventDetailsPage = () => {
         ticketsSold: increment(1)
       });
 
-      // 4. 📧 SEND EMAIL (Background Process)
-      // This calls your /api/send-email.js file
+      // 4. Send Email (Background)
       const emailHtml = `
         <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
           <h2 style="color: #4F46E5;">Ticket Confirmed! 🎟️</h2>
           <p>Hi <strong>${user.displayName}</strong>,</p>
           <p>You are officially registered for <strong>${event.title}</strong>.</p>
           <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p><strong>Date:</strong> ${event.date}</p>
-          <p><strong>Time:</strong> ${event.time}</p>
-          <p><strong>Venue:</strong> ${event.location}</p>
+          <p><strong>Date:</strong> ${event.date || 'TBA'}</p>
+          <p><strong>Time:</strong> ${event.time || 'TBA'}</p>
+          <p><strong>Venue:</strong> ${event.location || 'TBA'}</p>
           <div style="text-align: center; margin: 30px 0;">
             <p style="font-size: 12px; color: #888;">SHOW THIS QR CODE AT ENTRY</p>
             <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${docRef.id}" alt="QR" style="width: 150px;" />
@@ -115,14 +111,19 @@ const EventDetailsPage = () => {
           subject: `🎟️ Ticket: ${event.title}`,
           html: emailHtml
         })
-      }).catch(err => console.error("Email send failed (UI updated anyway):", err));
+      }).catch(err => console.error("Email failed:", err));
 
-      alert("✅ Ticket Booked Successfully! Check your email.");
+      alert("✅ Ticket Booked Successfully!");
       navigate('/my-tickets');
 
     } catch (err) {
       console.error("Booking Error:", err);
-      alert("Booking failed: " + err.message);
+      // More helpful error message for you
+      if (err.message.includes("undefined")) {
+        alert("System Error: Event data is incomplete. Please contact admin.");
+      } else {
+        alert("Booking failed: " + err.message);
+      }
     } finally {
       setRegistering(false);
     }
@@ -136,15 +137,11 @@ const EventDetailsPage = () => {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-6">
       <div className="max-w-4xl mx-auto">
-        
-        {/* Back Button */}
         <button onClick={() => navigate('/events')} className="mb-6 flex items-center gap-2 text-zinc-500 hover:text-indigo-600 transition-colors font-bold text-xs uppercase tracking-widest">
           <ArrowLeft className="w-4 h-4" /> Back to Events
         </button>
 
         <div className="bg-white dark:bg-zinc-900 rounded-[3rem] shadow-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800">
-          
-          {/* Hero Image */}
           <div className="h-64 sm:h-96 w-full bg-zinc-200 dark:bg-zinc-800 relative">
             {event.imageUrl ? (
               <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
@@ -154,7 +151,6 @@ const EventDetailsPage = () => {
               </div>
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-            
             <div className="absolute bottom-8 left-8 right-8">
               <span className="px-3 py-1 bg-indigo-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest mb-3 inline-block">
                 {event.category}
@@ -170,28 +166,27 @@ const EventDetailsPage = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3">
-            {/* Details Column */}
             <div className="md:col-span-2 p-8 sm:p-12 space-y-8">
               <div className="flex flex-wrap gap-6">
                  <div className="flex items-center gap-3">
                    <div className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-2xl"><Calendar className="w-5 h-5 text-indigo-600" /></div>
                    <div>
                      <p className="text-[10px] font-black uppercase text-zinc-400">Date</p>
-                     <p className="font-bold dark:text-white">{event.date}</p>
+                     <p className="font-bold dark:text-white">{event.date || 'TBA'}</p>
                    </div>
                  </div>
                  <div className="flex items-center gap-3">
                    <div className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-2xl"><Clock className="w-5 h-5 text-indigo-600" /></div>
                    <div>
                      <p className="text-[10px] font-black uppercase text-zinc-400">Time</p>
-                     <p className="font-bold dark:text-white">{event.time}</p>
+                     <p className="font-bold dark:text-white">{event.time || 'TBA'}</p>
                    </div>
                  </div>
                  <div className="flex items-center gap-3">
                    <div className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-2xl"><MapPin className="w-5 h-5 text-indigo-600" /></div>
                    <div>
                      <p className="text-[10px] font-black uppercase text-zinc-400">Venue</p>
-                     <p className="font-bold dark:text-white">{event.location}</p>
+                     <p className="font-bold dark:text-white">{event.location || 'TBA'}</p>
                    </div>
                  </div>
               </div>
@@ -217,7 +212,6 @@ const EventDetailsPage = () => {
               )}
             </div>
 
-            {/* Action Sidebar */}
             <div className="bg-zinc-50 dark:bg-black/40 p-8 sm:p-12 border-l border-zinc-100 dark:border-zinc-800 flex flex-col justify-between">
                <div className="space-y-6">
                  <div>
@@ -260,7 +254,6 @@ const EventDetailsPage = () => {
                </div>
             </div>
           </div>
-
         </div>
       </div>
     </div>
