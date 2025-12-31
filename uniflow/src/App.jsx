@@ -5,20 +5,20 @@ import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 
-// 🏠 Pages (Using YOUR Original Architecture)
+// ✅ VERIFIED PATHS (Based on your folder structure)
 import HomePage from './features/events/components/HomePage';
-import LoginPage from './features/auth/components/LoginPage';
-import HelpPage from './features/events/components/HelpPage';
-import AboutPage from './features/auth/AboutPage';
-
 import EventsPage from './features/events/components/EventsPage';
 import EventDetailsPage from './features/events/components/EventDetailsPage';
 import MyTicketsPage from './features/events/components/MyTicketsPage';
 import TicketPage from './features/events/components/TicketPage'; 
-
 import AdminDashboard from './features/events/components/AdminDashboard';
 import ScannerPage from './features/events/components/ScannerPage';
-import SuperAdminDashboard from './features/events/components/SuperAdminDashboard'; 
+import SuperAdminDashboard from './features/events/components/SuperAdminDashboard';
+import HelpPage from './features/events/components/HelpPage';
+
+// Auth Pages (Check if these are in 'auth/components' or just 'auth')
+import LoginPage from './features/auth/components/LoginPage';
+import AboutPage from './features/auth/AboutPage';
 
 const App = () => {
   return (
@@ -72,7 +72,7 @@ const App = () => {
               } 
             />
 
-            {/* 👑 SUPER ADMIN ROUTE (GOD MODE) */}
+            {/* 👑 SUPER ADMIN ROUTE */}
             <Route 
               path="/super-admin" 
               element={

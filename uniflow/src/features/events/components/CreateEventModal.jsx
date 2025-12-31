@@ -2,8 +2,10 @@ import React, { useState, useRef } from 'react';
 import { db } from '../../../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../../../context/AuthContext';
-import { uploadImage } from '../../../lib/uploadService'; // ☁️ Import Cloudinary Service
 import { X, Calendar, Clock, MapPin, Globe, GraduationCap, DollarSign, Users, Layers, ShieldAlert, Loader2, Image as ImageIcon, UploadCloud, Trash2 } from 'lucide-react';
+
+// ✅ CORRECT IMPORT PATH (Same feature folder)
+import { uploadImage } from '../services/uploadService'; 
 
 // 1. 🛡️ CLEAN STATE
 const INITIAL_STATE = {
@@ -26,7 +28,7 @@ const INITIAL_STATE = {
 const CreateEventModal = ({ isOpen, onClose }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [imageUploading, setImageUploading] = useState(false); // 🆕 Image State
+  const [imageUploading, setImageUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [formData, setFormData] = useState(INITIAL_STATE);
   const fileInputRef = useRef(null);

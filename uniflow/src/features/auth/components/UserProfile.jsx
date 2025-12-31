@@ -4,8 +4,8 @@ import { db } from '../../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { X, User, Hash, Phone, GraduationCap, Save, Loader2, LogOut, Home, Camera } from 'lucide-react';
 
-// 👇 UPDATED IMPORT: Now pointing to src/lib/uploadService.js
-import { uploadImage } from '../../../lib/uploadService'; 
+// ✅ CORRECT IMPORT PATH (Points to events/services)
+import { uploadImage } from '../../events/services/uploadService'; 
 
 const UserProfile = ({ isOpen, onClose }) => {
   const { user, logout, profile } = useAuth();
@@ -90,7 +90,7 @@ const UserProfile = ({ isOpen, onClose }) => {
     try {
       let finalPhotoURL = user.photoURL;
 
-      // ☁️ 1. UPLOAD IMAGE IF SELECTED (Using the new lib service)
+      // ☁️ 1. UPLOAD IMAGE IF SELECTED
       if (selectedFile) {
         finalPhotoURL = await uploadImage(selectedFile);
       }
