@@ -1,134 +1,128 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, MapPin, Clock, ArrowRight, Users, Ticket, Zap } from 'lucide-react';
+import { MapPin, Clock, ArrowRight, Zap, Users, Trophy } from 'lucide-react';
 
 const EventCard = ({ event }) => {
   const navigate = useNavigate();
   
-  // Calculate percentage for the progress bar
+  // Stats Calculation
   const percentSold = Math.min(100, Math.round((event.ticketsSold / event.totalTickets) * 100));
   const isSoldOut = percentSold >= 100;
+  const isSellingFast = !isSoldOut && percentSold > 70;
+
+  // Date Formatting (e.g., "24 OCT")
+  const dateObj = new Date(event.date);
+  const day = dateObj.getDate();
+  const month = dateObj.toLocaleString('default', { month: 'short' }).toUpperCase();
 
   return (
-    // 1. THE 3D SCENE CONTAINER
-    <div className="group h-[28rem] w-full [perspective:1000px] cursor-pointer">
+    <div className="group h-[26rem] w-full [perspective:1000px] cursor-pointer">
       
-      {/* 2. THE FLIPPING FLAPPER (Transition Wrapper) */}
       <div className="relative h-full w-full transition-all duration-700 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)]">
         
         {/* ==============================
-            3. SIDE A: THE CINEMATIC FRONT
+            SIDE A: FRONT (Info-Rich Cinematic)
            ============================== */}
-        <div className="absolute inset-0 h-full w-full rounded-[2rem] overflow-hidden shadow-xl [backface-visibility:hidden]">
+        <div className="absolute inset-0 h-full w-full rounded-[2rem] overflow-hidden shadow-xl [backface-visibility:hidden] bg-zinc-900 border border-zinc-800">
           
-          {/* Poster Image */}
+          {/* 1. Background Image with Gradient Overlay */}
           {event.imageUrl ? (
-            <img 
-              src={event.imageUrl} 
-              alt={event.title} 
-              className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" 
-            />
+            <img src={event.imageUrl} alt={event.title} className="h-full w-full object-cover opacity-80 transition-transform duration-700 group-hover:scale-110" />
           ) : (
-            // Fallback Abstract Art if no image
-            <div className={`h-full w-full bg-gradient-to-br ${getCategoryGradient(event.category)} relative`}>
-               <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-               <div className="flex items-center justify-center h-full">
-                  <h1 className="text-4xl font-black text-white/20 uppercase tracking-widest -rotate-45 select-none">{event.category}</h1>
-               </div>
-            </div>
+            <div className={`h-full w-full bg-gradient-to-br ${getCategoryGradient(event.category)} opacity-60`}></div>
           )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
 
-          {/* Glass Overlay (Front) */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
-          
-          {/* Front Content */}
-          <div className="absolute bottom-0 left-0 w-full p-8 text-white">
-             <div className="flex items-center gap-2 mb-3">
-               <span className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-md border border-white/10 text-[10px] font-black uppercase tracking-widest">
-                 {event.category}
-               </span>
-               {event.isUniversityOnly && (
-                 <span className="px-3 py-1 rounded-full bg-red-500/80 backdrop-blur-md text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
-                   <Zap className="w-3 h-3 fill-current" /> Chitkara Only
-                 </span>
-               )}
+          {/* 2. Top Bar: Date Badge & Club Name */}
+          <div className="absolute top-4 left-4 right-4 flex justify-between items-start">
+             {/* Glass Date Badge */}
+             <div className="flex flex-col items-center justify-center w-14 h-14 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl text-white shadow-lg">
+                <span className="text-[10px] font-bold uppercase tracking-widest leading-none">{month}</span>
+                <span className="text-2xl font-black leading-none mt-1">{day}</span>
              </div>
-             <h3 className="text-3xl font-black uppercase tracking-tighter leading-none mb-1 shadow-black drop-shadow-lg">{event.title}</h3>
-             <p className="text-xs font-bold text-white/70 uppercase tracking-widest">{event.organizerName}</p>
+
+             {/* Club Pill */}
+             <div className="px-4 py-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center gap-2">
+                <Trophy className="w-3 h-3 text-yellow-400" />
+                <span className="text-[10px] font-black text-white uppercase tracking-widest">{event.organizerName || 'Club'}</span>
+             </div>
+          </div>
+
+          {/* 3. Bottom Bar: Title & Price */}
+          <div className="absolute bottom-0 left-0 w-full p-6">
+             {/* Category Tag */}
+             <div className="flex gap-2 mb-2">
+                <span className="px-2 py-1 rounded-md bg-indigo-600 text-[9px] font-black text-white uppercase tracking-widest">
+                  {event.category}
+                </span>
+                {isSellingFast && (
+                  <span className="px-2 py-1 rounded-md bg-red-500 text-[9px] font-black text-white uppercase tracking-widest animate-pulse">
+                    Selling Fast
+                  </span>
+                )}
+             </div>
+
+             {/* Title */}
+             <h3 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight mb-3 line-clamp-2">
+               {event.title}
+             </h3>
+
+             {/* Price & Location Row */}
+             <div className="flex items-center justify-between border-t border-white/20 pt-3">
+                <div className="flex items-center gap-2 text-white/80">
+                   <MapPin className="w-4 h-4" />
+                   <span className="text-xs font-bold uppercase truncate max-w-[120px]">{event.location}</span>
+                </div>
+                <div className="text-xl font-black text-white">
+                   {event.price > 0 ? `₹${event.price}` : 'FREE'}
+                </div>
+             </div>
           </div>
         </div>
 
         {/* ==============================
-            4. SIDE B: THE DATA DASHBOARD (Rotated 180)
+            SIDE B: BACK (Action & Details)
            ============================== */}
-        <div className="absolute inset-0 h-full w-full rounded-[2rem] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-8 [transform:rotateY(180deg)] [backface-visibility:hidden] shadow-2xl flex flex-col justify-between overflow-hidden">
+        <div className="absolute inset-0 h-full w-full rounded-[2rem] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 [transform:rotateY(180deg)] [backface-visibility:hidden] shadow-2xl flex flex-col">
           
-          {/* Decorative BG Blob */}
-          <div className="absolute -top-20 -right-20 w-40 h-40 bg-indigo-500/20 rounded-full blur-3xl"></div>
-          <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-purple-500/20 rounded-full blur-3xl"></div>
-
-          {/* Top: Header */}
-          <div className="relative z-10">
-             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] mb-4">Event Dossier</p>
-             
-             <div className="space-y-4">
-                <div className="flex items-start gap-4">
-                   <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800 text-indigo-600">
-                      <Calendar className="w-5 h-5" />
-                   </div>
-                   <div>
-                      <p className="text-xs font-bold text-zinc-400 uppercase">Date & Time</p>
-                      <p className="font-black text-zinc-900 dark:text-white">{event.date}</p>
-                      <p className="text-xs font-medium text-zinc-500">{event.time}</p>
-                   </div>
+          {/* Top: Time Detail */}
+          <div className="flex items-center justify-between mb-6">
+             <div className="flex items-center gap-3">
+                <div className="p-3 bg-indigo-50 dark:bg-zinc-800 rounded-xl text-indigo-600">
+                   <Clock className="w-5 h-5" />
                 </div>
-
-                <div className="flex items-start gap-4">
-                   <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800 text-purple-600">
-                      <MapPin className="w-5 h-5" />
-                   </div>
-                   <div>
-                      <p className="text-xs font-bold text-zinc-400 uppercase">Venue</p>
-                      <p className="font-black text-zinc-900 dark:text-white line-clamp-1">{event.location}</p>
-                   </div>
-                </div>
-             </div>
-          </div>
-
-          {/* Middle: Stats */}
-          <div className="relative z-10 py-6 border-t border-b border-zinc-100 dark:border-zinc-800 my-2">
-             <div className="flex justify-between items-center mb-2">
-                <span className="text-[10px] font-black uppercase text-zinc-400">Availability</span>
-                <span className={`text-[10px] font-black uppercase ${isSoldOut ? 'text-red-500' : 'text-green-500'}`}>
-                  {isSoldOut ? 'Sold Out' : `${event.totalTickets - event.ticketsSold} Left`}
-                </span>
-             </div>
-             <div className="w-full h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                <div 
-                  className={`h-full rounded-full transition-all duration-1000 ${isSoldOut ? 'bg-red-500' : 'bg-gradient-to-r from-indigo-500 to-purple-500'}`} 
-                  style={{ width: `${percentSold}%` }}
-                ></div>
-             </div>
-          </div>
-
-          {/* Bottom: Action */}
-          <div className="relative z-10 mt-auto">
-             <div className="flex justify-between items-end mb-4">
                 <div>
-                   <p className="text-[10px] font-black text-zinc-400 uppercase">Entry Fee</p>
-                   <p className="text-3xl font-black text-zinc-900 dark:text-white tracking-tighter">
-                     {event.price > 0 ? `₹${event.price}` : 'FREE'}
-                   </p>
+                   <p className="text-[10px] font-bold text-zinc-400 uppercase">Starts At</p>
+                   <p className="font-black text-zinc-900 dark:text-white text-lg">{event.time}</p>
                 </div>
              </div>
-             
-             <button 
-               onClick={() => navigate(`/events/${event.id}`)}
-               className="w-full py-4 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-xl font-black text-xs uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group/btn"
-             >
-               View Details <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
-             </button>
+             <div className="text-right">
+                <p className="text-[10px] font-bold text-zinc-400 uppercase">Availability</p>
+                <p className={`font-black text-lg ${isSoldOut ? 'text-red-500' : 'text-green-500'}`}>
+                   {isSoldOut ? 'FULL' : `${event.totalTickets - event.ticketsSold} / ${event.totalTickets}`}
+                </p>
+             </div>
           </div>
+
+          {/* Middle: Description Scroll */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar mb-6">
+             <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400 leading-relaxed">
+               {event.description || "Join us for an amazing experience. This event is hosted by the top minds of Chitkara University. Don't miss out!"}
+             </p>
+          </div>
+
+          {/* Bottom: Book Button */}
+          <button 
+            onClick={(e) => { e.stopPropagation(); navigate(`/events/${event.id}`); }}
+            disabled={isSoldOut}
+            className={`w-full py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-2 transition-all ${
+              isSoldOut 
+                ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed' 
+                : 'bg-zinc-900 dark:bg-white text-white dark:text-black hover:scale-[1.02] active:scale-95 shadow-xl'
+            }`}
+          >
+            {isSoldOut ? 'Sold Out' : <>Book Seat <ArrowRight className="w-4 h-4" /></>}
+          </button>
 
         </div>
       </div>
@@ -136,13 +130,13 @@ const EventCard = ({ event }) => {
   );
 };
 
-// Helper for dynamic colors based on category
+// Gradient Helper
 const getCategoryGradient = (category) => {
   switch (category) {
-    case 'Tech': return 'from-blue-600 to-cyan-500';
-    case 'Cultural': return 'from-pink-600 to-rose-500';
-    case 'Sports': return 'from-orange-600 to-amber-500';
-    default: return 'from-indigo-600 to-purple-500';
+    case 'Tech': return 'from-blue-600 to-cyan-600';
+    case 'Cultural': return 'from-pink-600 to-rose-600';
+    case 'Sports': return 'from-orange-600 to-amber-600';
+    default: return 'from-indigo-600 to-purple-600';
   }
 };
 
