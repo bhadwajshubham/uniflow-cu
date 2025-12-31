@@ -2,19 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { db } from '../../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { X, User, Hash, Phone, GraduationCap, Save, Loader2, LogOut, Home } from 'lucide-react';
+import { X, User, Hash, Phone, GraduationCap, Save, Loader2, LogOut, Home, Camera } from 'lucide-react';
+import { uploadImage } from '../../common/services/uploadService'; // 👈 Importing the new service
 
 const UserProfile = ({ isOpen, onClose }) => {
-  // 1. ✅ ALL HOOKS AT THE TOP (No conditional returns before hooks)
   const { user, logout, profile } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null); // To show selected image before uploading
+  const [selectedFile, setSelectedFile] = useState(null); // To store the file for upload
+
   const [formData, setFormData] = useState({
     displayName: '',
     rollNo: '',
     phone: '',
     branch: '',
     group: '',
-    residency: '' // 🆕 Added Residency
+    residency: ''
   });
 
   // Load data when modal opens
@@ -33,8 +36,11 @@ const UserProfile = ({ isOpen, onClose }) => {
               phone: data.phone || '',
               branch: data.branch || '',
               group: data.group || '',
-              residency: data.residency || '' // 🆕 Load Residency
+              residency: data.residency || ''
             });
+            // Reset image states
+            setPreviewImage(null);
+            setSelectedFile(null);
           } else {
             setFormData(prev => ({ ...prev, displayName: user.displayName || '' }));
           }
@@ -46,16 +52,29 @@ const UserProfile = ({ isOpen, onClose }) => {
     }
   }, [user, isOpen]);
 
-  // 2. 🛡️ SAFE LOGOUT
   const handleLogout = async () => {
     onClose(); 
     await logout(); 
+  };
+
+  // 📸 HANDLE FILE SELECTION
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB Limit
+        alert("File size must be less than 5MB");
+        return;
+      }
+      setSelectedFile(file);
+      setPreviewImage(URL.createObjectURL(file)); // Show local preview instantly
+    }
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
     setLoading(true);
 
+    // Validation
     if (formData.rollNo && !/^\d{10}$/.test(formData.rollNo)) {
       alert("Roll Number must be exactly 10 digits.");
       setLoading(false);
@@ -68,10 +87,18 @@ const UserProfile = ({ isOpen, onClose }) => {
     }
 
     try {
+      let finalPhotoURL = user.photoURL;
+
+      // ☁️ 1. UPLOAD IMAGE IF SELECTED
+      if (selectedFile) {
+        finalPhotoURL = await uploadImage(selectedFile);
+      }
+
+      // 2. SAVE TO FIRESTORE
       await setDoc(doc(db, 'users', user.uid), {
         ...formData,
         email: user.email,
-        photoURL: user.photoURL,
+        photoURL: finalPhotoURL, // Save the Cloudinary URL
         role: profile?.role || 'student',
         isProfileComplete: true,
         updatedAt: new Date()
@@ -87,13 +114,13 @@ const UserProfile = ({ isOpen, onClose }) => {
     }
   };
 
-  // 3. 🛡️ CONDITIONAL RENDER (Only after hooks are defined)
   if (!user || !isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-white dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh]">
         
+        {/* Header */}
         <div className="p-8 pb-4 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-black/20 flex justify-between items-center">
           <div>
             <h2 className="text-xl font-black tracking-tighter uppercase dark:text-white italic">Student Identity</h2>
@@ -108,14 +135,35 @@ const UserProfile = ({ isOpen, onClose }) => {
 
         <form onSubmit={handleSave} className="p-8 overflow-y-auto custom-scrollbar space-y-5">
           
+          {/* 📸 IMAGE UPLOAD SECTION */}
           <div className="flex justify-center mb-6">
-             {user.photoURL ? (
-               <img src={user.photoURL} alt="Profile" className="w-24 h-24 rounded-full border-4 border-white dark:border-zinc-900 shadow-xl" />
-             ) : (
-               <div className="w-24 h-24 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-4xl font-black text-indigo-600 border-4 border-white dark:border-zinc-900 shadow-xl">
-                 {formData.displayName?.[0] || 'U'}
+             <div className="relative group cursor-pointer">
+               {/* Image Display */}
+               <div className="w-24 h-24 rounded-full border-4 border-white dark:border-zinc-900 shadow-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                 {previewImage ? (
+                   <img src={previewImage} alt="Preview" className="w-full h-full object-cover" />
+                 ) : user.photoURL ? (
+                   <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+                 ) : (
+                   <span className="text-4xl font-black text-indigo-600">{formData.displayName?.[0] || 'U'}</span>
+                 )}
                </div>
-             )}
+
+               {/* Hidden File Input */}
+               <input 
+                 type="file" 
+                 id="profile-upload" 
+                 accept="image/*" 
+                 className="hidden" 
+                 onChange={handleFileChange} 
+               />
+
+               {/* Overlay Icon */}
+               <label htmlFor="profile-upload" className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                 <Camera className="w-8 h-8 text-white" />
+               </label>
+             </div>
+             <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest absolute mt-28">Tap to Change</p>
           </div>
 
           <div className="space-y-1">
@@ -158,7 +206,6 @@ const UserProfile = ({ isOpen, onClose }) => {
              </div>
           </div>
 
-          {/* 🆕 RESIDENCY FIELD */}
           <div className="space-y-1">
              <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Residency Status</label>
              <div className="relative group">
