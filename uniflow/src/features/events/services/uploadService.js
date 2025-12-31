@@ -10,7 +10,7 @@ export const uploadImage = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('upload_preset', UPLOAD_PRESET);
-  formData.append('folder', 'uniflow_users'); // Optional: Keeps your Cloudinary folder clean
+  formData.append('folder', 'uniflow_users');
 
   try {
     const response = await axios.post(
