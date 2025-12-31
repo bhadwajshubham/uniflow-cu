@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext'; // Fixed path for new location
+import { useAuth } from '../../../context/AuthContext';
 import { ArrowRight, Zap, Trophy, Users, Star, ShieldCheck, Ticket, LayoutDashboard } from 'lucide-react';
 
 const HomePage = () => {
