@@ -7,13 +7,12 @@ import { ThemeProvider } from './context/ThemeContext';
 import Navbar from './components/layout/Navbar';
 
 // Pages
-// 👇 THIS WAS THE ERROR. NOW IT WILL WORK BECAUSE WE CREATED THE FILE ABOVE.
-import HomePage from './features/home/pages/HomePage'; 
+import HomePage from './features/home/pages/HomePage';
 import EventsPage from './features/events/pages/EventsPage';
 import EventDetailsPage from './features/events/pages/EventDetailsPage';
 import LoginPage from './features/auth/pages/LoginPage';
 import MyTicketsPage from './features/tickets/pages/MyTicketsPage';
-import TicketPage from './features/tickets/pages/TicketPage'; 
+import TicketPage from './features/tickets/pages/TicketPage'; // 🆕 IMPORT THIS
 
 // Admin Pages
 import AdminDashboard from './features/admin/pages/AdminDashboard';
@@ -68,6 +67,7 @@ const App = () => {
                 </ProtectedRoute>
               } />
               
+              {/* 🆕 THE MISSING TICKET VIEW ROUTE */}
               <Route path="/tickets/:ticketId" element={
                 <ProtectedRoute>
                   <TicketPage />
