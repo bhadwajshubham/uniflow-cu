@@ -8,7 +8,7 @@ import { ArrowLeft, CheckCircle, AlertCircle, XCircle, ShieldAlert, Zap } from '
 
 const ScannerPage = () => {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [scanResult, setScanResult] = useState(null); 
   const [message, setMessage] = useState('');
   const lastScannedId = useRef(null);
@@ -20,49 +20,45 @@ const ScannerPage = () => {
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const oscillator = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
-
     oscillator.connect(gainNode);
     gainNode.connect(audioCtx.destination);
 
     if (type === 'success') {
-      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // High pitch
+      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
       oscillator.type = 'sine';
     } else {
-      oscillator.frequency.setValueAtTime(220, audioCtx.currentTime); // Low pitch/Buzz
+      oscillator.frequency.setValueAtTime(220, audioCtx.currentTime);
       oscillator.type = 'square';
     }
-
     oscillator.start();
     gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.1);
     oscillator.stop(audioCtx.currentTime + 0.1);
 
-    // 2. Pro Voice Welcome (Text-to-Speech)
+    // 2. Pro Voice Welcome
     if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel(); // Stop any current speaking
+      window.speechSynthesis.cancel();
       let text = "";
       if (type === 'success') text = `Welcome, ${name}`;
-      if (type === 'error') text = `Invalid Ticket`;
+      if (type === 'error') text = `Access Denied`;
       if (type === 'warning') text = `Already Scanned`;
+      if (type === 'security') text = `Unauthorized Admin`;
 
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.1; // Slightly faster for gate speed
-      utterance.pitch = 1.0;
+      utterance.rate = 1.1;
       window.speechSynthesis.speak(utterance);
     }
   };
 
   useEffect(() => {
-    if (profile?.role !== 'admin' && profile?.role !== 'super_admin') {
-      return;
-    }
+    if (profile?.role !== 'admin' && profile?.role !== 'super_admin') return;
 
     const scanner = new Html5QrcodeScanner(
       "reader",
       { 
-        fps: 15, // ⚡ Turbo FPS
+        fps: 15, 
         qrbox: { width: 280, height: 280 },
         aspectRatio: 1.0,
-        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE] // Speed hack: QR only
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
       }
     );
 
@@ -83,8 +79,14 @@ const ScannerPage = () => {
           playFeedback('error');
         } else {
           const data = regSnap.data();
-          // Support both 'attended' and your current 'checkedIn' status
-          if (data.status === 'attended' || data.checkedIn === true) {
+
+          // 🛡️ SECURITY: Cross-Event Admin Check
+          if (profile.role !== 'super_admin' && data.eventCreatorId !== user.uid) {
+            setScanResult('error');
+            setMessage('Unauthorized: You are not the organizer for this event.');
+            playFeedback('security');
+          } 
+          else if (data.status === 'attended' || data.checkedIn === true) {
             setScanResult('warning');
             setMessage(`Already Used: Scanned at ${data.attendedAt?.toDate().toLocaleTimeString()}`);
             playFeedback('warning');
@@ -104,7 +106,6 @@ const ScannerPage = () => {
         setMessage('Network Error: Could not verify.');
         playFeedback('error');
       } finally {
-        // ⚡ TURBO RESET: Reduced to 800ms for high-speed gate entry
         setTimeout(() => {
           isProcessing.current = false;
           lastScannedId.current = null;
@@ -115,7 +116,7 @@ const ScannerPage = () => {
 
     scanner.render(onScanSuccess, (err) => {});
     return () => scanner.clear().catch(e => console.error(e));
-  }, [profile]);
+  }, [profile, user]);
 
   if (profile?.role !== 'admin' && profile?.role !== 'super_admin') {
     return (
@@ -160,7 +161,7 @@ const ScannerPage = () => {
           )}
         </div>
         <p className="mt-8 text-center text-zinc-600 text-[10px] font-black uppercase tracking-[0.3em]">
-            UniFlow Gate Protocol v3.0 • Voice Enabled
+            UniFlow Gate Protocol v3.1 • Voice Verified
         </p>
       </div>
     </div>
