@@ -7,33 +7,29 @@ import { ThemeProvider } from './context/ThemeContext';
 import Navbar from './components/layout/Navbar';
 
 // Pages
-import HomePage from './features/home/pages/HomePage'; // ✅ Fixed Import
+import HomePage from './features/landing/HomePage'; // ✅ UPDATED IMPORT (landing)
 import EventsPage from './features/events/pages/EventsPage';
 import EventDetailsPage from './features/events/pages/EventDetailsPage';
 import LoginPage from './features/auth/pages/LoginPage';
 import MyTicketsPage from './features/tickets/pages/MyTicketsPage';
-import TicketPage from './features/tickets/pages/TicketPage'; // ✅ View Pass Page
+import TicketPage from './features/tickets/pages/TicketPage';
 
 // Admin Pages
 import AdminDashboard from './features/admin/pages/AdminDashboard';
 import SuperAdminDashboard from './features/super-admin/pages/SuperAdminDashboard';
 
 // 🛡️ Protected Route Component
-// This ensures only logged-in users can access specific pages
 const ProtectedRoute = ({ children, requiredRole }) => {
   const { user, profile, loading } = useAuth();
 
-  // Show a loading spinner while checking auth status
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
     </div>
   );
   
-  // If not logged in, kick to login page
   if (!user) return <Navigate to="/login" />;
 
-  // Role Security Check (Admin/SuperAdmin)
   if (requiredRole) {
     if (requiredRole === 'admin' && profile?.role !== 'admin' && profile?.role !== 'super_admin') {
       return <Navigate to="/" />;
@@ -55,17 +51,18 @@ const App = () => {
             <Navbar />
             
             <Routes>
-              {/* 🌍 PUBLIC ROUTES */}
+              {/* Public Routes */}
               <Route path="/" element={<HomePage />} />
               <Route path="/login" element={<LoginPage />} />
+              
+              {/* Event Routes */}
               <Route path="/events" element={<EventsPage />} />
               <Route path="/events/:id" element={<EventDetailsPage />} />
 
-              {/* 🔒 STUDENT ROUTES (Protected) */}
+              {/* User Routes (Protected) */}
               <Route path="/my-tickets" element={
                 <ProtectedRoute>
-                  <MyTicketsPage /> 
-                  {/* Note: RateEventModal lives inside MyTicketsPage, so no extra route needed */}
+                  <MyTicketsPage />
                 </ProtectedRoute>
               } />
               
@@ -75,21 +72,21 @@ const App = () => {
                 </ProtectedRoute>
               } />
 
-              {/* 👔 ADMIN ROUTES */}
+              {/* Admin Routes */}
               <Route path="/admin" element={
                 <ProtectedRoute requiredRole="admin">
                   <AdminDashboard />
                 </ProtectedRoute>
               } />
 
-              {/* 👑 SUPER ADMIN ROUTES */}
+              {/* Super Admin Routes */}
               <Route path="/super-admin" element={
                 <ProtectedRoute requiredRole="super_admin">
                   <SuperAdminDashboard />
                 </ProtectedRoute>
               } />
 
-              {/* 404 Fallback - Send back to Home */}
+              {/* Fallback */}
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
           </div>
