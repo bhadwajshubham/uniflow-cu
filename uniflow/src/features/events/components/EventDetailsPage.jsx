@@ -58,13 +58,13 @@ const EventDetailsPage = () => {
     setRegistering(true);
 
     try {
-      // 1. Create Ticket Object with SAFETY CHECKS (|| "TBA")
+      // 1. Create Ticket Object (Safe Version)
       const newTicket = {
         eventId: event.id,
         eventTitle: event.title || "Untitled Event",
         eventDate: event.date || "Date TBA",
-        eventTime: event.time || "Time TBA", // 🛡️ FIX: Agar time undefined hai toh "Time TBA" use karega
-        eventLocation: event.location || "Location TBA", // 🛡️ FIX: Location ke liye bhi safety
+        eventTime: event.time || "Time TBA",
+        eventLocation: event.location || "Location TBA",
         userId: user.uid,
         userName: user.displayName || "Student",
         userEmail: user.email,
@@ -84,22 +84,53 @@ const EventDetailsPage = () => {
         ticketsSold: increment(1)
       });
 
-      // 4. Send Email (Background)
+      // 🔗 GENERATE THE MAGIC LINK
+      // This grabs your current website URL automatically (localhost or vercel)
+      const appUrl = window.location.origin; 
+      const ticketLink = `${appUrl}/tickets/${docRef.id}`;
+
+      // 4. Send Email with "VIEW IN APP" Button
       const emailHtml = `
-        <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-          <h2 style="color: #4F46E5;">Ticket Confirmed! 🎟️</h2>
-          <p>Hi <strong>${user.displayName}</strong>,</p>
-          <p>You are officially registered for <strong>${event.title}</strong>.</p>
-          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p><strong>Date:</strong> ${event.date || 'TBA'}</p>
-          <p><strong>Time:</strong> ${event.time || 'TBA'}</p>
-          <p><strong>Venue:</strong> ${event.location || 'TBA'}</p>
-          <div style="text-align: center; margin: 30px 0;">
-            <p style="font-size: 12px; color: #888;">SHOW THIS QR CODE AT ENTRY</p>
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${docRef.id}" alt="QR" style="width: 150px;" />
-            <p style="font-family: monospace; font-size: 16px; font-weight: bold;">${docRef.id}</p>
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0;">
+          
+          <div style="background-color: #4F46E5; padding: 30px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: 1px;">YOU'RE GOING! 🚀</h1>
+            <p style="color: #e0e7ff; margin-top: 5px; font-size: 14px;">Ticket Confirmed</p>
           </div>
-          <p style="font-size: 12px; color: #999;">Powered by UniFlow</p>
+
+          <div style="padding: 40px 30px;">
+            <p style="font-size: 16px; color: #334155; margin-bottom: 20px;">Hi <strong>${user.displayName}</strong>,</p>
+            <p style="color: #475569; line-height: 1.6;">You have officially secured a spot for <strong style="color: #4F46E5;">${event.title}</strong>.</p>
+            
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 25px 0;">
+               <table style="width: 100%;">
+                 <tr>
+                   <td style="padding-bottom: 10px; color: #64748b; font-size: 12px; text-transform: uppercase; font-weight: bold;">Date</td>
+                   <td style="padding-bottom: 10px; color: #0f172a; font-weight: bold; text-align: right;">${event.date || 'TBA'}</td>
+                 </tr>
+                 <tr>
+                   <td style="padding-bottom: 10px; color: #64748b; font-size: 12px; text-transform: uppercase; font-weight: bold;">Time</td>
+                   <td style="padding-bottom: 10px; color: #0f172a; font-weight: bold; text-align: right;">${event.time || 'TBA'}</td>
+                 </tr>
+                 <tr>
+                   <td style="color: #64748b; font-size: 12px; text-transform: uppercase; font-weight: bold;">Venue</td>
+                   <td style="color: #0f172a; font-weight: bold; text-align: right;">${event.location || 'TBA'}</td>
+                 </tr>
+               </table>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+              <a href="${ticketLink}" style="display: inline-block; background-color: #4F46E5; color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 100px; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);">
+                View Ticket in App
+              </a>
+              <p style="margin-top: 15px; font-size: 12px; color: #94a3b8;">Click above to view QR Code & Certificate</p>
+            </div>
+          </div>
+
+          <div style="background-color: #f1f5f9; padding: 20px; text-align: center; font-size: 12px; color: #64748b;">
+            <p style="margin: 0;">Powered by <strong>UniFlow</strong></p>
+            <p style="margin-top: 5px;">Ticket ID: ${docRef.id}</p>
+          </div>
         </div>
       `;
 
@@ -113,14 +144,13 @@ const EventDetailsPage = () => {
         })
       }).catch(err => console.error("Email failed:", err));
 
-      alert("✅ Ticket Booked Successfully!");
+      alert("✅ Ticket Booked! Check your email for the access link.");
       navigate('/my-tickets');
 
     } catch (err) {
       console.error("Booking Error:", err);
-      // More helpful error message for you
       if (err.message.includes("undefined")) {
-        alert("System Error: Event data is incomplete. Please contact admin.");
+        alert("System Error: Event data is incomplete.");
       } else {
         alert("Booking failed: " + err.message);
       }
