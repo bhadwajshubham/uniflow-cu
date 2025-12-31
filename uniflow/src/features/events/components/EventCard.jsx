@@ -5,12 +5,11 @@ import { MapPin, Clock, ArrowRight, Trophy } from 'lucide-react';
 const EventCard = ({ event }) => {
   const navigate = useNavigate();
   
-  // 1. 🛡️ MATH SAFETY: Force numbers to prevent "100" + "1" = "1001" errors
+  // 1. 🛡️ MATH SAFETY
   const total = parseInt(event.totalTickets) || 0;
   const sold = parseInt(event.ticketsSold) || 0;
-  const remaining = Math.max(0, total - sold); // Prevent negative numbers
+  const remaining = Math.max(0, total - sold);
 
-  // Percent for "Selling Fast" tag
   const percentSold = total > 0 ? (sold / total) * 100 : 0;
   const isSoldOut = remaining === 0;
   const isSellingFast = !isSoldOut && percentSold > 70;
@@ -68,11 +67,21 @@ const EventCard = ({ event }) => {
                {event.title}
              </h3>
 
+             {/* 🆕 TIME ADDED HERE */}
              <div className="flex items-center justify-between border-t border-white/20 pt-3">
-                <div className="flex items-center gap-2 text-white/80">
-                   <MapPin className="w-4 h-4" />
-                   <span className="text-xs font-bold uppercase truncate max-w-[120px]">{event.location}</span>
+                <div className="flex flex-col gap-1 text-white/90">
+                   {/* Time Row */}
+                   <div className="flex items-center gap-2 text-xs font-bold">
+                      <Clock className="w-3 h-3 text-indigo-400" />
+                      <span>{event.time}</span>
+                   </div>
+                   {/* Location Row */}
+                   <div className="flex items-center gap-2 text-xs font-medium text-white/70">
+                      <MapPin className="w-3 h-3" />
+                      <span className="truncate max-w-[120px]">{event.location}</span>
+                   </div>
                 </div>
+                
                 <div className="text-xl font-black text-white">
                    {event.price > 0 ? `₹${event.price}` : 'FREE'}
                 </div>
@@ -97,7 +106,6 @@ const EventCard = ({ event }) => {
                 </div>
              </div>
              
-             {/* 2. 🛡️ CLEANER AVAILABILITY LAYOUT */}
              <div className="text-right">
                 <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1">Availability</p>
                 <p className={`font-black text-xl leading-none ${isSoldOut ? 'text-red-500' : 'text-green-500'}`}>
