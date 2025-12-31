@@ -5,6 +5,7 @@
     "tailwindcss": "^4.1.18"
   },
   "dependencies": {
-    "html5-qrcode": "^2.3.8"
+    "html5-qrcode": "^2.3.8",
+    "nodemailer": "^7.0.12"
   }
 }
