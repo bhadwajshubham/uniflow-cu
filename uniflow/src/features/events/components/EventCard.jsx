@@ -1,13 +1,18 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Clock, ArrowRight, Trophy, Zap } from 'lucide-react';
+import { MapPin, Clock, ArrowRight, Trophy } from 'lucide-react';
 
 const EventCard = ({ event }) => {
   const navigate = useNavigate();
   
-  // Stats Calculation
-  const percentSold = Math.min(100, Math.round((event.ticketsSold / event.totalTickets) * 100));
-  const isSoldOut = percentSold >= 100;
+  // 1. 🛡️ MATH SAFETY: Force numbers to prevent "100" + "1" = "1001" errors
+  const total = parseInt(event.totalTickets) || 0;
+  const sold = parseInt(event.ticketsSold) || 0;
+  const remaining = Math.max(0, total - sold); // Prevent negative numbers
+
+  // Percent for "Selling Fast" tag
+  const percentSold = total > 0 ? (sold / total) * 100 : 0;
+  const isSoldOut = remaining === 0;
   const isSellingFast = !isSoldOut && percentSold > 70;
 
   // Date Formatting
@@ -21,7 +26,7 @@ const EventCard = ({ event }) => {
       <div className="relative h-full w-full transition-all duration-700 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)]">
         
         {/* ==============================
-            SIDE A: FRONT (Clean & Readable)
+            SIDE A: FRONT
            ============================== */}
         <div className="absolute inset-0 h-full w-full rounded-[2rem] overflow-hidden shadow-xl [backface-visibility:hidden] bg-zinc-900 border border-zinc-800">
           
@@ -59,7 +64,6 @@ const EventCard = ({ event }) => {
                 )}
              </div>
 
-             {/* Removed 'italic', kept it upright for readability */}
              <h3 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight mb-3 line-clamp-2">
                {event.title}
              </h3>
@@ -77,7 +81,7 @@ const EventCard = ({ event }) => {
         </div>
 
         {/* ==============================
-            SIDE B: BACK (Data & Action)
+            SIDE B: BACK
            ============================== */}
         <div className="absolute inset-0 h-full w-full rounded-[2rem] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 [transform:rotateY(180deg)] [backface-visibility:hidden] shadow-2xl flex flex-col">
           
@@ -93,17 +97,12 @@ const EventCard = ({ event }) => {
                 </div>
              </div>
              
-             {/* 🛠️ FIX: Vertical Stack for Availability to prevent overflow */}
+             {/* 2. 🛡️ CLEANER AVAILABILITY LAYOUT */}
              <div className="text-right">
                 <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1">Availability</p>
-                <div className="flex flex-col items-end leading-none">
-                   <span className={`font-black text-lg ${isSoldOut ? 'text-red-500' : 'text-green-500'}`}>
-                     {isSoldOut ? 'FULL' : (event.totalTickets - event.ticketsSold)}
-                   </span>
-                   <span className="text-[10px] font-bold text-zinc-400">
-                     / {event.totalTickets} Seats
-                   </span>
-                </div>
+                <p className={`font-black text-xl leading-none ${isSoldOut ? 'text-red-500' : 'text-green-500'}`}>
+                   {isSoldOut ? 'FULL' : remaining} <span className="text-xs text-zinc-400 font-bold uppercase">Left</span>
+                </p>
              </div>
           </div>
 
