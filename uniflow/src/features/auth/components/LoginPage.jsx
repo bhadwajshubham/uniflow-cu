@@ -4,16 +4,28 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, Calendar, QrCode, Trophy, Lock } from 'lucide-react';
 
 const LoginPage = () => {
-  const { login, user, loading } = useAuth(); // Using correct 'user' variable
+  const { login, user, loading } = useAuth(); 
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState('');
 
-  // 🔄 1. AUTO-REDIRECT LOGIC
+  // 🔄 1. AUTO-REDIRECT LOGIC (SECURED)
   useEffect(() => {
     if (user && !loading) {
       console.log("✅ User detected. Redirecting to Dashboard...");
-      const destination = location.state?.from?.pathname || '/events'; // Default to /events
+      
+      // 🛡️ SECURITY FIX: Prevent Open Redirect Vulnerability
+      // Hackers can use 'state.from' to redirect users to phishing sites.
+      // We force the destination to be an internal path (starts with / and not //)
+      
+      let destination = location.state?.from?.pathname || '/events';
+      
+      // If destination looks suspicious (e.g., "http://evil.com" or "//evil.com"), reset it.
+      if (!destination.startsWith('/') || destination.startsWith('//')) {
+         console.warn("Blocked potential open redirect attempt.");
+         destination = '/events';
+      }
+
       navigate(destination, { replace: true });
     }
   }, [user, loading, navigate, location]);
@@ -22,15 +34,14 @@ const LoginPage = () => {
     try {
       setError('');
       await login();
-      // The useEffect above handles the redirect once the user state updates
+      // The useEffect above handles the redirect
     } catch (error) {
       console.error('Login Failed', error);
       setError('Authentication failed. Please try again.');
     }
   };
 
-  // 🛑 2. PREVENT FLICKER: If loading OR user is already logged in, show Spinner ONLY.
-  // This stops the "Lock Icon" form from flashing on the screen.
+  // 🛑 2. PREVENT FLICKER
   if (loading || user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-black">
@@ -42,7 +53,7 @@ const LoginPage = () => {
     );
   }
 
-  // 🎨 3. RENDER LOGIN FORM (Only if NO user exists)
+  // 🎨 3. RENDER LOGIN FORM
   return (
     <div className="min-h-screen flex bg-white dark:bg-zinc-950 font-sans">
       

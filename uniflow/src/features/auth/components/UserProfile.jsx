@@ -1,240 +1,255 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../../context/AuthContext';
-import { db } from '../../../lib/firebase';
+import { useAuth } from '../../context/AuthContext';
+import { db, storage } from '../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { updateProfile } from 'firebase/auth'; 
-import { X, User, Hash, Phone, GraduationCap, Save, Loader2, LogOut, Home, Camera, Sparkles, Shield, QrCode } from 'lucide-react';
-import { uploadImage } from '../../events/services/uploadService';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { User, Mail, Phone, Hash, BookOpen, Layers, MapPin, Camera, Save, Loader2, AlertCircle } from 'lucide-react';
 
-const UserProfile = ({ isOpen, onClose }) => {
-  const { user, logout, profile } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [previewImage, setPreviewImage] = useState(null);
-  const [selectedFile, setSelectedFile] = useState(null);
-
+const UserProfile = () => {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  
+  // Form State
   const [formData, setFormData] = useState({
     displayName: '',
-    rollNo: '',
     phone: '',
-    branch: '',
+    rollNo: '',
+    branch: 'CSE',
+    semester: '1st',
     group: '',
-    residency: ''
+    residency: 'Day Scholar'
   });
+  
+  const [photo, setPhoto] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [existingPhoto, setExistingPhoto] = useState(null);
 
-  // Load data
+  // Fetch Data
   useEffect(() => {
-    if (user && isOpen) {
-      const fetchProfile = async () => {
-        try {
-          const docRef = doc(db, 'users', user.uid);
-          const docSnap = await getDoc(docRef);
-
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            setFormData({
-              displayName: data.displayName || user.displayName || '',
-              rollNo: data.rollNo || '',
-              phone: data.phone || '',
-              branch: data.branch || '',
-              group: data.group || '',
-              residency: data.residency || ''
-            });
-            setPreviewImage(user.photoURL || null);
-            setSelectedFile(null);
-          } else {
-            setFormData(prev => ({ ...prev, displayName: user.displayName || '' }));
-          }
-        } catch (err) {
-          console.error("Profile Fetch Error:", err);
+    if (!user) return;
+    const fetchData = async () => {
+      try {
+        const docRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setFormData({
+            displayName: data.displayName || user.displayName || '',
+            phone: data.phone || '',
+            rollNo: data.rollNo || '',
+            branch: data.branch || 'CSE',
+            semester: data.semester || '1st',
+            group: data.group || '',
+            residency: data.residency || 'Day Scholar'
+          });
+          setExistingPhoto(data.photoURL || user.photoURL);
         }
-      };
-      fetchProfile();
-    }
-  }, [user, isOpen]);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [user]);
 
-  const handleLogout = async () => {
-    onClose();
-    await logout();
-    window.location.href = '/login'; 
+  // Handle Input Change
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setError('');
   };
 
+  // Handle File Change
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        alert("File size must be less than 5MB"); return;
+        setError("File size must be less than 5MB");
+        return;
       }
-      if (!file.type.startsWith('image/')) {
-        alert("Please select a valid image file."); return;
-      }
-      setSelectedFile(file);
-      setPreviewImage(URL.createObjectURL(file)); 
+      setPhoto(file);
+      setPreview(URL.createObjectURL(file));
     }
   };
 
+  // 🛡️ SECURE SAVE FUNCTION
   const handleSave = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setSaving(true);
+    setError('');
+    setSuccess('');
 
-    if (formData.rollNo && !/^\d{10}$/.test(formData.rollNo)) {
-      alert("Roll Number must be exactly 10 digits."); setLoading(false); return;
-    }
-    if (formData.phone && !/^\d{10}$/.test(formData.phone)) {
-      alert("Phone Number must be exactly 10 digits."); setLoading(false); return;
+    // Basic Client Validation
+    if (formData.phone.length !== 10) {
+      setError("Phone number must be 10 digits.");
+      setSaving(false);
+      return;
     }
 
     try {
-      let finalPhotoURL = user.photoURL;
+      let finalPhotoURL = existingPhoto;
 
-      if (selectedFile) {
-        finalPhotoURL = await uploadImage(selectedFile);
+      // 1. Upload Photo if changed
+      if (photo) {
+        const storageRef = ref(storage, `avatars/${user.uid}_${Date.now()}`);
+        await uploadBytes(storageRef, photo);
+        finalPhotoURL = await getDownloadURL(storageRef);
       }
 
-      // 🛡️ SECURITY FIX: Removed 'role' from this payload.
-      // We strictly use { merge: true } so we don't overwrite the existing role.
+      // 2. Update Firestore (🛡️ EXPLICIT FIELD MAPPING)
+      // We do NOT use ...formData here to prevent Mass Assignment attacks.
       await setDoc(doc(db, 'users', user.uid), {
-        ...formData,
-        email: user.email,
+        displayName: formData.displayName,
+        phone: formData.phone,
+        rollNo: formData.rollNo,
+        branch: formData.branch,
+        semester: formData.semester,
+        group: formData.group,
+        residency: formData.residency,
         photoURL: finalPhotoURL,
-        // role: profile?.role ... ❌ REMOVED THIS LINE TO PREVENT PRIVILEGE ESCALATION
+        email: user.email, // Read-only from auth
+        
+        // Metadata
         isProfileComplete: true,
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        
+        // 🔒 SECURITY NOTE: 
+        // We purposefully DO NOT include 'role', 'credits', or 'isAdmin' here.
+        // Even if a hacker adds them to the state, they won't be saved.
       }, { merge: true });
 
-      if (user) {
-        await updateProfile(user, {
-            displayName: formData.displayName,
-            photoURL: finalPhotoURL
-        });
-      }
-
-      alert("✅ Profile Updated Successfully!");
-      onClose();
-      window.location.reload(); 
+      setSuccess("Profile updated successfully!");
+      setExistingPhoto(finalPhotoURL);
+      
+      // Clear success msg after 3s
+      setTimeout(() => setSuccess(''), 3000);
 
     } catch (err) {
       console.error(err);
-      alert("Save Failed: " + err.message);
+      setError("Failed to update profile. " + err.message);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  if (!user || !isOpen) return null;
-  const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
+  if (loading) return <div className="flex justify-center pt-20"><Loader2 className="animate-spin w-8 h-8 text-indigo-600"/></div>;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl w-full max-w-lg rounded-[2.5rem] border border-white/20 dark:border-zinc-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] relative animate-in slide-in-from-bottom-8 duration-500">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-6">
+      <div className="max-w-2xl mx-auto bg-white dark:bg-zinc-900 rounded-3xl p-8 border border-zinc-200 dark:border-zinc-800 shadow-xl">
         
-        {/* Header */}
-        <div className="relative p-6 flex justify-between items-start z-10">
-          <div>
-             <div className="flex items-center gap-2 mb-1">
-                <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                <span className="text-xs font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Student Hub</span>
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-black text-zinc-900 dark:text-white">Edit Profile</h1>
+          <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest mt-1">Keep your ID card details updated</p>
+        </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 font-bold text-sm flex items-center gap-2">
+            <AlertCircle className="w-5 h-5" /> {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 font-bold text-sm flex items-center gap-2">
+            <CheckCircle className="w-5 h-5" /> {success}
+          </div>
+        )}
+
+        <form onSubmit={handleSave} className="space-y-6">
+          
+          {/* Photo Upload */}
+          <div className="flex flex-col items-center gap-4">
+             <div className="relative group cursor-pointer">
+                <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-zinc-100 dark:border-zinc-800 shadow-lg">
+                   <img src={preview || existingPhoto || `https://ui-avatars.com/api/?name=${user.displayName}`} alt="Profile" className="w-full h-full object-cover" />
+                </div>
+                <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                   <Camera className="w-6 h-6 text-white" />
+                </div>
+                <input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
              </div>
-             <h2 className="text-2xl font-black tracking-tight dark:text-white">My Identity</h2>
+             <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Tap to change photo</p>
           </div>
-          <button onClick={onClose} className="p-2 bg-white/50 dark:bg-zinc-800/50 hover:bg-white dark:hover:bg-zinc-800 rounded-full transition-colors backdrop-blur-md">
-            <X className="w-5 h-5 dark:text-white" />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             {/* Name */}
+             <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Full Name</label>
+                <div className="relative">
+                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                   <input name="displayName" value={formData.displayName} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50" placeholder="John Doe" required />
+                </div>
+             </div>
+             
+             {/* Phone */}
+             <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Phone (+91)</label>
+                <div className="relative">
+                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                   <input name="phone" value={formData.phone} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50" placeholder="9876543210" required />
+                </div>
+             </div>
+
+             {/* Roll No */}
+             <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Roll No / URN</label>
+                <div className="relative">
+                   <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                   <input name="rollNo" value={formData.rollNo} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50" placeholder="211099..." required />
+                </div>
+             </div>
+
+             {/* Branch */}
+             <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Branch</label>
+                <div className="relative">
+                   <BookOpen className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                   <select name="branch" value={formData.branch} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none">
+                      <option>CSE</option><option>CSE (AI)</option><option>ECE</option><option>ME</option><option>BBA</option><option>Pharmacy</option>
+                   </select>
+                </div>
+             </div>
+
+             {/* Semester */}
+             <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Semester</label>
+                <div className="relative">
+                   <Layers className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                   <select name="semester" value={formData.semester} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none">
+                      <option>1st</option><option>2nd</option><option>3rd</option><option>4th</option><option>5th</option><option>6th</option><option>7th</option><option>8th</option>
+                   </select>
+                </div>
+             </div>
+
+             {/* Group */}
+             <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Group (Optional)</label>
+                <div className="relative">
+                   <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                   <input name="group" value={formData.group} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50" placeholder="G1, G2..." />
+                </div>
+             </div>
+             
+             {/* Residency */}
+             <div className="space-y-1 md:col-span-2">
+                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Residency</label>
+                <div className="relative">
+                   <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                   <select name="residency" value={formData.residency} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none">
+                      <option>Day Scholar</option><option>Hosteller (Boys)</option><option>Hosteller (Girls)</option>
+                   </select>
+                </div>
+             </div>
+          </div>
+
+          <button type="submit" disabled={saving} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black uppercase tracking-widest shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+            {saving ? <Loader2 className="animate-spin w-5 h-5" /> : <><Save className="w-5 h-5" /> Save Changes</>}
           </button>
-        </div>
 
-        <form onSubmit={handleSave} className="flex-1 overflow-y-auto custom-scrollbar relative z-10">
-          <div className="px-6 pb-6 space-y-8">
-            {/* Image Upload */}
-            <div className="flex flex-col items-center">
-               <div className="relative group cursor-pointer">
-                 <div className={`w-28 h-28 rounded-full p-1 ${isAdmin ? 'bg-gradient-to-tr from-amber-400 to-orange-600' : 'bg-gradient-to-tr from-indigo-500 to-purple-600'} shadow-lg shadow-indigo-500/20`}>
-                   <div className="w-full h-full rounded-full border-4 border-white dark:border-zinc-900 overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center relative">
-                     {previewImage ? (
-                       <img src={previewImage} alt="Preview" className="w-full h-full object-cover" />
-                     ) : (
-                       <span className="text-4xl font-black text-indigo-300 dark:text-indigo-700">{formData.displayName?.[0] || 'U'}</span>
-                     )}
-                     <label htmlFor="profile-upload" className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center backdrop-blur-[2px]">
-                       <Camera className="w-8 h-8 text-white drop-shadow-lg scale-90 group-hover:scale-100 transition-transform" />
-                     </label>
-                   </div>
-                 </div>
-                 <input type="file" id="profile-upload" accept="image/*" className="hidden" onChange={handleFileChange} />
-               </div>
-               <div className={`mt-3 px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm border ${isAdmin ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800' : 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-800'}`}>
-                 <Shield className="w-3 h-3" /> {profile?.role || 'Student Access'}
-               </div>
-            </div>
-
-            {/* Inputs */}
-            <div className="space-y-6">
-                <div className="bg-white/50 dark:bg-zinc-800/50 rounded-3xl p-5 border border-zinc-100 dark:border-zinc-700/50">
-                    <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-4 flex items-center gap-2">
-                        <GraduationCap className="w-4 h-4" /> Academic Credentials
-                    </h3>
-                    <div className="space-y-4">
-                        <div className="relative group">
-                           <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
-                           <input required type="text" placeholder="Full Name" className="w-full pl-12 pr-4 py-4 bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 rounded-2xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
-                             value={formData.displayName} onChange={e => setFormData({...formData, displayName: e.target.value})} />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="relative group">
-                                <Hash className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
-                                <input required type="text" pattern="\d{10}" maxLength={10} placeholder="Roll No." className="w-full pl-12 pr-4 py-4 bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 rounded-2xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
-                                  value={formData.rollNo} onChange={e => setFormData({...formData, rollNo: e.target.value})} />
-                            </div>
-                            <div className="relative group">
-                                <QrCode className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
-                                <input required type="text" placeholder="Group" className="w-full pl-12 pr-4 py-4 bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 rounded-2xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
-                                  value={formData.group} onChange={e => setFormData({...formData, group: e.target.value})} />
-                            </div>
-                        </div>
-                        <div className="relative group">
-                           <select required className="w-full px-4 py-4 bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 rounded-2xl text-sm font-bold dark:text-white outline-none appearance-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
-                             value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value})}>
-                             <option value="">Select Branch...</option>
-                             <option value="B.E. (C.S.E.)">CSE</option>
-                             <option value="B.E. (C.S.E. AI)">CSE (AI)</option>
-                             <option value="B.E. (ECE)">ECE</option>
-                             <option value="Other">Other</option>
-                           </select>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white/50 dark:bg-zinc-800/50 rounded-3xl p-5 border border-zinc-100 dark:border-zinc-700/50">
-                    <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-4 flex items-center gap-2">
-                        <Home className="w-4 h-4" /> Personal Details
-                    </h3>
-                    <div className="space-y-4">
-                        <div className="relative group">
-                           <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
-                           <input required type="tel" pattern="\d{10}" maxLength={10} placeholder="Phone Number" className="w-full pl-12 pr-4 py-4 bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 rounded-2xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
-                             value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
-                        </div>
-                        <div className="relative group">
-                            <Home className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
-                            <select required className="w-full pl-12 pr-4 py-4 bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 rounded-2xl font-bold dark:text-white outline-none appearance-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
-                                value={formData.residency} onChange={e => setFormData({...formData, residency: e.target.value})}>
-                                <option value="">Residency Status...</option>
-                                <option value="Hosteller">Hosteller</option>
-                                <option value="Day Scholar">Day Scholar</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-          </div>
         </form>
-
-        <div className="p-6 border-t border-zinc-100 dark:border-zinc-800/50 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md flex flex-col sm:flex-row gap-4 z-20">
-          <button type="button" onClick={handleLogout} className="order-2 sm:order-1 flex-1 py-4 rounded-2xl font-bold text-xs uppercase tracking-widest text-red-500 border-2 border-red-100 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all flex items-center justify-center gap-2 active:scale-95">
-             <LogOut className="w-4 h-4" /> Sign Out
-          </button>
-          <button type="submit" disabled={loading} onClick={handleSave} className="order-1 sm:order-2 flex-[2] py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-lg shadow-indigo-500/30 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-70">
-            {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <><Save className="w-5 h-5" /> Save Changes</>}
-          </button>
-        </div>
       </div>
     </div>
   );

@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
-import { Ticket, Calendar, Clock, Search, MapPin, XCircle, Users, CheckCircle, Award, Star, ExternalLink, ArrowRight, Copy } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Ticket, Calendar, Clock, Search, MapPin, XCircle, Users, CheckCircle, Award, Star, ExternalLink, ArrowRight, Copy, Loader2 } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
 
-// Import Both Modals
-import CertificateModal from '../components/CertificateModal';
-import RateEventModal from '../components/RateEventModal'; 
+// ✅ CORRECT IMPORTS (Assuming files are in the same folder)
+import CertificateModal from './CertificateModal';
+import RateEventModal from './RateEventModal'; 
 
 const MyTicketsPage = () => {
   const { user } = useAuth();
@@ -32,11 +32,20 @@ const MyTicketsPage = () => {
         const q = query(collection(db, 'registrations'), where('userId', '==', user.uid));
         const snapshot = await getDocs(q);
         const ticketData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
         // Sort Newest First
-        ticketData.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        ticketData.sort((a, b) => {
+            const timeA = a.createdAt?.seconds || 0;
+            const timeB = b.createdAt?.seconds || 0;
+            return timeB - timeA;
+        });
+        
         setTickets(ticketData);
-      } catch (err) { console.error("Error fetching tickets:", err); } 
-      finally { setLoading(false); }
+      } catch (err) { 
+        console.error("Error fetching tickets:", err); 
+      } finally { 
+        setLoading(false); 
+      }
     };
     fetchTickets();
   }, [user]);
@@ -51,7 +60,7 @@ const MyTicketsPage = () => {
     eventDate.setHours(0, 0, 0, 0);
 
     const isPast = eventDate < today;
-    const isCompleted = ticket.status === 'attended' || ticket.status === 'used';
+    const isCompleted = ticket.status === 'attended' || ticket.used === true;
     const isCancelled = ticket.status === 'cancelled';
 
     let matchesTab = false;
@@ -81,7 +90,7 @@ const MyTicketsPage = () => {
 
   if (loading) return (
     <div className="min-h-screen pt-24 flex flex-col items-center justify-center bg-zinc-50 dark:bg-black">
-      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4"></div>
+      <Loader2 className="animate-spin h-10 w-10 text-indigo-600 mb-4" />
       <p className="text-zinc-500 font-bold uppercase text-xs tracking-widest">Loading Access...</p>
     </div>
   );
@@ -121,6 +130,7 @@ const MyTicketsPage = () => {
             <Ticket className="w-16 h-16 text-zinc-300 mx-auto mb-4" />
             <h3 className="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-tight">No Tickets Found</h3>
             <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mt-2">You have no {activeTab} events.</p>
+            <Link to="/events" className="mt-6 inline-block px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest">Browse Events</Link>
           </div>
         ) : (
           <div className="space-y-6">
@@ -135,15 +145,15 @@ const MyTicketsPage = () => {
                 <div className="absolute top-4 right-4 z-10">
                   <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
                     ticket.status === 'cancelled' ? 'bg-red-100 text-red-600' : 
-                    (ticket.status === 'used' || ticket.status === 'attended') ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
+                    (ticket.status === 'attended' || ticket.used) ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
                   }`}>
-                    {(ticket.status === 'used' || ticket.status === 'attended') ? 'COMPLETED' : ticket.status || 'CONFIRMED'}
+                    {(ticket.status === 'attended' || ticket.used) ? 'COMPLETED' : ticket.status || 'CONFIRMED'}
                   </span>
                 </div>
 
                 {/* 🔳 QR / STATUS SECTION */}
                 <div className="flex-shrink-0 flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 rounded-2xl w-full md:w-40 p-4 border border-zinc-200 dark:border-zinc-800">
-                   {(ticket.status === 'used' || ticket.status === 'attended') ? (
+                   {(ticket.status === 'attended' || ticket.used) ? (
                      <div className="text-center">
                        <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-2" />
                        <span className="text-[10px] font-black text-green-600 uppercase tracking-wider">Attended</span>
@@ -203,12 +213,12 @@ const MyTicketsPage = () => {
 
                   {/* 📱 MOBILE ACTION BUTTON */}
                   <div className="mt-2 md:hidden">
-                    {(ticket.status !== 'cancelled' && ticket.status !== 'attended' && ticket.status !== 'used') && (
+                    {(ticket.status !== 'cancelled' && !ticket.used) && (
                         <button 
-                            onClick={() => navigate(`/tickets/${ticket.id}`)}
-                            className="w-full py-3 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-200 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                           onClick={() => navigate(`/tickets/${ticket.id}`)}
+                           className="w-full py-3 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-200 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                         >
-                            Open Full Ticket <ArrowRight className="w-3 h-3" />
+                           Open Full Ticket <ArrowRight className="w-3 h-3" />
                         </button>
                     )}
                   </div>
@@ -220,7 +230,7 @@ const MyTicketsPage = () => {
                     </span>
                     
                     {/* ⭐ RATE EVENT BUTTON (Visible in History or Attended) */}
-                    {(activeTab === 'past' || ticket.status === 'attended') && (
+                    {(activeTab === 'past' || ticket.status === 'attended' || ticket.used) && (
                       <button 
                         onClick={() => openRating(ticket)}
                         className="text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-indigo-600 flex items-center gap-1 transition-colors"
@@ -236,22 +246,22 @@ const MyTicketsPage = () => {
         )}
 
         {/* 🎓 MOUNT CERTIFICATE MODAL */}
-        <CertificateModal 
-          isOpen={isCertificateOpen}
-          onClose={() => setIsCertificateOpen(false)}
-          userName={selectedTicketForCert?.userName}
-          eventTitle={selectedTicketForCert?.eventTitle}
-          eventDate={selectedTicketForCert?.eventDate}
-          ticketId={selectedTicketForCert?.id}
-        />
+        {selectedTicketForCert && (
+            <CertificateModal 
+                isOpen={isCertificateOpen}
+                onClose={() => setIsCertificateOpen(false)}
+                ticket={selectedTicketForCert} // Pass full object to be safe
+            />
+        )}
 
         {/* ⭐ MOUNT RATING MODAL */}
-        <RateEventModal 
-          isOpen={isRateOpen}
-          onClose={() => setIsRateOpen(false)}
-          eventTitle={selectedTicketForRating?.eventTitle}
-          eventId={selectedTicketForRating?.eventId}
-        />
+        {selectedTicketForRating && (
+            <RateEventModal 
+                isOpen={isRateOpen}
+                onClose={() => setIsRateOpen(false)}
+                ticket={selectedTicketForRating} // Pass full object
+            />
+        )}
 
       </div>
     </div>
