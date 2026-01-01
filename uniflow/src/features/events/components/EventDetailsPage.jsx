@@ -1,164 +1,226 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../../lib/firebase';
-import { doc, getDoc, addDoc, collection, serverTimestamp, updateDoc, increment } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../../../context/AuthContext';
-import { Calendar, MapPin, Clock, Users, ArrowLeft, Share2, Ticket, Loader2, ShieldCheck } from 'lucide-react';
+import { Calendar, MapPin, Clock, Users, Shield, ArrowLeft, Loader2, Share2, Ticket, AlertCircle } from 'lucide-react';
 
 const EventDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [registering, setRegistering] = useState(false);
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [alreadyBooked, setAlreadyBooked] = useState(false);
 
+  // 1. Fetch Event Data
   useEffect(() => {
     const fetchEvent = async () => {
       try {
-        const docSnap = await getDoc(doc(db, 'events', id));
+        const docRef = doc(db, 'events', id);
+        const docSnap = await getDoc(docRef);
+        
         if (docSnap.exists()) {
           setEvent({ id: docSnap.id, ...docSnap.data() });
+          
+          // Check if user already booked
+          if (user) {
+            const q = query(
+              collection(db, 'registrations'), 
+              where('eventId', '==', id),
+              where('userId', '==', user.uid)
+            );
+            const snapshot = await getDocs(q);
+            if (!snapshot.empty) setAlreadyBooked(true);
+          }
         } else {
+          // Event doesn't exist (maybe deleted)
+          alert("This event no longer exists.");
           navigate('/events');
         }
-      } catch (err) {
-        console.error(err);
+      } catch (error) {
+        console.error("Error fetching event:", error);
       } finally {
         setLoading(false);
       }
     };
+
     fetchEvent();
-  }, [id, navigate]);
+  }, [id, user, navigate]);
 
-  // 🚀 SHARE LOGIC (Wapas Agaya!)
-  const handleShare = async () => {
-    try {
-      await navigator.share({
-        title: event.title,
-        text: `Check out ${event.title} on UniFlow!`,
-        url: window.location.href,
-      });
-    } catch (err) {
-      console.log("Share failed or cancelled");
+  // 2. Handle Booking Logic (Safely)
+  const handleBookTicket = async () => {
+    if (!user) {
+      navigate('/login');
+      return;
     }
-  };
 
-  const handleRegister = async () => {
-    if (!user) { navigate('/login'); return; }
-    if (!profile?.isProfileComplete) { alert("Please complete your profile first!"); return; }
-    if (event.ticketsSold >= event.totalTickets) { alert("Housefull!"); return; }
+    setBookingLoading(true);
 
-    setRegistering(true);
     try {
-      const newTicket = {
+      // 🛡️ CRASH FIX: Handle missing organizerId (Ghost Events)
+      // If organizerId is missing, we assign it to 'admin' or the current user to prevent crash.
+      const safeOrganizerId = event.organizerId || 'admin_fallback';
+
+      // 1. Generate Unique Ticket Data
+      const ticketData = {
         eventId: event.id,
-        eventTitle: event.title || "Untitled Event",
-        eventCreatorId: event.createdBy, // 🛡️ Security Check binding
-        eventDate: event.date || "Date TBA",
-        eventTime: event.time || "Time TBA",
-        eventLocation: event.location || "Location TBA",
+        eventTitle: event.title || 'Untitled Event',
+        eventDate: event.date,
+        eventLocation: event.location,
+        eventImage: event.imageUrl || '',
         userId: user.uid,
-        userName: user.displayName || "Student",
+        userName: user.displayName || 'Student',
         userEmail: user.email,
-        userRollNo: profile.rollNo || 'N/A',
-        userPhone: profile.phone || 'N/A',
-        userPhoto: user.photoURL || '', 
-        purchasedAt: serverTimestamp(),
-        checkedIn: false,
-        status: 'pending',
-        price: event.price || 0
+        eventCreatorId: safeOrganizerId, // ✅ Uses the Safe ID
+        status: 'confirmed',
+        bookedAt: serverTimestamp(),
+        used: false, // For QR Scanning later
+        qrCodeString: `${event.id}_${user.uid}_${Date.now()}` // Unique String for QR
       };
 
-      const docRef = await addDoc(collection(db, 'registrations'), newTicket);
-      await updateDoc(doc(db, 'events', event.id), { ticketsSold: increment(1) });
+      // 2. Save to Firestore
+      await addDoc(collection(db, 'registrations'), ticketData);
 
-      const appUrl = window.location.origin; 
-      const ticketLink = `${appUrl}/tickets/${docRef.id}`;
-
-      // 📧 Email Magic Link
-      const emailHtml = `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #fff;">
-          <div style="background: #4F46E5; padding: 30px; text-align: center; color: white;"><h1>CONFIRMED! 🚀</h1></div>
-          <div style="padding: 30px;">
-            <p>Hi <strong>${user.displayName}</strong>, you're booked for ${event.title}.</p>
-            <div style="text-align: center; margin: 25px 0;">
-              <a href="${ticketLink}" style="background: #4F46E5; color: white; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: bold; display: inline-block;">VIEW PASS IN APP</a>
-            </div>
-          </div>
-        </div>`;
-
-      fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: user.email, subject: `🎟️ Ticket: ${event.title}`, html: emailHtml })
-      }).catch(err => console.error("Email API Error:", err));
-
-      alert("✅ Ticket Booked! Access link sent to Email.");
+      // 3. Success Feedback
+      alert("🎉 Ticket Booked Successfully! Check 'My Tickets'.");
+      setAlreadyBooked(true);
       navigate('/my-tickets');
-    } catch (err) {
-      alert("Booking failed: " + err.message);
+
+    } catch (error) {
+      console.error("Booking Error:", error);
+      // Show the actual error to helps us debug, but gracefully
+      alert(`Booking Failed: ${error.message}`);
     } finally {
-      setRegistering(false);
+      setBookingLoading(false);
     }
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-indigo-600" /></div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-zinc-50 dark:bg-black">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      </div>
+    );
+  }
+
   if (!event) return null;
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-6">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <button onClick={() => navigate('/events')} className="flex items-center gap-2 text-zinc-500 hover:text-indigo-600 font-bold text-xs uppercase tracking-widest transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Back to Events
-          </button>
-          <button onClick={handleShare} className="p-3 bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-zinc-100 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:text-indigo-600 transition-all">
-            <Share2 className="w-5 h-5" />
-          </button>
-        </div>
+    <div className="min-h-screen bg-zinc-50 dark:bg-black pb-24 relative">
+      
+      {/* 🖼️ Hero Image */}
+      <div className="relative h-72 md:h-96 w-full">
+        <img 
+          src={event.imageUrl} 
+          alt={event.title} 
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+        
+        {/* Back Button */}
+        <button 
+          onClick={() => navigate(-1)}
+          className="absolute top-4 left-4 p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition-all"
+        >
+          <ArrowLeft className="w-6 h-6" />
+        </button>
 
-        <div className="bg-white dark:bg-zinc-900 rounded-[3rem] shadow-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800">
-          <div className="h-64 sm:h-96 w-full relative">
-            {event.imageUrl ? <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-indigo-600" />}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-            <div className="absolute bottom-8 left-8 right-8 text-white">
-              <span className="px-3 py-1 bg-indigo-600 rounded-full text-[10px] font-black uppercase tracking-widest mb-3 inline-block">{event.category}</span>
-              <h1 className="text-3xl sm:text-5xl font-black tracking-tighter mb-2">{event.title}</h1>
-              {event.isUniversityOnly && <p className="text-xs font-bold uppercase tracking-wide flex items-center gap-2 text-indigo-200"><ShieldCheck className="w-4 h-4" /> Chitkara Exclusive</p>}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 p-8 sm:p-12 gap-8">
-            <div className="md:col-span-2 space-y-8">
-              <div className="flex flex-wrap gap-6">
-                 <div className="flex items-center gap-3">
-                   <div className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-2xl"><Calendar className="w-5 h-5 text-indigo-600" /></div>
-                   <div><p className="text-[10px] font-black uppercase text-zinc-400">Date</p><p className="font-bold dark:text-white">{event.date || 'TBA'}</p></div>
-                 </div>
-                 <div className="flex items-center gap-3">
-                   <div className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-2xl"><Clock className="w-5 h-5 text-indigo-600" /></div>
-                   <div><p className="text-[10px] font-black uppercase text-zinc-400">Time</p><p className="font-bold dark:text-white">{event.time || 'TBA'}</p></div>
-                 </div>
-              </div>
-              <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed whitespace-pre-line">{event.description}</p>
-            </div>
-            
-            <div className="bg-zinc-50 dark:bg-black/40 p-8 rounded-3xl border border-zinc-100 dark:border-zinc-800">
-               <p className="text-[10px] font-black uppercase text-zinc-400 mb-2">Price</p>
-               <p className="text-4xl font-black text-indigo-600 mb-6">{Number(event.price) === 0 ? 'FREE' : `₹${event.price}`}</p>
-               <button 
-                  onClick={handleRegister} 
-                  disabled={registering} 
-                  className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-indigo-500/20"
-               >
-                 {registering ? <Loader2 className="animate-spin mx-auto" /> : "Book Now"}
-               </button>
-            </div>
-          </div>
+        {/* Category Badge */}
+        <div className="absolute bottom-6 left-6">
+          <span className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg">
+            {event.category}
+          </span>
+          <h1 className="mt-2 text-3xl md:text-4xl font-black text-white tracking-tight leading-none">
+            {event.title}
+          </h1>
         </div>
       </div>
+
+      {/* 📝 Content Container */}
+      <div className="max-w-4xl mx-auto px-6 -mt-6 relative z-10">
+        <div className="bg-white dark:bg-zinc-900 rounded-[2rem] p-6 shadow-xl border border-zinc-100 dark:border-zinc-800 space-y-8">
+          
+          {/* Info Grid */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-zinc-50 dark:bg-black p-4 rounded-2xl border border-zinc-100 dark:border-zinc-800 flex flex-col gap-1">
+              <Calendar className="w-5 h-5 text-indigo-600 mb-1" />
+              <span className="text-[10px] uppercase text-zinc-400 font-bold tracking-wider">Date</span>
+              <span className="text-sm font-bold dark:text-white">{new Date(event.date).toDateString()}</span>
+            </div>
+            <div className="bg-zinc-50 dark:bg-black p-4 rounded-2xl border border-zinc-100 dark:border-zinc-800 flex flex-col gap-1">
+              <Clock className="w-5 h-5 text-indigo-600 mb-1" />
+              <span className="text-[10px] uppercase text-zinc-400 font-bold tracking-wider">Time</span>
+              <span className="text-sm font-bold dark:text-white">{event.time}</span>
+            </div>
+            <div className="bg-zinc-50 dark:bg-black p-4 rounded-2xl border border-zinc-100 dark:border-zinc-800 flex flex-col gap-1 col-span-2">
+              <MapPin className="w-5 h-5 text-indigo-600 mb-1" />
+              <span className="text-[10px] uppercase text-zinc-400 font-bold tracking-wider">Location</span>
+              <span className="text-sm font-bold dark:text-white">{event.location}</span>
+            </div>
+          </div>
+
+          {/* About Section */}
+          <div className="space-y-3">
+            <h3 className="text-lg font-black dark:text-white flex items-center gap-2">
+              About Event
+            </h3>
+            <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed text-sm whitespace-pre-wrap">
+              {event.description}
+            </p>
+          </div>
+
+          {/* Organizer Info */}
+          <div className="flex items-center justify-between p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-900/30">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-indigo-200 dark:bg-indigo-800 flex items-center justify-center text-indigo-700 dark:text-indigo-300 font-bold text-xs">
+                {event.organizerName ? event.organizerName[0] : 'U'}
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase text-indigo-400 tracking-widest">Organized By</p>
+                <p className="text-sm font-bold dark:text-white">{event.organizerName || 'UniFlow Admin'}</p>
+              </div>
+            </div>
+            {event.isUniversityOnly && (
+               <div className="flex items-center gap-1 px-3 py-1 bg-white dark:bg-black rounded-full border border-zinc-200 dark:border-zinc-700">
+                 <Shield className="w-3 h-3 text-indigo-600" />
+                 <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400">Official</span>
+               </div>
+            )}
+          </div>
+
+        </div>
+      </div>
+
+      {/* 🦶 Sticky Footer Action */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-t border-zinc-200 dark:border-zinc-800 z-40 md:static md:bg-transparent md:border-none md:p-6 md:max-w-4xl md:mx-auto">
+        <button 
+          onClick={handleBookTicket}
+          disabled={alreadyBooked || bookingLoading}
+          className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2
+            ${alreadyBooked 
+              ? 'bg-green-500 text-white cursor-default shadow-green-500/20' 
+              : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/30'
+            }
+            ${bookingLoading ? 'opacity-70 cursor-wait' : ''}
+          `}
+        >
+          {bookingLoading ? (
+            <Loader2 className="animate-spin w-5 h-5" />
+          ) : alreadyBooked ? (
+            <>
+              <Ticket className="w-5 h-5" /> Ticket Confirmed
+            </>
+          ) : (
+            <>
+              Get Ticket • {event.price > 0 ? `₹${event.price}` : 'Free'}
+            </>
+          )}
+        </button>
+      </div>
+
     </div>
   );
 };
