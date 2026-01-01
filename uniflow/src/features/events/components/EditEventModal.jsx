@@ -3,7 +3,8 @@ import { X, Save, Loader2, MapPin, Calendar, Clock, DollarSign, Image as ImageIc
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 
-const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
+// 🟢 FIX: Changed prop 'event' to 'eventData' to match AdminDashboard
+const EditEventModal = ({ isOpen, onClose, eventData, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   
   // Initial State
@@ -18,27 +19,27 @@ const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
 
   // Sync Data when Event Prop Changes
   useEffect(() => {
-    if (event) {
+    if (eventData) {
       setFormData({
-        title: event.title || '',
-        date: event.date || '',
-        time: event.time || '',
-        location: event.location || '',
-        price: event.price || 0,
-        totalTickets: event.totalTickets || 0,
-        description: event.description || '',
-        imageUrl: event.imageUrl || '',
-        category: event.category || 'Tech',
-        allowedBranches: event.allowedBranches || 'All',
-        whatsappLink: event.whatsappLink || '',
-        isUniversityOnly: event.isUniversityOnly || false,
-        type: event.teamSize > 1 ? 'team' : 'solo', // Auto-detect type
-        teamSize: event.teamSize || 1
+        title: eventData.title || '',
+        date: eventData.date || '',
+        time: eventData.time || '',
+        location: eventData.location || '',
+        price: eventData.price || 0,
+        totalTickets: eventData.totalTickets || 0,
+        description: eventData.description || '',
+        imageUrl: eventData.imageUrl || '',
+        category: eventData.category || 'Tech',
+        allowedBranches: eventData.allowedBranches || 'All',
+        whatsappLink: eventData.whatsappLink || '',
+        isUniversityOnly: eventData.isUniversityOnly || false,
+        type: (eventData.teamSize > 1) ? 'team' : 'solo',
+        teamSize: eventData.teamSize || 1
       });
     }
-  }, [event]);
+  }, [eventData]);
 
-  if (!isOpen || !event) return null;
+  if (!isOpen || !eventData) return null;
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -69,13 +70,13 @@ const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
     }
 
     try {
-      const eventRef = doc(db, 'events', event.id);
+      // 🟢 FIX: Use eventData.id
+      const eventRef = doc(db, 'events', eventData.id);
       
       await updateDoc(eventRef, {
         ...formData,
         price: priceNum,
         totalTickets: ticketsNum,
-        // Force teamSize to 1 if switched to Solo
         teamSize: formData.type === 'team' ? teamSizeNum : 1, 
         whatsappLink: whatsappClean,
         updatedAt: serverTimestamp()
@@ -83,6 +84,7 @@ const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
 
       alert("✅ Event Updated Successfully!");
       if (onSuccess) onSuccess(); 
+      // Reload page to reflect changes instantly if needed, or rely on snapshot
       onClose();
     } catch (error) {
       console.error("Update error:", error);
@@ -153,7 +155,7 @@ const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
                </div>
             </div>
 
-            {/* Participation Type (Solo vs Team) */}
+            {/* Participation Type */}
             <div className="p-5 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-3xl">
                 <label className="text-[10px] font-black uppercase text-zinc-400 mb-4 block tracking-widest text-center">Participation Type</label>
                 <div className="flex justify-center gap-6">
@@ -177,7 +179,7 @@ const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
                 )}
             </div>
 
-            {/* Branch Restriction & University Only */}
+            {/* Branch & University */}
             <div className="space-y-3">
                <div onClick={() => setFormData(prev => ({...prev, isUniversityOnly: !prev.isUniversityOnly}))} 
                     className={`p-4 rounded-2xl border-2 cursor-pointer flex items-center gap-4 transition-all ${formData.isUniversityOnly ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20' : 'border-zinc-200 dark:border-zinc-800 bg-transparent'}`}>
@@ -213,7 +215,7 @@ const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
                 </div>
             </div>
 
-            {/* Image & WhatsApp */}
+            {/* Poster & WhatsApp */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <div className="space-y-1">
                  <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Poster URL</label>
