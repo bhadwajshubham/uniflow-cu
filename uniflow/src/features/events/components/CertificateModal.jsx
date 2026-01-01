@@ -1,155 +1,137 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
+import { X, Download, Share2, Award, ShieldCheck } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { X, Download, Share2, Award, CheckCircle, Loader2, ShieldCheck } from 'lucide-react';
 
-const CertificateModal = ({ isOpen, onClose, userName, eventTitle, eventDate, ticketId }) => {
+const CertificateModal = ({ isOpen, onClose, ticket }) => {
   const certificateRef = useRef(null);
-  const [downloading, setDownloading] = useState(false);
 
-  if (!isOpen) return null;
+  if (!isOpen || !ticket) return null;
 
+  // 🛠️ DATA SAFEGUARDS (Fallbacks if data is missing)
+  const studentName = ticket.userName || "Student Name";
+  const eventName = ticket.eventTitle || "Event Name";
+  const date = ticket.eventDate || new Date().toLocaleDateString();
+  const certId = ticket.id ? ticket.id.slice(0, 8).toUpperCase() : "UNKNOWN";
+
+  // 🖨️ DOWNLOAD FUNCTION
   const handleDownload = async () => {
-    setDownloading(true);
-    const element = certificateRef.current;
-
+    if (!certificateRef.current) return;
     try {
-      // 1. Capture the certificate (High Scale for Crystal Clear Text)
-      const canvas = await html2canvas(element, {
-        scale: 2, // 2x Resolution
-        backgroundColor: '#FFFCF5', // Match the paper color
-        useCORS: true, // Fixes image cross-origin issues
-        logging: false,
+      const canvas = await html2canvas(certificateRef.current, {
+        scale: 2, // High resolution
+        useCORS: true,
+        backgroundColor: '#ffffff'
       });
-
-      // 2. Convert to PDF
+      
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('l', 'mm', 'a4'); // Landscape, A4
+      const pdf = new jsPDF('l', 'mm', 'a4'); // Landscape
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`${userName.replace(/\s+/g, '_')}_Certificate.pdf`);
+      pdf.save(`Certificate_${eventName.replace(/\s+/g, '_')}.pdf`);
     } catch (err) {
-      console.error("Certificate Error:", err);
-      alert("Download failed. Please try again.");
-    } finally {
-      setDownloading(false);
+      console.error("Certificate generation failed", err);
+      alert("Could not generate certificate.");
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       
-      {/* Wrapper to handle mobile scrolling */}
-      <div className="relative w-full max-w-5xl flex flex-col gap-4 max-h-[95vh]">
+      {/* Modal Container */}
+      <div className="bg-zinc-900 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         
-        {/* Action Bar (Top) */}
-        <div className="flex justify-between items-center text-white px-2">
-           <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Official Credential</h3>
-           <button onClick={onClose} className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-full transition-colors">
-             <X className="w-5 h-5" />
-           </button>
-        </div>
-
-        {/* 📜 CERTIFICATE PREVIEW CONTAINER */}
-        <div className="overflow-auto rounded-xl shadow-2xl border border-zinc-800 bg-zinc-900/50 p-4 flex justify-center">
-          
-          {/* THE ACTUAL CERTIFICATE NODE */}
-          {/* We set a min-width to ensure it generates correctly even on small mobile screens */}
-          <div 
-            ref={certificateRef}
-            className="relative bg-[#FFFCF5] text-black flex-shrink-0"
-            style={{ width: '800px', height: '566px', padding: '40px' }} 
-          >
-            {/* 🎨 GOLD BORDER DESIGN */}
-            <div className="absolute inset-0 border-[16px] border-double border-zinc-100 pointer-events-none"></div>
-            <div className="absolute inset-4 border-2 border-[#D4AF37] opacity-50 pointer-events-none"></div>
-            <div className="absolute inset-6 border border-[#D4AF37] opacity-30 pointer-events-none"></div>
-
-            {/* Corner Ornaments */}
-            <div className="absolute top-4 left-4 w-16 h-16 border-t-4 border-l-4 border-[#D4AF37]"></div>
-            <div className="absolute top-4 right-4 w-16 h-16 border-t-4 border-r-4 border-[#D4AF37]"></div>
-            <div className="absolute bottom-4 left-4 w-16 h-16 border-b-4 border-l-4 border-[#D4AF37]"></div>
-            <div className="absolute bottom-4 right-4 w-16 h-16 border-b-4 border-r-4 border-[#D4AF37]"></div>
-
-            {/* CONTENT LAYER */}
-            <div className="relative z-10 h-full flex flex-col items-center justify-between py-8">
-              
-              {/* Header */}
-              <div className="text-center space-y-2">
-                <div className="flex justify-center mb-2">
-                   <Award className="w-10 h-10 text-[#D4AF37]" />
-                </div>
-                <h2 className="text-xs font-black tracking-[0.4em] uppercase text-[#D4AF37]">Chitkara University</h2>
-                <h1 className="text-5xl font-serif text-zinc-900 tracking-wide">
-                  Certificate of Participation
-                </h1>
-              </div>
-
-              {/* Name Section */}
-              <div className="text-center w-3/4">
-                <p className="text-zinc-500 italic font-serif mb-2">is hereby awarded to</p>
-                <div className="py-2 border-b-2 border-[#D4AF37]/30">
-                  <h3 className="text-4xl font-black uppercase tracking-tight text-zinc-900">
-                    {userName || "Student Name"}
-                  </h3>
-                </div>
-              </div>
-
-              {/* Event Details */}
-              <div className="text-center space-y-1">
-                <p className="text-zinc-600 text-lg">For successfully attending and actively participating in</p>
-                <h4 className="text-3xl font-bold text-indigo-900 uppercase">{eventTitle || "Event Name"}</h4>
-                <p className="text-zinc-500">held on <span className="text-zinc-900 font-bold">{eventDate}</span></p>
-              </div>
-
-              {/* Footer / Digital Verification */}
-              <div className="w-full flex justify-between items-end px-12 mt-4">
-                 
-                 {/* Left: Digital ID */}
-                 <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-1.5 text-[#D4AF37]">
-                       <ShieldCheck className="w-4 h-4" />
-                       <span className="text-[9px] font-bold uppercase tracking-widest">Digitally Verified</span>
-                    </div>
-                    <p className="text-[8px] text-zinc-400">
-                      ID: {ticketId ? ticketId.slice(0,8).toUpperCase() : 'UNKNOWN'}<br/>
-                      Issued via UniFlow System.<br/>
-                      No physical signature required.
-                    </p>
-                 </div>
-
-                 {/* Center: Seal */}
-                 <div className="absolute left-1/2 bottom-12 -translate-x-1/2 opacity-10">
-                    <CheckCircle className="w-24 h-24" />
-                 </div>
-
-                 {/* Right: Powered By */}
-                 <div className="text-right">
-                    <p className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Powered By</p>
-                    <div className="flex items-center gap-1 justify-end opacity-80">
-                       <span className="text-lg font-black tracking-tighter text-black">
-                         Uni<span className="text-indigo-600">Flow</span>
-                       </span>
-                    </div>
-                 </div>
-
-              </div>
-            </div>
+        {/* Toolbar */}
+        <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-black/50">
+          <h3 className="text-white font-bold flex items-center gap-2">
+            <Award className="w-5 h-5 text-yellow-500" />
+            Official Certificate
+          </h3>
+          <div className="flex gap-2">
+            <button onClick={handleDownload} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold uppercase tracking-widest transition-colors">
+              <Download className="w-4 h-4" /> Download PDF
+            </button>
+            <button onClick={onClose} className="p-2 hover:bg-zinc-800 rounded-lg text-white transition-colors">
+              <X className="w-5 h-5" />
+            </button>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-3 justify-end">
-          <button 
-             onClick={handleDownload} 
-             disabled={downloading}
-             className="w-full sm:w-auto px-8 py-4 bg-[#D4AF37] text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:brightness-110 shadow-lg shadow-yellow-900/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+        {/* 📜 CERTIFICATE CANVAS (Visible) */}
+        <div className="p-8 overflow-auto bg-zinc-800/50 flex justify-center">
+          <div 
+            ref={certificateRef}
+            className="w-[800px] h-[560px] bg-white text-black relative flex flex-col items-center justify-between p-12 shadow-2xl border-[10px] border-double border-indigo-900 shrink-0"
+            style={{ fontFamily: "'Times New Roman', serif" }}
           >
-            {downloading ? <Loader2 className="animate-spin w-4 h-4" /> : <Download className="w-4 h-4" />}
-            {downloading ? "Generating PDF..." : "Download PDF"}
-          </button>
+            {/* Watermark Background */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
+               <ShieldCheck className="w-96 h-96 text-black" />
+            </div>
+
+            {/* Header */}
+            <div className="text-center z-10 space-y-4">
+               {/* 🟢 ACTION: Ensure logo.png exists in /public or remove this img tag */}
+               <img src="/logo.png" alt="University Logo" className="h-16 mx-auto mb-2 opacity-80" onError={(e) => e.target.style.display = 'none'} />
+               
+               <h1 className="text-4xl font-bold uppercase tracking-widest text-indigo-900">Chitkara University</h1>
+               <div className="w-32 h-1 bg-yellow-500 mx-auto mt-2"></div>
+               <h2 className="text-5xl font-black mt-6 tracking-tight font-serif text-black">Certificate of Participation</h2>
+            </div>
+
+            {/* Body */}
+            <div className="text-center z-10 space-y-6 mt-4">
+               <p className="text-xl text-zinc-600 italic">is hereby awarded to</p>
+               
+               {/* 🎓 DYNAMIC NAME */}
+               <h3 className="text-4xl font-bold text-indigo-700 border-b-2 border-zinc-300 pb-2 px-8 inline-block min-w-[300px]">
+                 {studentName}
+               </h3>
+
+               <p className="text-lg text-zinc-600">
+                 For successfully attending and actively participating in
+               </p>
+
+               {/* 📅 DYNAMIC EVENT */}
+               <h4 className="text-2xl font-bold text-black uppercase tracking-wide">
+                 {eventName}
+               </h4>
+
+               <p className="text-md text-zinc-500 font-bold">
+                 held on {date}
+               </p>
+            </div>
+
+            {/* Footer / Validation */}
+            <div className="w-full flex justify-between items-end mt-12 z-10">
+               <div className="text-left">
+                  <div className="w-20 h-20 bg-white border-2 border-black p-1">
+                     <img 
+                       src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${certId}`} 
+                       alt="Verification QR" 
+                       className="w-full h-full object-contain"
+                     />
+                  </div>
+                  <p className="text-[10px] font-bold mt-2 uppercase tracking-widest text-zinc-400">Digitally Verified</p>
+                  <p className="text-[10px] font-mono text-zinc-500">ID: {certId}</p>
+               </div>
+
+               <div className="text-right">
+                  {/* Signature Line */}
+                  <div className="flex flex-col items-center">
+                     <img src="/signature.png" alt="Sign" className="h-10 mb-[-10px] opacity-70" onError={(e) => e.target.style.display='none'} />
+                     <div className="w-48 h-px bg-black mt-4"></div>
+                     <p className="text-xs font-bold mt-1 text-zinc-600 uppercase">Event Organizer</p>
+                     <p className="text-[9px] text-zinc-400 mt-0.5">Issued via UniFlow System</p>
+                  </div>
+               </div>
+            </div>
+
+            {/* Bottom Color Bar */}
+            <div className="absolute bottom-0 left-0 right-0 h-4 bg-indigo-900"></div>
+          </div>
         </div>
 
       </div>
