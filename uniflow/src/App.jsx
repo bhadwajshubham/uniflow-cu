@@ -2,7 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
-// ✅ Navbar Import
+// ✅ Navbar Import (Your Custom UI)
 import Navbar from './components/layout/Navbar';
 
 // ✅ Pages Imports
@@ -41,36 +41,46 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
 
 function App() {
   return (
-      <AuthProvider>
-        <div className="min-h-screen bg-zinc-50 dark:bg-black flex flex-col">
-          {/* Navbar */}
-          <Navbar />
-          
-          <main className="flex-grow">
-            <Routes>
-              {/* --- Public Routes --- */}
-              <Route path="/" element={<HomePage />} />
-              <Route path="/events" element={<EventsPage />} />
-              <Route path="/events/:id" element={<EventDetailsPage />} />
-              <Route path="/login" element={<LoginPage />} />
-              {/* <Route path="/register" element={<RegisterPage />} /> */}
+    // ✨ Context Provider
+    <AuthProvider>
+      {/* LAYOUT CONTAINER:
+         - min-h-screen: Ensures app takes full mobile height
+         - flex flex-col: Stacks Navbar and Main content vertically
+         - bg-zinc-50/dark:bg-black: Preserves your theme
+      */}
+      <div className="min-h-screen bg-zinc-50 dark:bg-black flex flex-col">
+        
+        {/* Navigation Bar 
+           (Includes your Desktop TopBar and Mobile BottomBar if handled inside Navbar) 
+        */}
+        <Navbar />
+        
+        {/* Main Content Area - Grows to fill space between bars */}
+        <main className="flex-grow">
+          <Routes>
+            {/* --- Public Routes --- */}
+            <Route path="/" element={<HomePage />} />
+            <Route path="/events" element={<EventsPage />} />
+            <Route path="/events/:id" element={<EventDetailsPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            {/* <Route path="/register" element={<RegisterPage />} /> */}
 
-              {/* --- Student Routes --- */}
-              <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
-              <Route path="/my-tickets" element={<ProtectedRoute><MyTicketsPage /></ProtectedRoute>} />
-              <Route path="/tickets/:ticketId" element={<ProtectedRoute><TicketPage /></ProtectedRoute>} />
+            {/* --- Student Routes --- */}
+            <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+            <Route path="/my-tickets" element={<ProtectedRoute><MyTicketsPage /></ProtectedRoute>} />
+            <Route path="/tickets/:ticketId" element={<ProtectedRoute><TicketPage /></ProtectedRoute>} />
 
-              {/* --- Admin Routes --- */}
-              <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />
-              {/* <Route path="/admin/create" element={<ProtectedRoute requireAdmin><CreateEventPage /></ProtectedRoute>} /> */}
-              <Route path="/scan" element={<ProtectedRoute requireAdmin><ScannerPage /></ProtectedRoute>} />
+            {/* --- Admin Routes --- */}
+            <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />
+            {/* <Route path="/admin/create" element={<ProtectedRoute requireAdmin><CreateEventPage /></ProtectedRoute>} /> */}
+            <Route path="/scan" element={<ProtectedRoute requireAdmin><ScannerPage /></ProtectedRoute>} />
 
-              {/* Fallback */}
-              <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
-          </main>
-        </div>
-      </AuthProvider>
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </main>
+      </div>
+    </AuthProvider>
   );
 }
 
