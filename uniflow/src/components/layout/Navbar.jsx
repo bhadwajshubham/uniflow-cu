@@ -35,17 +35,14 @@ const Navbar = () => {
           
           {user ? (
             <>
-              {/* Student Links */}
               <Link to="/my-tickets" className="text-sm font-bold uppercase tracking-widest text-zinc-500 hover:text-indigo-600 transition-colors">My Tickets</Link>
               
-              {/* Admin Link (Conditional) */}
               {isAdmin && (
                 <Link to="/admin" className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 rounded-full text-xs font-black uppercase tracking-widest text-indigo-600 hover:bg-indigo-50 transition-all">
                   <ShieldCheck className="w-4 h-4" /> Console
                 </Link>
               )}
 
-              {/* Profile Dropdown Trigger (Simple Version) */}
               <div className="flex items-center gap-4 ml-4 pl-4 border-l border-zinc-200 dark:border-zinc-800">
                 <Link to="/profile" className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 font-bold hover:scale-110 transition-transform">
                   {user.photoURL ? (
