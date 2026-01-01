@@ -7,6 +7,7 @@ import { updateProfile } from 'firebase/auth';
 import { X, User, Hash, Phone, GraduationCap, Save, Loader2, LogOut, Home, Camera, Sparkles, Shield, QrCode } from 'lucide-react';
 
 // ✅ CORRECT IMPORT PATH for Cloudinary Service
+// Adjust this path if your file structure is different, but based on your context it looks correct.
 import { uploadImage } from '../../events/services/uploadService';
 
 const UserProfile = ({ isOpen, onClose }) => {
@@ -92,7 +93,7 @@ const UserProfile = ({ isOpen, onClose }) => {
     try {
       let finalPhotoURL = user.photoURL;
 
-      // ☁️ 1. UPLOAD IMAGE IF SELECTED
+      // ☁️ 1. UPLOAD IMAGE IF SELECTED (Cloudinary)
       if (selectedFile) {
         finalPhotoURL = await uploadImage(selectedFile);
       }
@@ -108,7 +109,6 @@ const UserProfile = ({ isOpen, onClose }) => {
       }, { merge: true });
 
       // 🔄 3. CRITICAL: UPDATE FIREBASE AUTH (The Session)
-      // This tells the Navbar "Hey, the photo changed!"
       if (user) {
         await updateProfile(user, {
             displayName: formData.displayName,
@@ -120,7 +120,6 @@ const UserProfile = ({ isOpen, onClose }) => {
       onClose();
       
       // 🚀 4. RELOAD PAGE (The "Nuclear" Fix)
-      // This forces the Navbar to re-fetch the new image immediately.
       window.location.reload(); 
 
     } catch (err) {
@@ -199,12 +198,12 @@ const UserProfile = ({ isOpen, onClose }) => {
                             <div className="relative group">
                                 <Hash className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
                                 <input required type="text" pattern="\d{10}" maxLength={10} placeholder="Roll No." className="w-full pl-12 pr-4 py-4 bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 rounded-2xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
-                                value={formData.rollNo} onChange={e => setFormData({...formData, rollNo: e.target.value})} />
+                                  value={formData.rollNo} onChange={e => setFormData({...formData, rollNo: e.target.value})} />
                             </div>
                             <div className="relative group">
                                 <QrCode className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
                                 <input required type="text" placeholder="Group (e.g. G1)" className="w-full pl-12 pr-4 py-4 bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 rounded-2xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
-                                value={formData.group} onChange={e => setFormData({...formData, group: e.target.value})} />
+                                  value={formData.group} onChange={e => setFormData({...formData, group: e.target.value})} />
                             </div>
                         </div>
                         <div className="relative group">

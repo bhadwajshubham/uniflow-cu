@@ -1,32 +1,32 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
-// ✅ Navbar Import (Handles Top and Bottom bars)
+// ✅ Navbar Import (Your App-Like Navbar)
 import Navbar from './components/layout/Navbar';
 
 // ✅ Pages Imports
 import HomePage from './features/events/components/HomePage';
 import EventsPage from './features/events/components/EventsPage';
 import LoginPage from './features/auth/components/LoginPage';
-// import RegisterPage from './pages/RegisterPage'; 
 import MyTicketsPage from './features/events/components/MyTicketsPage';
-import UserProfile from './features/auth/components/UserProfile';
 
-// ✅ Feature Components
+// ✅ The Feature Components you asked to keep active
+import UserProfile from './features/auth/components/UserProfile';
+import CreateEventModal from './features/events/components/CreateEventModal'; // Assuming file name is CreateEventModal.jsx
+
+// ✅ Feature Details
 import EventDetailsPage from './features/events/components/EventDetailsPage';
 import TicketPage from './features/events/components/TicketPage';
 
 // ✅ Admin Components
 import AdminDashboard from './features/events/components/AdminDashboard';
-// import CreateEventPage from './features/events/components/CreateEventPage'; 
 import ScannerPage from './features/events/components/ScannerPage';
 
-// 🛡️ Protected Route Wrapper (FIXED: Now shows a loader instead of a blank screen)
+// 🛡️ Protected Route Wrapper
 const ProtectedRoute = ({ children, requireAdmin = false }) => {
   const { user, profile, loading } = useAuth();
 
-  // FIX: If loading is stuck, show a spinner so the UI doesn't look broken
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[50vh]">
@@ -46,16 +46,23 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
   return children;
 };
 
+// 🛠️ Helper to make Modals act like Pages
+const ModalRouteWrapper = ({ Component, backPath = '/' }) => {
+  const navigate = useNavigate();
+  // We pass isOpen={true} so it renders immediately
+  // We pass onClose so the 'X' button goes back to the previous page
+  return <Component isOpen={true} onClose={() => navigate(backPath)} />;
+};
+
 function App() {
   return (
     <AuthProvider>
-      {/* LAYOUT FIX: 
-         - 'relative': Ensures absolute/fixed children (like BottomNav) position correctly.
-         - 'pb-16': Adds padding at bottom so the content isn't hidden behind the Mobile Bottom Bar.
+      {/* LAYOUT CONTAINER:
+          - pb-24: Ensures content isn't hidden behind the Mobile Bottom Bar 
       */}
-      <div className="min-h-screen bg-zinc-50 dark:bg-black flex flex-col relative pb-16 md:pb-0">
+      <div className="min-h-screen bg-zinc-50 dark:bg-black flex flex-col relative pb-24 md:pb-0 transition-colors duration-300">
         
-        {/* Navbar (Top and Bottom) */}
+        {/* Navbar (Top & Bottom) */}
         <Navbar />
         
         <main className="flex-grow">
@@ -65,16 +72,28 @@ function App() {
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/:id" element={<EventDetailsPage />} />
             <Route path="/login" element={<LoginPage />} />
-            {/* <Route path="/register" element={<RegisterPage />} /> */}
 
             {/* --- Student Routes --- */}
-            <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+            {/* UserProfile is now a route. We wrap it to handle the 'isOpen' prop */}
+            <Route path="/profile" element={
+              <ProtectedRoute>
+                <ModalRouteWrapper Component={UserProfile} backPath="/" />
+              </ProtectedRoute>
+            } />
+            
             <Route path="/my-tickets" element={<ProtectedRoute><MyTicketsPage /></ProtectedRoute>} />
             <Route path="/tickets/:ticketId" element={<ProtectedRoute><TicketPage /></ProtectedRoute>} />
 
             {/* --- Admin Routes --- */}
             <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />
-            {/* <Route path="/admin/create" element={<ProtectedRoute requireAdmin><CreateEventPage /></ProtectedRoute>} /> */}
+            
+            {/* ✅ Create Event Page Active Here */}
+            <Route path="/admin/create" element={
+              <ProtectedRoute requireAdmin>
+                <ModalRouteWrapper Component={CreateEventModal} backPath="/admin" />
+              </ProtectedRoute>
+            } />
+            
             <Route path="/scan" element={<ProtectedRoute requireAdmin><ScannerPage /></ProtectedRoute>} />
 
             {/* Fallback */}
