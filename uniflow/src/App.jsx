@@ -1,5 +1,4 @@
 import React from 'react';
-// 1. Removed 'BrowserRouter as Router' to fix the error
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -11,8 +10,8 @@ import HomePage from './features/events/components/HomePage';
 import EventsPage from './features/events/components/EventsPage';
 import LoginPage from './features/auth/components/LoginPage';
 // import RegisterPage from './pages/RegisterPage'; 
-import MyTicketsPage from './features/events/components/MyTicketsPage'; 
-import UserProfile from './features/auth/components/UserProfile'; 
+import MyTicketsPage from './features/events/components/MyTicketsPage';
+import UserProfile from './features/auth/components/UserProfile';
 
 // ✅ Feature Components
 import EventDetailsPage from './features/events/components/EventDetailsPage';
@@ -42,38 +41,36 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
 
 function App() {
   return (
-    // 2. Removed <Router> wrapper here. 
-    // The App is already wrapped in BrowserRouter inside main.jsx
-    <AuthProvider>
-      <div className="min-h-screen bg-zinc-50 dark:bg-black flex flex-col">
-        {/* Navbar */}
-        <Navbar />
-        
-        <main className="flex-grow">
-          <Routes>
-            {/* --- Public Routes --- */}
-            <Route path="/" element={<HomePage />} />
-            <Route path="/events" element={<EventsPage />} />
-            <Route path="/events/:id" element={<EventDetailsPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            {/* <Route path="/register" element={<RegisterPage />} /> */}
+      <AuthProvider>
+        <div className="min-h-screen bg-zinc-50 dark:bg-black flex flex-col">
+          {/* Navbar */}
+          <Navbar />
+          
+          <main className="flex-grow">
+            <Routes>
+              {/* --- Public Routes --- */}
+              <Route path="/" element={<HomePage />} />
+              <Route path="/events" element={<EventsPage />} />
+              <Route path="/events/:id" element={<EventDetailsPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              {/* <Route path="/register" element={<RegisterPage />} /> */}
 
-            {/* --- Student Routes --- */}
-            <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
-            <Route path="/my-tickets" element={<ProtectedRoute><MyTicketsPage /></ProtectedRoute>} />
-            <Route path="/tickets/:ticketId" element={<ProtectedRoute><TicketPage /></ProtectedRoute>} />
+              {/* --- Student Routes --- */}
+              <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+              <Route path="/my-tickets" element={<ProtectedRoute><MyTicketsPage /></ProtectedRoute>} />
+              <Route path="/tickets/:ticketId" element={<ProtectedRoute><TicketPage /></ProtectedRoute>} />
 
-            {/* --- Admin Routes --- */}
-            <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />
-            {/* <Route path="/admin/create" element={<ProtectedRoute requireAdmin><CreateEventPage /></ProtectedRoute>} /> */}
-            <Route path="/scan" element={<ProtectedRoute requireAdmin><ScannerPage /></ProtectedRoute>} />
+              {/* --- Admin Routes --- */}
+              <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />
+              {/* <Route path="/admin/create" element={<ProtectedRoute requireAdmin><CreateEventPage /></ProtectedRoute>} /> */}
+              <Route path="/scan" element={<ProtectedRoute requireAdmin><ScannerPage /></ProtectedRoute>} />
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
-        </main>
-      </div>
-    </AuthProvider>
+              {/* Fallback */}
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+          </main>
+        </div>
+      </AuthProvider>
   );
 }
 
