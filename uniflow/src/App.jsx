@@ -2,7 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
-// ✅ Components (Ensure Navbar exists in src/components/)
+// ✅ Navbar Import (Make sure file exists in src/components/)
 import Navbar from './components/Navbar';
 
 // ✅ Pages
@@ -21,7 +21,6 @@ import MyTickets from './features/events/components/MyTickets';
 import AdminDashboard from './features/events/components/AdminDashboard';
 import CreateEventPage from './features/events/components/CreateEventPage';
 import ScannerPage from './features/events/components/ScannerPage';
-import EditEventModal from './features/events/components/EditEventModal'; // Only used inside Dashboard, but good to have reference
 
 // 🛡️ Protected Route Wrapper
 const ProtectedRoute = ({ children, requireAdmin = false }) => {
@@ -45,7 +44,7 @@ function App() {
     <Router>
       <AuthProvider>
         <div className="min-h-screen bg-zinc-50 dark:bg-black flex flex-col">
-          {/* Navbar on top */}
+          {/* Navbar Fixed at Top */}
           <Navbar />
           
           <main className="flex-grow">
@@ -57,22 +56,20 @@ function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
 
-              {/* --- Student Routes (Protected) --- */}
+              {/* --- Student Routes (Private) --- */}
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
               <Route path="/my-tickets" element={<ProtectedRoute><MyTickets /></ProtectedRoute>} />
               <Route path="/tickets/:ticketId" element={<ProtectedRoute><TicketPage /></ProtectedRoute>} />
 
-              {/* --- Admin Routes (Protected + Role Check) --- */}
+              {/* --- Admin Routes (Strictly Protected) --- */}
               <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />
               <Route path="/admin/create" element={<ProtectedRoute requireAdmin><CreateEventPage /></ProtectedRoute>} />
               <Route path="/scan" element={<ProtectedRoute requireAdmin><ScannerPage /></ProtectedRoute>} />
 
-              {/* Fallback Route */}
+              {/* Fallback */}
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
           </main>
-          
-          {/* ❌ Removed Footer as per your instruction */}
         </div>
       </AuthProvider>
     </Router>

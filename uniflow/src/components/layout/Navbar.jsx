@@ -17,6 +17,7 @@ const Navbar = () => {
     }
   };
 
+  // Check role for Admin Console access
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
 
   return (
@@ -51,7 +52,7 @@ const Navbar = () => {
                     <User className="w-5 h-5" />
                   )}
                 </Link>
-                <button onClick={handleLogout} className="text-zinc-400 hover:text-red-500 transition-colors">
+                <button onClick={handleLogout} className="text-zinc-400 hover:text-red-500 transition-colors" title="Logout">
                   <LogOut className="w-5 h-5" />
                 </button>
               </div>
@@ -71,7 +72,7 @@ const Navbar = () => {
 
       {/* Mobile Menu */}
       {isMenuOpen && (
-        <div className="md:hidden absolute top-20 left-0 w-full bg-white dark:bg-black border-b border-zinc-200 dark:border-zinc-800 p-6 flex flex-col gap-4 shadow-2xl">
+        <div className="md:hidden absolute top-20 left-0 w-full bg-white dark:bg-black border-b border-zinc-200 dark:border-zinc-800 p-6 flex flex-col gap-4 shadow-2xl h-screen">
           <Link to="/events" onClick={() => setIsMenuOpen(false)} className="py-2 text-sm font-bold uppercase tracking-widest dark:text-white">Explore Events</Link>
           
           {user ? (
@@ -87,6 +88,7 @@ const Navbar = () => {
                   <LayoutDashboard className="w-4 h-4" /> Admin Console
                 </Link>
               )}
+              <div className="h-px bg-zinc-200 dark:bg-zinc-800 my-2"></div>
               <button onClick={handleLogout} className="py-2 text-sm font-bold uppercase tracking-widest text-red-500 flex items-center gap-2 text-left">
                 <LogOut className="w-4 h-4" /> Logout
               </button>
