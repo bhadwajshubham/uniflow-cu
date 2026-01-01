@@ -1,137 +1,110 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../context/AuthContext';
-import { ArrowRight, Zap, Trophy, Users, Star, ShieldCheck, Ticket, LayoutDashboard } from 'lucide-react';
+import { Calendar, Ticket, ShieldCheck, ArrowRight, Zap, Users } from 'lucide-react';
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] dark:bg-black text-zinc-900 dark:text-white pb-24 relative overflow-x-hidden selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-white pt-20">
       
-      {/* 🎨 BACKGROUND MESH */}
-      <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[-10%] right-[-5%] w-[300px] md:w-[600px] h-[300px] md:h-[600px] bg-indigo-500/20 dark:bg-indigo-600/20 rounded-full blur-[80px] md:blur-[120px] animate-pulse"></div>
-        <div className="absolute top-[20%] left-[-10%] w-[250px] md:w-[500px] h-[250px] md:h-[500px] bg-purple-500/20 dark:bg-purple-600/10 rounded-full blur-[80px] md:blur-[120px]"></div>
-      </div>
-
-      {/* 🌟 HERO SECTION */}
-      <div className="relative z-10 pt-32 pb-16 px-6 max-w-7xl mx-auto text-center flex flex-col items-center justify-center min-h-[70vh] md:min-h-auto">
-        
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 shadow-sm mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
-          </span>
-          <span className="text-xs md:text-sm font-bold tracking-wide text-zinc-600 dark:text-zinc-300 uppercase">
-            Live on Campus
-          </span>
+      {/* Hero Section */}
+      <section className="relative px-6 py-20 lg:py-32 overflow-hidden">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-7xl pointer-events-none">
+           <div className="absolute top-20 right-0 w-72 h-72 bg-indigo-500/20 rounded-full blur-3xl"></div>
+           <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl"></div>
         </div>
 
-        <h1 className="text-5xl md:text-8xl font-black tracking-tight mb-6 leading-[1.1] md:leading-[0.9] animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
-          Student Life, <br/>
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600">Supercharged.</span>
-        </h1>
+        <div className="max-w-4xl mx-auto text-center relative z-10">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-full mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+            </span>
+            <span className="text-xs font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+              Live Campus Sync
+            </span>
+          </div>
 
-        <p className="text-lg md:text-2xl text-zinc-500 dark:text-zinc-400 max-w-2xl mx-auto mb-10 leading-relaxed font-medium animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200 px-4">
-          One platform for every hackathon, party, and workshop. 
-          Join the ecosystem.
-        </p>
-        
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
-          <button 
-            onClick={() => navigate('/events')} 
-            className="w-full sm:w-auto px-8 py-4 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-bold text-lg flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-indigo-500/20"
-          >
-            Explore Events <ArrowRight className="w-5 h-5" />
-          </button>
+          <h1 className="text-5xl md:text-7xl font-black tracking-tighter mb-8 leading-[0.9]">
+            CAMPUS LIFE, <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">AMPLIFIED.</span>
+          </h1>
           
-          {user ? (
+          <p className="text-lg md:text-xl text-zinc-500 dark:text-zinc-400 font-medium max-w-2xl mx-auto mb-10 leading-relaxed">
+            One platform for all university events. Book tickets, manage entries, and get certified—all in real-time.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button 
-              onClick={() => navigate('/my-tickets')}
-              className="w-full sm:w-auto px-8 py-4 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white rounded-2xl font-bold text-lg hover:bg-white dark:hover:bg-zinc-800 active:scale-95 transition-all flex items-center justify-center gap-2"
+              onClick={() => navigate('/events')}
+              className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-indigo-600/20 active:scale-95 flex items-center gap-2"
             >
-              <LayoutDashboard className="w-5 h-5" /> My Dashboard
+              Explore Events <ArrowRight className="w-4 h-4" />
             </button>
-          ) : (
             <button 
               onClick={() => navigate('/login')}
-              className="w-full sm:w-auto px-8 py-4 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white rounded-2xl font-bold text-lg hover:bg-white dark:hover:bg-zinc-800 active:scale-95 transition-all"
+              className="px-8 py-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white rounded-full font-black text-xs uppercase tracking-widest transition-all hover:bg-zinc-50 dark:hover:bg-zinc-800"
             >
-              Login / Sign Up
+              Student Login
             </button>
-          )}
-        </div>
-      </div>
-
-      {/* 🍱 BENTO GRID */}
-      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-12 animate-in slide-in-from-bottom-12 duration-1000 delay-500">
-        <h2 className="text-center text-xs font-bold uppercase tracking-widest text-zinc-400 mb-8">Everything you need</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-          <div className="col-span-1 md:col-span-2 bg-white/60 dark:bg-zinc-900/60 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/20 dark:border-zinc-800 shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 group overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-700">
-               <Ticket className="w-48 h-48 text-indigo-600 rotate-12" />
-            </div>
-            <div className="relative z-10">
-              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-2xl flex items-center justify-center mb-6">
-                <Zap className="w-6 h-6" />
-              </div>
-              <h3 className="text-2xl md:text-3xl font-black mb-3">Instant Entry.</h3>
-              <p className="text-zinc-500 dark:text-zinc-400 font-medium leading-relaxed max-w-sm">
-                Get a unique QR code for every event. Flash it at the gate and walk in instantly. No more waiting.
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-zinc-900 dark:bg-white text-white dark:text-black p-8 rounded-[2.5rem] shadow-2xl flex flex-col justify-between relative overflow-hidden group hover:-translate-y-1 transition-all">
-            <div className="absolute -right-4 -top-4 w-32 h-32 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
-            <div>
-              <Trophy className="w-10 h-10 mb-6 text-yellow-400 dark:text-yellow-600" />
-              <h3 className="text-2xl font-black mb-2">Verified Wins.</h3>
-              <p className="text-zinc-400 dark:text-zinc-600 text-sm font-medium">
-                Auto-generate certificates for your resume immediately after attending.
-              </p>
-            </div>
-            <div className="mt-8 flex items-center gap-2 text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-              <ShieldCheck className="w-4 h-4 text-green-500" /> Official Proof
-            </div>
-          </div>
-
-          <div className="bg-white/60 dark:bg-zinc-900/60 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/20 dark:border-zinc-800 shadow-lg hover:shadow-xl transition-all duration-500">
-            <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 text-orange-600 rounded-2xl flex items-center justify-center mb-6">
-              <Users className="w-6 h-6" />
-            </div>
-            <h3 className="text-xl font-black mb-2">Squad Mode</h3>
-            <p className="text-zinc-500 dark:text-zinc-400 text-sm font-medium">
-              One click to register your whole team. Share the code and win together.
-            </p>
-          </div>
-
-          <div className="col-span-1 md:col-span-2 bg-gradient-to-br from-indigo-600 to-blue-700 p-8 rounded-[2.5rem] shadow-lg flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-            <div className="relative z-10 text-center md:text-left">
-               <h3 className="text-2xl font-black mb-2 text-white">Ready to join?</h3>
-               <p className="text-indigo-100 font-medium mb-6">
-                 Thousands of students use UniFlow to discover their next passion.
-               </p>
-               {!user && (
-                 <button onClick={() => navigate('/login')} className="px-6 py-3 bg-white text-indigo-600 rounded-xl font-bold text-sm shadow-xl hover:bg-zinc-50 transition-colors">
-                   Create Account
-                 </button>
-               )}
-            </div>
-            <div className="relative z-10 flex -space-x-4">
-               {[1,2,3,4].map(i => (
-                 <div key={i} className="w-12 h-12 rounded-full border-2 border-indigo-500 bg-indigo-800 flex items-center justify-center text-xs font-bold text-indigo-200">
-                    <Star className="w-4 h-4" />
-                 </div>
-               ))}
-            </div>
           </div>
         </div>
-      </div>
+      </section>
+
+      {/* Features Grid */}
+      <section className="px-6 py-20 bg-white dark:bg-zinc-950/50 border-t border-zinc-200 dark:border-zinc-900">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+          
+          <div className="p-8 bg-zinc-50 dark:bg-black rounded-3xl border border-zinc-100 dark:border-zinc-800 hover:border-indigo-500/30 transition-colors group">
+            <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/20 rounded-2xl flex items-center justify-center mb-6 text-indigo-600 group-hover:scale-110 transition-transform">
+              <Ticket className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-black uppercase tracking-tight mb-3">Instant Booking</h3>
+            <p className="text-zinc-500 text-sm leading-relaxed">Secure your spot in seconds. QR tickets delivered straight to your dashboard and email.</p>
+          </div>
+
+          <div className="p-8 bg-zinc-50 dark:bg-black rounded-3xl border border-zinc-100 dark:border-zinc-800 hover:border-purple-500/30 transition-colors group">
+             <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/20 rounded-2xl flex items-center justify-center mb-6 text-purple-600 group-hover:scale-110 transition-transform">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-black uppercase tracking-tight mb-3">Secure Entry</h3>
+            <p className="text-zinc-500 text-sm leading-relaxed">Fraud-proof QR codes bound to student IDs. Fast, reliable scanning at the gate.</p>
+          </div>
+
+          <div className="p-8 bg-zinc-50 dark:bg-black rounded-3xl border border-zinc-100 dark:border-zinc-800 hover:border-green-500/30 transition-colors group">
+             <div className="w-12 h-12 bg-green-100 dark:bg-green-900/20 rounded-2xl flex items-center justify-center mb-6 text-green-600 group-hover:scale-110 transition-transform">
+              <Zap className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-black uppercase tracking-tight mb-3">Real-time Updates</h3>
+            <p className="text-zinc-500 text-sm leading-relaxed">Live capacity tracking, instant notifications, and dynamic event management.</p>
+          </div>
+
+        </div>
+      </section>
+
+      {/* Stats/Social Proof */}
+      <section className="px-6 py-20 border-t border-zinc-200 dark:border-zinc-900">
+         <div className="max-w-5xl mx-auto bg-black dark:bg-zinc-900 rounded-[3rem] p-12 text-center relative overflow-hidden">
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+            <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter mb-6 relative z-10">Join the Hype</h2>
+            <div className="flex flex-wrap justify-center gap-12 relative z-10">
+               <div>
+                  <p className="text-4xl font-black text-indigo-500">50+</p>
+                  <p className="text-xs font-bold uppercase text-zinc-500 tracking-widest">Events</p>
+               </div>
+               <div>
+                  <p className="text-4xl font-black text-purple-500">2k+</p>
+                  <p className="text-xs font-bold uppercase text-zinc-500 tracking-widest">Students</p>
+               </div>
+               <div>
+                  <p className="text-4xl font-black text-green-500">100%</p>
+                  <p className="text-xs font-bold uppercase text-zinc-500 tracking-widest">Paperless</p>
+               </div>
+            </div>
+         </div>
+      </section>
+
     </div>
   );
 };
