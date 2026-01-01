@@ -29,17 +29,12 @@ const Navbar = () => {
       ───────────────────────────────────────────────────────────── */}
       <nav className="sticky top-0 z-40 w-full bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-100 dark:border-zinc-800 px-4 py-3 flex justify-between items-center transition-all">
         
-        {/* LEFT: Logo (Now using your Brand Image) */}
+        {/* LEFT: Logo (Using your PWA Icon) */}
         <Link to="/" className="flex items-center gap-3 group">
-          {/* 🟢 ACTION: Ensure you have 'logo.png' inside your 'public' folder */}
           <img 
-            src="/logo.png" 
+            src="/pwa-192x192.png" 
             alt="UniFlow" 
-            className="w-8 h-8 object-contain group-hover:scale-105 transition-transform" 
-            onError={(e) => {
-              // Fallback if image not found: Just show text, no broken icon
-              e.target.style.display = 'none';
-            }}
+            className="w-8 h-8 object-contain rounded-lg group-hover:scale-105 transition-transform" 
           />
           <span className="text-xl font-black tracking-tighter text-zinc-900 dark:text-white">
             UniFlow
