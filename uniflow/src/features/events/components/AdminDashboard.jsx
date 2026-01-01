@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../../lib/firebase';
-import { collection, query, where, onSnapshot, deleteDoc, doc, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, deleteDoc, doc, orderBy, getDocs } from 'firebase/firestore';
 import { useAuth } from '../../../context/AuthContext';
 import { 
   Users, Ticket, DollarSign, Calendar, TrendingUp, 
-  Trash2, Edit3, MoreVertical, Plus, Zap, Activity 
+  Trash2, Edit3, Plus, Zap, Activity, Download, FileSpreadsheet 
 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
   
   const [events, setEvents] = useState([]);
   const [liveAttendance, setLiveAttendance] = useState(0);
@@ -22,12 +21,11 @@ const AdminDashboard = () => {
   useEffect(() => {
     if (!user) return;
 
-    // 1. Listen to ADMIN'S Events
-    // Fix: We query 'organizerId' to match your database field
+    // 1. Listen to EVENTS (Trying both ID fields to be safe)
+    // We use 'organizerId' because that's what your CreateEventModal uses.
     const q = query(
       collection(db, 'events'), 
-      where('organizerId', '==', user.uid),
-      orderBy('createdAt', 'desc') // Show newest created first
+      where('organizerId', '==', user.uid)
     );
 
     const unsubscribeEvents = onSnapshot(q, (snapshot) => {
@@ -35,6 +33,10 @@ const AdminDashboard = () => {
         id: doc.id,
         ...doc.data()
       }));
+      
+      // Sort manually since we removed orderBy to avoid index errors for now
+      eventList.sort((a, b) => b.createdAt - a.createdAt);
+      
       setEvents(eventList);
       
       // Calculate Stats
@@ -46,16 +48,16 @@ const AdminDashboard = () => {
       setLoading(false);
     });
 
-    // 2. Listen to LIVE ATTENDANCE (Checked-in Users)
-    // We count registrations where eventCreatorId is ME and checkedIn is TRUE
+    // 2. Listen to LIVE ATTENDANCE (Only Checked-In Users)
+    // This query finds tickets for YOUR events that are MARKED AS USED/CHECKED-IN
     const qLive = query(
       collection(db, 'registrations'),
       where('eventCreatorId', '==', user.uid),
-      where('checkedIn', '==', true)
+      where('used', '==', true) // ✅ LOGIC FIX: Only counts people who entered
     );
 
     const unsubscribeLive = onSnapshot(qLive, (snapshot) => {
-      setLiveAttendance(snapshot.size); // The size of snapshot is the count of people inside
+      setLiveAttendance(snapshot.size); 
     });
 
     return () => {
@@ -65,13 +67,50 @@ const AdminDashboard = () => {
   }, [user]);
 
   const handleDelete = async (eventId) => {
-    if (window.confirm("Are you sure? This will delete the event and ticket data.")) {
+    if (window.confirm("Are you sure? This will delete the event.")) {
       try {
         await deleteDoc(doc(db, 'events', eventId));
-        // Note: Ideally we should also delete sub-collection registrations or use a Cloud Function
       } catch (err) {
         alert("Error deleting event: " + err.message);
       }
+    }
+  };
+
+  // 📊 CSV EXPORT FUNCTION
+  const downloadAttendanceSheet = async (eventId, eventTitle) => {
+    try {
+      const q = query(collection(db, 'registrations'), where('eventId', '==', eventId));
+      const snapshot = await getDocs(q);
+      
+      if (snapshot.empty) {
+        alert("No bookings found for this event.");
+        return;
+      }
+
+      // Create CSV Content
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += "Name,Roll No,Branch,Status,Check-In Time\n"; // Headers
+
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const checkInTime = data.usedAt ? new Date(data.usedAt.toDate()).toLocaleTimeString() : 'Not Checked In';
+        const status = data.used ? 'Present' : 'Registered';
+        const row = `${data.userName},${data.userRollNo || 'N/A'},${data.userBranch || 'N/A'},${status},${checkInTime}`;
+        csvContent += row + "\n";
+      });
+
+      // Trigger Download
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `${eventTitle}_Attendance.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+    } catch (err) {
+      console.error("Export failed:", err);
+      alert("Could not download sheet.");
     }
   };
 
@@ -80,16 +119,18 @@ const AdminDashboard = () => {
       <div className="max-w-5xl mx-auto space-y-8">
         
         {/* 👋 Header */}
-        <div className="flex justify-between items-end">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4">
           <div>
             <h1 className="text-3xl font-black tracking-tighter dark:text-white flex items-center gap-2">
-              Mission Control <Zap className="w-6 h-6 text-yellow-500 fill-current" />
+              Organizer Control <Zap className="w-6 h-6 text-indigo-500 fill-current" />
             </h1>
-            <p className="text-zinc-500 font-medium">Manage your campus empire.</p>
+            <p className="text-zinc-500 font-medium">Manage your events & attendance.</p>
           </div>
+          
+          {/* CREATE EVENT BUTTON */}
           <Link to="/admin/create">
-            <button className="hidden md:flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg shadow-indigo-500/30 transition-all active:scale-95">
-              <Plus className="w-4 h-4" /> Create Event
+            <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg shadow-indigo-500/30 transition-all active:scale-95 w-full md:w-auto justify-center">
+              <Plus className="w-4 h-4" /> Create New Event
             </button>
           </Link>
         </div>
@@ -97,7 +138,7 @@ const AdminDashboard = () => {
         {/* 📊 LIVE PULSE & STATS GRID */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           
-          {/* Card 1: LIVE ATTENDANCE (The "Interesting" Feature) */}
+          {/* Card 1: LIVE ATTENDANCE */}
           <div className="col-span-1 md:col-span-2 bg-black text-white rounded-[2rem] p-6 relative overflow-hidden shadow-2xl">
             <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600 rounded-full blur-[100px] opacity-30 -mr-16 -mt-16 animate-pulse"></div>
             <div className="relative z-10 flex flex-col h-full justify-between">
@@ -110,10 +151,10 @@ const AdminDashboard = () => {
               </div>
               <div className="flex items-end gap-2">
                  <span className="text-6xl font-black tracking-tighter">{liveAttendance}</span>
-                 <span className="text-lg font-bold text-zinc-500 mb-2">Students Active</span>
+                 <span className="text-lg font-bold text-zinc-500 mb-2">Present Now</span>
               </div>
               <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-2 text-xs text-zinc-400 font-bold">
-                 <Activity className="w-4 h-4 text-green-500" /> Real-time updates from scanners
+                 <Activity className="w-4 h-4 text-green-500" /> Only Checked-In Students
               </div>
             </div>
           </div>
@@ -125,7 +166,7 @@ const AdminDashboard = () => {
             </div>
             <div>
               <p className="text-3xl font-black dark:text-white">{totalTicketsSold}</p>
-              <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Total Tickets Sold</p>
+              <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Registrations</p>
             </div>
           </div>
 
@@ -146,12 +187,12 @@ const AdminDashboard = () => {
           <h2 className="text-xl font-black dark:text-white px-2">Your Active Events</h2>
           
           {loading ? (
-             <div className="text-center py-10 text-zinc-400">Loading your empire...</div>
+             <div className="text-center py-10 text-zinc-400">Syncing with HQ...</div>
           ) : events.length === 0 ? (
              <div className="bg-white dark:bg-zinc-900 rounded-[2rem] p-10 text-center border border-zinc-200 dark:border-zinc-800 border-dashed">
                 <Calendar className="w-10 h-10 mx-auto text-zinc-300 mb-4" />
                 <h3 className="font-bold text-zinc-500">No events active</h3>
-                <Link to="/admin/create" className="text-indigo-600 font-black text-sm mt-2 inline-block hover:underline">Launch your first event</Link>
+                <Link to="/admin/create" className="text-indigo-600 font-black text-sm mt-2 inline-block hover:underline">Launch Event</Link>
              </div>
           ) : (
              <div className="grid gap-4">
@@ -160,7 +201,11 @@ const AdminDashboard = () => {
                     
                     {/* Event Image */}
                     <div className="w-full md:w-32 h-32 rounded-2xl overflow-hidden relative shrink-0">
-                      <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
+                      {event.imageUrl ? (
+                        <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center"><Calendar className="text-zinc-400"/></div>
+                      )}
                       <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg">
                         <p className="text-[10px] font-black text-white uppercase">{event.category}</p>
                       </div>
@@ -170,24 +215,33 @@ const AdminDashboard = () => {
                     <div className="flex-1 text-center md:text-left space-y-1">
                       <h3 className="text-lg font-black dark:text-white">{event.title}</h3>
                       <div className="flex flex-wrap justify-center md:justify-start gap-4 text-xs font-bold text-zinc-500">
-                         <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(event.date).toLocaleDateString()}</span>
-                         <span className="flex items-center gap-1"><Ticket className="w-3 h-3" /> {event.ticketsSold} / {event.totalTickets} Sold</span>
+                         <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {event.date ? new Date(event.date).toLocaleDateString() : 'Date TBA'}</span>
+                         <span className="flex items-center gap-1"><Ticket className="w-3 h-3" /> {event.ticketsSold || 0} / {event.totalTickets} Sold</span>
                       </div>
                       
                       {/* Progress Bar */}
                       <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-2 rounded-full mt-3 overflow-hidden">
                         <div 
                           className="bg-indigo-600 h-full rounded-full transition-all duration-500" 
-                          style={{ width: `${(event.ticketsSold / event.totalTickets) * 100}%` }}
+                          style={{ width: `${((event.ticketsSold || 0) / event.totalTickets) * 100}%` }}
                         />
                       </div>
                     </div>
 
                     {/* Actions */}
-                    <div className="flex md:flex-col gap-2 w-full md:w-auto">
-                       {/* Edit (Placeholder for now) */}
+                    <div className="flex flex-row md:flex-col gap-2 w-full md:w-auto">
+                       {/* 📥 CSV DOWNLOAD */}
                        <button 
-                         onClick={() => alert("Edit Feature: Connect this to CreateEventModal with pre-filled data!")}
+                         onClick={() => downloadAttendanceSheet(event.id, event.title)}
+                         className="flex-1 px-4 py-3 rounded-xl bg-green-50 dark:bg-green-900/10 text-green-600 font-bold text-xs uppercase hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors flex items-center justify-center gap-2"
+                         title="Download Excel/CSV"
+                       >
+                         <FileSpreadsheet className="w-4 h-4" /> CSV
+                       </button>
+
+                       {/* Manage / Edit */}
+                       <button 
+                         onClick={() => alert("Edit Modal Coming Soon! (Link this to CreateEventModal with event data)")}
                          className="flex-1 px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-bold text-xs uppercase hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/20 transition-colors flex items-center justify-center gap-2"
                        >
                          <Edit3 className="w-4 h-4" /> Manage
