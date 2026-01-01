@@ -2,7 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
-// ✅ Navbar Import (Your Custom UI)
+// ✅ Navbar Import (Handles Top and Bottom bars)
 import Navbar from './components/layout/Navbar';
 
 // ✅ Pages Imports
@@ -22,11 +22,18 @@ import AdminDashboard from './features/events/components/AdminDashboard';
 // import CreateEventPage from './features/events/components/CreateEventPage'; 
 import ScannerPage from './features/events/components/ScannerPage';
 
-// 🛡️ Protected Route Wrapper
+// 🛡️ Protected Route Wrapper (FIXED: Now shows a loader instead of a blank screen)
 const ProtectedRoute = ({ children, requireAdmin = false }) => {
   const { user, profile, loading } = useAuth();
 
-  if (loading) return null; 
+  // FIX: If loading is stuck, show a spinner so the UI doesn't look broken
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[50vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
 
   if (!user) {
     return <Navigate to="/login" />;
@@ -41,21 +48,16 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
 
 function App() {
   return (
-    // ✨ Context Provider
     <AuthProvider>
-      {/* LAYOUT CONTAINER:
-         - min-h-screen: Ensures app takes full mobile height
-         - flex flex-col: Stacks Navbar and Main content vertically
-         - bg-zinc-50/dark:bg-black: Preserves your theme
+      {/* LAYOUT FIX: 
+         - 'relative': Ensures absolute/fixed children (like BottomNav) position correctly.
+         - 'pb-16': Adds padding at bottom so the content isn't hidden behind the Mobile Bottom Bar.
       */}
-      <div className="min-h-screen bg-zinc-50 dark:bg-black flex flex-col">
+      <div className="min-h-screen bg-zinc-50 dark:bg-black flex flex-col relative pb-16 md:pb-0">
         
-        {/* Navigation Bar 
-           (Includes your Desktop TopBar and Mobile BottomBar if handled inside Navbar) 
-        */}
+        {/* Navbar (Top and Bottom) */}
         <Navbar />
         
-        {/* Main Content Area - Grows to fill space between bars */}
         <main className="flex-grow">
           <Routes>
             {/* --- Public Routes --- */}
