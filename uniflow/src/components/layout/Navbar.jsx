@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+// 👇 FIXED IMPORT PATH (Added another '../')
+import { useAuth } from '../../context/AuthContext'; 
 import { Menu, X, User, Ticket, LogOut, ShieldCheck, LayoutDashboard } from 'lucide-react';
 
 const Navbar = () => {
@@ -17,7 +18,6 @@ const Navbar = () => {
     }
   };
 
-  // Check role for Admin Console access
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
 
   return (
