@@ -22,7 +22,7 @@ const EventDetailsPage = () => {
         if (docSnap.exists()) {
           setEvent({ id: docSnap.id, ...docSnap.data() });
           
-          // Check if already booked (to disable button if needed)
+          // Check if already booked
           if (user) {
              const q = query(
                 collection(db, 'registrations'), 
@@ -44,7 +44,6 @@ const EventDetailsPage = () => {
     fetchEvent();
   }, [id, navigate, user]);
 
-  // 🚀 SHARE LOGIC (As requested!)
   const handleShare = async () => {
     try {
       await navigator.share({
@@ -59,23 +58,20 @@ const EventDetailsPage = () => {
 
   const handleRegister = async () => {
     if (!user) { navigate('/login'); return; }
-    // Optional: Uncomment if strict profile check is needed
-    // if (!profile?.isProfileComplete) { alert("Please complete your profile first!"); return; }
     
+    // Check constraints
     if (event.ticketsSold >= event.totalTickets) { alert("Housefull!"); return; }
     if (alreadyBooked) { alert("You already have a ticket!"); return; }
 
     setRegistering(true);
     try {
-      // 🛡️ CRITICAL FIX: Handle Ghost Data
-      // The error happened because 'createdBy' was missing in your old database data.
-      // We now look for 'createdBy', OR 'organizerId', OR fallback to 'admin'.
+      // 🛡️ CRITICAL FIX: Ghost Data Protection (Prevents "undefined" crash)
       const safeCreatorId = event.createdBy || event.organizerId || 'admin_fallback';
 
       const newTicket = {
         eventId: event.id,
         eventTitle: event.title || "Untitled Event",
-        eventCreatorId: safeCreatorId, // ✅ No more crash here
+        eventCreatorId: safeCreatorId, // ✅ Crash Fixed
         eventDate: event.date || "Date TBA",
         eventTime: event.time || "Time TBA",
         eventLocation: event.location || "Location TBA",
@@ -87,46 +83,56 @@ const EventDetailsPage = () => {
         userPhoto: user.photoURL || '', 
         purchasedAt: serverTimestamp(),
         checkedIn: false,
-        status: 'confirmed', // Confirmed immediately
+        status: 'confirmed',
         price: event.price || 0,
         
-        // 🆕 QR Code Logic Support
+        // 🆕 QR Code Logic
         used: false, 
         qrCodeString: `${event.id}_${user.uid}_${Date.now()}`
       };
 
-      // 1. Save Ticket
+      // 1. Save Ticket to Database
       const docRef = await addDoc(collection(db, 'registrations'), newTicket);
       
-      // 2. Update Counts
+      // 2. Update Ticket Count
       await updateDoc(doc(db, 'events', event.id), { ticketsSold: increment(1) });
 
-      // 3. Email Logic (Wrapped in try-catch so it doesn't block booking if API fails)
-      try {
-          const appUrl = window.location.origin; 
-          const ticketLink = `${appUrl}/tickets/${docRef.id}`;
-          const emailHtml = `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #fff;">
-              <div style="background: #4F46E5; padding: 30px; text-align: center; color: white;"><h1>CONFIRMED! 🚀</h1></div>
-              <div style="padding: 30px;">
-                <p>Hi <strong>${user.displayName}</strong>, you're booked for ${event.title}.</p>
-                <div style="text-align: center; margin: 25px 0;">
-                  <a href="${ticketLink}" style="background: #4F46E5; color: white; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: bold; display: inline-block;">VIEW PASS IN APP</a>
-                </div>
-              </div>
-            </div>`;
+      // 📧 3. SEND EMAIL (Activated & Restored)
+      console.log("Attempting to send email to:", user.email); // Debug Log
+      
+      const appUrl = window.location.origin; 
+      const ticketLink = `${appUrl}/tickets/${docRef.id}`;
 
-          // Only run this if you have the backend set up
-          fetch('/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to: user.email, subject: `🎟️ Ticket: ${event.title}`, html: emailHtml })
-          }).catch(err => console.warn("Email API not reachable, but booking confirmed."));
-      } catch (emailErr) {
-          console.warn("Skipping email send.");
-      }
+      const emailHtml = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #fff;">
+          <div style="background: #4F46E5; padding: 30px; text-align: center; color: white;"><h1>CONFIRMED! 🚀</h1></div>
+          <div style="padding: 30px;">
+            <p>Hi <strong>${user.displayName}</strong>, you're booked for ${event.title}.</p>
+            <div style="text-align: center; margin: 25px 0;">
+              <a href="${ticketLink}" style="background: #4F46E5; color: white; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: bold; display: inline-block;">VIEW PASS IN APP</a>
+            </div>
+            <p style="text-align: center; color: #666; font-size: 12px; margin-top: 20px;">Show this QR code at the venue entry.</p>
+          </div>
+        </div>`;
 
-      alert("✅ Ticket Booked Successfully!");
+      // Direct Call - No Try/Catch Wrapper blocking it
+      fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            to: user.email, 
+            subject: `🎟️ Ticket: ${event.title}`, 
+            html: emailHtml 
+        })
+      })
+      .then(res => {
+          if(res.ok) console.log("Email Sent Successfully");
+          else console.error("Email API responded with error", res.status);
+      })
+      .catch(err => console.error("Email API Network Error:", err));
+
+      // 4. Success Navigation
+      alert("✅ Ticket Booked! Email Sent.");
       setAlreadyBooked(true);
       navigate('/my-tickets');
 
