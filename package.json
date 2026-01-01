@@ -7,6 +7,7 @@
   "dependencies": {
     "html5-qrcode": "^2.3.8",
     "nodemailer": "^7.0.12",
-    "react-qr-code": "^2.0.18"
+    "react-qr-code": "^2.0.18",
+    "recharts": "^3.6.0"
   }
 }

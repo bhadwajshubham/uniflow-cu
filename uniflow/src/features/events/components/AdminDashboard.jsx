@@ -1,312 +1,279 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../../lib/firebase';
-import { collection, query, where, onSnapshot, deleteDoc, doc, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, deleteDoc, doc, orderBy, getDocs } from 'firebase/firestore';
 import { useAuth } from '../../../context/AuthContext';
 import { 
-  Users, Ticket, DollarSign, Calendar, 
-  Trash2, Edit3, Plus, Zap, Activity, FileSpreadsheet, Settings 
+  Ticket, DollarSign, Calendar, Trash2, Edit3, Plus, Zap, 
+  Activity, Users, Settings, TrendingUp, Menu, X, BarChart3, QrCode, Download 
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+// npm install recharts
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
-// ✅ LINKED MODALS (Using your existing files)
+// Modals
 import EditEventModal from './EditEventModal';
 import ManageEventModal from './ManageEventModal'; 
 
 const AdminDashboard = () => {
   const { user } = useAuth();
   
+  // Data State
   const [events, setEvents] = useState([]);
-  const [liveAttendance, setLiveAttendance] = useState(0);
-  const [totalRevenue, setTotalRevenue] = useState(0);
-  const [totalTicketsSold, setTotalTicketsSold] = useState(0);
+  const [stats, setStats] = useState({ revenue: 0, tickets: 0, attendance: 0 });
   const [loading, setLoading] = useState(true);
+  const [isSidebarOpen, setSidebarOpen] = useState(true);
 
-  // 🛠️ STATE FOR MODALS
+  // Modals State
   const [editEvent, setEditEvent] = useState(null);
   const [manageEvent, setManageEvent] = useState(null);
 
-  // 📡 REAL-TIME DATA LISTENER
+  // 📡 Real-time Data
   useEffect(() => {
     if (!user) return;
 
-    // Listen to YOUR Events
+    // 1. Fetch Events
     const eventsRef = collection(db, 'events');
     const q = query(eventsRef, where('organizerId', '==', user.uid));
 
     const unsubscribeEvents = onSnapshot(q, (snapshot) => {
-      const eventList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      // Sort newest first
-      eventList.sort((a, b) => {
-        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
-        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
-        return dateB - dateA;
-      });
+      const eventList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      eventList.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds); // Newest first
 
       setEvents(eventList);
       
-      // Stats
+      // Calculate Aggregated Stats
       const revenue = eventList.reduce((acc, curr) => acc + (Number(curr.price || 0) * (curr.ticketsSold || 0)), 0);
       const tickets = eventList.reduce((acc, curr) => acc + (curr.ticketsSold || 0), 0);
       
-      setTotalRevenue(revenue);
-      setTotalTicketsSold(tickets);
+      setStats(prev => ({ ...prev, revenue, tickets }));
       setLoading(false);
     });
 
-    // Listen to LIVE ATTENDANCE
+    // 2. Fetch Live Attendance (Total Checked In)
     const qLive = query(
       collection(db, 'registrations'),
       where('eventCreatorId', '==', user.uid),
       where('used', '==', true) 
     );
-
-    const unsubscribeLive = onSnapshot(qLive, (snapshot) => {
-      setLiveAttendance(snapshot.size); 
+    const unsubscribeLive = onSnapshot(qLive, (snap) => {
+      setStats(prev => ({ ...prev, attendance: snap.size }));
     });
 
-    return () => {
-      unsubscribeEvents();
-      unsubscribeLive();
-    };
+    return () => { unsubscribeEvents(); unsubscribeLive(); };
   }, [user]);
 
+  // 📉 Mock Data for Charts (Replace with real data later)
+  const chartData = [
+    { name: 'Mon', sales: 4 },
+    { name: 'Tue', sales: 7 },
+    { name: 'Wed', sales: 12 },
+    { name: 'Thu', sales: 9 },
+    { name: 'Fri', sales: 18 },
+    { name: 'Sat', sales: 25 },
+    { name: 'Sun', sales: stats.tickets || 30 },
+  ];
+
+  const pieData = [
+    { name: 'Checked In', value: stats.attendance },
+    { name: 'Pending', value: stats.tickets - stats.attendance },
+  ];
+  const COLORS = ['#10B981', '#6366f1']; // Green, Indigo
+
+  // Handlers
   const handleDelete = async (eventId) => {
-    if (window.confirm("Are you sure? This will delete the event.")) {
-      try {
-        await deleteDoc(doc(db, 'events', eventId));
-      } catch (err) {
-        alert("Error deleting event: " + err.message);
-      }
-    }
-  };
-
-  // 📊 MASTER CSV EXPORT
-  const downloadMasterCsv = async (eventId, eventTitle) => {
-    try {
-      const q = query(collection(db, 'registrations'), where('eventId', '==', eventId));
-      const snapshot = await getDocs(q);
-      
-      if (snapshot.empty) {
-        alert("No students registered yet.");
-        return;
-      }
-
-      let csvContent = "data:text/csv;charset=utf-8,";
-      csvContent += "Name,Roll No,Email ID,Branch,Contact No,Status,Check-In Time\n";
-
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
-        const status = data.used ? 'Present' : 'Registered';
-        const checkInTime = data.usedAt ? new Date(data.usedAt.toDate()).toLocaleTimeString() : 'Pending';
-
-        const row = [
-          `"${data.userName || ''}"`,
-          `"${data.userRollNo || 'N/A'}"`,
-          `"${data.userEmail || ''}"`,
-          `"${data.userBranch || 'N/A'}"`,
-          `"${data.userPhone || 'N/A'}"`,
-          `"${status}"`,
-          `"${checkInTime}"`
-        ].join(",");
-
-        csvContent += row + "\n";
-      });
-
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `MasterList_${eventTitle.replace(/\s+/g, '_')}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-    } catch (err) {
-      console.error("Export failed:", err);
-      alert("Could not generate CSV.");
+    if (window.confirm("Are you sure? This action cannot be undone.")) {
+      await deleteDoc(doc(db, 'events', eventId));
     }
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black pb-24 px-6 pt-24">
-      <div className="max-w-5xl mx-auto space-y-8">
+    <div className="flex h-screen bg-zinc-50 dark:bg-black pt-16">
+      
+      {/* 🟢 SIDEBAR (Zoho Style) */}
+      <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} hidden md:flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 transition-all duration-300`}>
+        <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+           {isSidebarOpen && <span className="font-black text-lg tracking-tight dark:text-white">Backstage</span>}
+           <button onClick={() => setSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg">
+             <Menu className="w-5 h-5 text-zinc-500" />
+           </button>
+        </div>
         
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4">
-          <div>
-            <h1 className="text-3xl font-black tracking-tighter dark:text-white flex items-center gap-2">
-              Organizer Console <Zap className="w-6 h-6 text-indigo-500 fill-current" />
-            </h1>
-            <p className="text-zinc-500 font-medium">Real-time attendance & management.</p>
-          </div>
-          
-          <Link to="/admin/create">
-            <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg shadow-indigo-500/30 transition-all active:scale-95 w-full md:w-auto justify-center">
-              <Plus className="w-4 h-4" /> Create New Event
-            </button>
-          </Link>
-        </div>
+        <nav className="flex-1 p-4 space-y-2">
+           <SidebarItem icon={BarChart3} label="Overview" active isOpen={isSidebarOpen} />
+           <SidebarItem icon={Calendar} label="My Events" isOpen={isSidebarOpen} />
+           <SidebarItem icon={Users} label="Attendees" isOpen={isSidebarOpen} />
+           <SidebarItem icon={DollarSign} label="Finance" isOpen={isSidebarOpen} />
+           <SidebarItem icon={Settings} label="Settings" isOpen={isSidebarOpen} />
+        </nav>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Live Attendance */}
-          <div className="col-span-1 md:col-span-2 bg-black text-white rounded-[2rem] p-6 relative overflow-hidden shadow-2xl">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600 rounded-full blur-[100px] opacity-30 -mr-16 -mt-16 animate-pulse"></div>
-            <div className="relative z-10 flex flex-col h-full justify-between">
-              <div className="flex items-center gap-3 mb-4">
-                 <span className="relative flex h-3 w-3">
-                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                   <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                 </span>
-                 <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400">Live Attendance</h3>
-              </div>
-              <div className="flex items-end gap-2">
-                 <span className="text-6xl font-black tracking-tighter">{liveAttendance}</span>
-                 <span className="text-lg font-bold text-zinc-500 mb-2">Present Now</span>
-              </div>
-              <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-2 text-xs text-zinc-400 font-bold">
-                 <Activity className="w-4 h-4 text-green-500" /> Auto-updates via Scanner
-              </div>
-            </div>
-          </div>
-
-          {/* Registrations */}
-          <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-zinc-100 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
-            <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/20 rounded-full flex items-center justify-center text-indigo-600 mb-4">
-              <Ticket className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-3xl font-black dark:text-white">{totalTicketsSold}</p>
-              <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Total Registrations</p>
-            </div>
-          </div>
-
-          {/* Revenue */}
-          <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-zinc-100 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
-            <div className="w-10 h-10 bg-green-50 dark:bg-green-900/20 rounded-full flex items-center justify-center text-green-600 mb-4">
-              <DollarSign className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-3xl font-black dark:text-white">₹{totalRevenue}</p>
-              <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Total Revenue</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Events List */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-black dark:text-white px-2">Your Events</h2>
-          
-          {loading ? (
-             <div className="text-center py-10 text-zinc-400">Loading events...</div>
-          ) : events.length === 0 ? (
-             <div className="bg-white dark:bg-zinc-900 rounded-[2rem] p-10 text-center border border-zinc-200 dark:border-zinc-800 border-dashed">
-                <Calendar className="w-10 h-10 mx-auto text-zinc-300 mb-4" />
-                <h3 className="font-bold text-zinc-500">No events found</h3>
-                <Link to="/admin/create" className="text-indigo-600 font-black text-sm mt-2 inline-block hover:underline">Create One Now</Link>
+        <div className="p-4 border-t border-zinc-100 dark:border-zinc-800">
+           <Link to="/scan">
+             <div className={`flex items-center gap-3 p-3 rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-500/30 cursor-pointer hover:bg-indigo-700 transition-all ${!isSidebarOpen && 'justify-center'}`}>
+                <QrCode className="w-5 h-5" />
+                {isSidebarOpen && <span className="font-bold text-sm">Open Scanner</span>}
              </div>
-          ) : (
-             <div className="grid gap-4">
-                {events.map(event => (
-                  <div key={event.id} className="group bg-white dark:bg-zinc-900 p-4 rounded-[2rem] border border-zinc-100 dark:border-zinc-800 hover:border-indigo-500/30 transition-all flex flex-col md:flex-row gap-6 items-center shadow-sm">
-                    
-                    {/* Event Image */}
-                    <div className="w-full md:w-32 h-32 rounded-2xl overflow-hidden relative shrink-0">
-                      {event.imageUrl ? (
-                        <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center"><Calendar className="text-zinc-400"/></div>
-                      )}
-                      <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg">
-                        <p className="text-[10px] font-black text-white uppercase">{event.category}</p>
-                      </div>
-                    </div>
+           </Link>
+        </div>
+      </aside>
 
-                    {/* Info */}
-                    <div className="flex-1 text-center md:text-left space-y-1">
+      {/* 🟢 MAIN CONTENT */}
+      <main className="flex-1 overflow-y-auto p-6 md:p-8">
+        <div className="max-w-7xl mx-auto space-y-8">
+          
+          {/* 1. Header & Stats Row */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+             <div>
+                <h1 className="text-3xl font-black text-zinc-900 dark:text-white">Dashboard</h1>
+                <p className="text-zinc-500 text-sm font-medium">Welcome back, {user?.displayName}</p>
+             </div>
+             <Link to="/admin/create">
+                <button className="flex items-center gap-2 px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-xl font-bold text-xs uppercase tracking-widest hover:opacity-90 transition-opacity shadow-xl">
+                   <Plus className="w-4 h-4" /> Create Event
+                </button>
+             </Link>
+          </div>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+             <StatCard title="Total Sales" value={`₹${stats.revenue.toLocaleString()}`} icon={DollarSign} color="text-green-500" />
+             <StatCard title="Registrations" value={stats.tickets} icon={Ticket} color="text-indigo-500" />
+             <StatCard title="Live Attendance" value={stats.attendance} icon={Zap} color="text-amber-500" animate />
+          </div>
+
+          {/* 2. Middle Section: Quick Actions & Trends */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+             
+             {/* Left: Quick Actions (Zoho Style) */}
+             <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                <h3 className="text-lg font-bold dark:text-white mb-6">Quick Actions</h3>
+                <div className="grid grid-cols-2 gap-4">
+                   <QuickAction icon={Plus} label="New Event" onClick={() => {}} />
+                   <QuickAction icon={QrCode} label="Scan Tix" link="/scan" />
+                   <QuickAction icon={Users} label="Export CSV" onClick={() => alert("Select an event below first")} />
+                   <QuickAction icon={Settings} label="Settings" onClick={() => {}} />
+                </div>
+                
+                {/* Attendance Pie Chart Mini */}
+                <div className="mt-8 h-48 w-full">
+                   <h4 className="text-xs font-bold uppercase text-zinc-400 mb-4">Check-in Ratio</h4>
+                   <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
+                          {pieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                      </PieChart>
+                   </ResponsiveContainer>
+                </div>
+             </div>
+
+             {/* Right: Registration Trend (Big Chart) */}
+             <div className="lg:col-span-2 bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                <div className="flex justify-between items-center mb-6">
+                   <h3 className="text-lg font-bold dark:text-white">Registration Trend</h3>
+                   <select className="bg-zinc-100 dark:bg-zinc-800 text-xs font-bold px-3 py-1 rounded-lg outline-none">
+                      <option>Last 7 Days</option>
+                   </select>
+                </div>
+                <div className="h-80 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E4E4E7" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#A1A1AA'}} dy={10} />
+                      <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#A1A1AA'}} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}
+                        itemStyle={{ color: '#000', fontWeight: 'bold' }}
+                      />
+                      <Line type="monotone" dataKey="sales" stroke="#6366f1" strokeWidth={4} dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+             </div>
+          </div>
+
+          {/* 3. Bottom: Event List (Table/Cards) */}
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold dark:text-white">Your Events</h2>
+            <div className="grid gap-4">
+              {events.map(event => (
+                <div key={event.id} className="group bg-white dark:bg-zinc-900 p-4 rounded-3xl border border-zinc-200 dark:border-zinc-800 hover:border-indigo-500/50 transition-all flex flex-col md:flex-row gap-6 items-center shadow-sm">
+                   
+                   {/* Image */}
+                   <div className="w-full md:w-24 h-24 rounded-2xl overflow-hidden shrink-0 relative">
+                     <img src={event.imageUrl} className="w-full h-full object-cover" alt="" />
+                     <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-all" />
+                   </div>
+
+                   {/* Info */}
+                   <div className="flex-1 text-center md:text-left">
                       <h3 className="text-lg font-black dark:text-white">{event.title}</h3>
-                      <div className="flex flex-wrap justify-center md:justify-start gap-4 text-xs font-bold text-zinc-500">
-                         <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {event.date ? new Date(event.date).toLocaleDateString() : 'TBA'}</span>
-                         <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {event.ticketsSold || 0} Registered</span>
+                      <div className="flex justify-center md:justify-start gap-4 text-xs font-bold text-zinc-500 mt-1">
+                         <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {event.date}</span>
+                         <span className="flex items-center gap-1"><Ticket className="w-3 h-3" /> {event.ticketsSold}/{event.totalTickets}</span>
                       </div>
-                      
-                      {/* Attendance Bar */}
-                      <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-2 rounded-full mt-3 overflow-hidden">
-                        <div 
-                          className="bg-indigo-600 h-full rounded-full transition-all duration-500" 
-                          style={{ width: `${((event.ticketsSold || 0) / event.totalTickets) * 100}%` }}
-                        />
+                      <div className="w-full max-w-md mt-3 bg-zinc-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                         <div className="bg-indigo-500 h-full transition-all duration-1000" style={{width: `${(event.ticketsSold/event.totalTickets)*100}%`}}></div>
                       </div>
-                    </div>
+                   </div>
 
-                    {/* Actions */}
-                    <div className="flex flex-row md:flex-col gap-2 w-full md:w-auto">
-                       
-                       {/* MASTER CSV */}
-                       <button 
-                         onClick={() => downloadMasterCsv(event.id, event.title)}
-                         className="flex-1 px-4 py-3 rounded-xl bg-green-50 dark:bg-green-900/10 text-green-600 font-bold text-xs uppercase hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors flex items-center justify-center gap-2"
-                         title="Download Master List"
-                       >
-                         <FileSpreadsheet className="w-4 h-4" /> CSV
-                       </button>
+                   {/* Actions (Zoho Style Buttons) */}
+                   <div className="flex gap-2">
+                      <button onClick={() => setManageEvent(event)} className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-zinc-600 hover:bg-green-50 hover:text-green-600 transition-colors" title="Participants">
+                        <Users className="w-5 h-5" />
+                      </button>
+                      <button onClick={() => setEditEvent(event)} className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-zinc-600 hover:bg-indigo-50 hover:text-indigo-600 transition-colors" title="Edit">
+                        <Edit3 className="w-5 h-5" />
+                      </button>
+                      <button onClick={() => handleDelete(event.id)} className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-zinc-600 hover:bg-red-50 hover:text-red-500 transition-colors" title="Delete">
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                   </div>
+                </div>
+              ))}
+            </div>
+          </div>
 
-                       {/* MANAGE (Opens ManageEventModal) */}
-                       <button 
-                         onClick={() => setManageEvent(event)} 
-                         className="flex-1 px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-bold text-xs uppercase hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/20 transition-colors flex items-center justify-center gap-2"
-                       >
-                         <Settings className="w-4 h-4" /> Manage
-                       </button>
-
-                       {/* EDIT (Opens EditEventModal) */}
-                       <button 
-                         onClick={() => setEditEvent(event)}
-                         className="flex-1 px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-bold text-xs uppercase hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20 transition-colors flex items-center justify-center gap-2"
-                       >
-                         <Edit3 className="w-4 h-4" /> Edit
-                       </button>
-                       
-                       {/* DELETE */}
-                       <button 
-                         onClick={() => handleDelete(event.id)}
-                         className="flex-1 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/10 text-red-500 font-bold text-xs uppercase hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center justify-center gap-2"
-                       >
-                         <Trash2 className="w-4 h-4" />
-                       </button>
-                    </div>
-
-                  </div>
-                ))}
-             </div>
-          )}
         </div>
-      </div>
+      </main>
 
-      {/* 🚀 MODAL RENDERING */}
-      {/* If EditEventModal is open, pass the event data and onClose handler */}
-      {editEvent && (
-        <EditEventModal 
-          isOpen={!!editEvent} 
-          onClose={() => setEditEvent(null)} 
-          eventData={editEvent} // Assuming EditEventModal expects 'eventData' or 'event'
-        />
-      )}
-
-      {/* If ManageEventModal is open */}
-      {manageEvent && (
-        <ManageEventModal 
-          isOpen={!!manageEvent} 
-          onClose={() => setManageEvent(null)} 
-          eventData={manageEvent} 
-        />
-      )}
-
+      {/* Modals */}
+      {editEvent && <EditEventModal isOpen={!!editEvent} onClose={() => setEditEvent(null)} eventData={editEvent} />}
+      {manageEvent && <ManageEventModal isOpen={!!manageEvent} onClose={() => setManageEvent(null)} eventData={manageEvent} />}
     </div>
   );
 };
+
+// 🎨 Helper Components for the Clean Look
+const StatCard = ({ title, value, icon: Icon, color, animate }) => (
+  <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center gap-4">
+    <div className={`w-14 h-14 rounded-2xl ${color.replace('text-', 'bg-')}/10 flex items-center justify-center ${color}`}>
+       <Icon className={`w-7 h-7 ${animate ? 'animate-pulse' : ''}`} />
+    </div>
+    <div>
+       <p className="text-xs font-bold uppercase text-zinc-400 tracking-wider">{title}</p>
+       <h3 className="text-3xl font-black dark:text-white tracking-tight">{value}</h3>
+    </div>
+  </div>
+);
+
+const QuickAction = ({ icon: Icon, label, onClick, link }) => {
+    const content = (
+        <div className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 cursor-pointer transition-all border border-transparent hover:border-indigo-200 group">
+            <Icon className="w-6 h-6 text-zinc-400 group-hover:text-indigo-600 transition-colors" />
+            <span className="text-xs font-bold text-zinc-600 dark:text-zinc-400 group-hover:text-indigo-700">{label}</span>
+        </div>
+    );
+    return link ? <Link to={link}>{content}</Link> : <div onClick={onClick}>{content}</div>;
+}
+
+const SidebarItem = ({ icon: Icon, label, active, isOpen }) => (
+    <div className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${active ? 'bg-zinc-100 dark:bg-zinc-800 text-indigo-600' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'} ${!isOpen && 'justify-center'}`}>
+        <Icon className={`w-5 h-5 ${active ? 'fill-current' : ''}`} />
+        {isOpen && <span className="text-sm font-bold">{label}</span>}
+    </div>
+);
 
 export default AdminDashboard;
