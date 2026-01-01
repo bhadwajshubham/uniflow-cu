@@ -2,12 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { db } from '../../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-// 👇 1. IMPORT updateProfile HERE
 import { updateProfile } from 'firebase/auth'; 
 import { X, User, Hash, Phone, GraduationCap, Save, Loader2, LogOut, Home, Camera, Sparkles, Shield, QrCode } from 'lucide-react';
-
-// ✅ CORRECT IMPORT PATH for Cloudinary Service
-// Adjust this path if your file structure is different, but based on your context it looks correct.
 import { uploadImage } from '../../events/services/uploadService';
 
 const UserProfile = ({ isOpen, onClose }) => {
@@ -25,7 +21,7 @@ const UserProfile = ({ isOpen, onClose }) => {
     residency: ''
   });
 
-  // Load data when modal opens
+  // Load data
   useEffect(() => {
     if (user && isOpen) {
       const fetchProfile = async () => {
@@ -43,7 +39,6 @@ const UserProfile = ({ isOpen, onClose }) => {
               group: data.group || '',
               residency: data.residency || ''
             });
-            // Don't reset preview if we already have a photo
             setPreviewImage(user.photoURL || null);
             setSelectedFile(null);
           } else {
@@ -67,12 +62,10 @@ const UserProfile = ({ isOpen, onClose }) => {
     const file = e.target.files[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        alert("File size must be less than 5MB");
-        return;
+        alert("File size must be less than 5MB"); return;
       }
       if (!file.type.startsWith('image/')) {
-        alert("Please select a valid image file.");
-        return;
+        alert("Please select a valid image file."); return;
       }
       setSelectedFile(file);
       setPreviewImage(URL.createObjectURL(file)); 
@@ -93,22 +86,21 @@ const UserProfile = ({ isOpen, onClose }) => {
     try {
       let finalPhotoURL = user.photoURL;
 
-      // ☁️ 1. UPLOAD IMAGE IF SELECTED (Cloudinary)
       if (selectedFile) {
         finalPhotoURL = await uploadImage(selectedFile);
       }
 
-      // 💾 2. UPDATE FIRESTORE (The Database)
+      // 🛡️ SECURITY FIX: Removed 'role' from this payload.
+      // We strictly use { merge: true } so we don't overwrite the existing role.
       await setDoc(doc(db, 'users', user.uid), {
         ...formData,
         email: user.email,
         photoURL: finalPhotoURL,
-        role: profile?.role || 'student',
+        // role: profile?.role ... ❌ REMOVED THIS LINE TO PREVENT PRIVILEGE ESCALATION
         isProfileComplete: true,
         updatedAt: new Date()
       }, { merge: true });
 
-      // 🔄 3. CRITICAL: UPDATE FIREBASE AUTH (The Session)
       if (user) {
         await updateProfile(user, {
             displayName: formData.displayName,
@@ -118,8 +110,6 @@ const UserProfile = ({ isOpen, onClose }) => {
 
       alert("✅ Profile Updated Successfully!");
       onClose();
-      
-      // 🚀 4. RELOAD PAGE (The "Nuclear" Fix)
       window.location.reload(); 
 
     } catch (err) {
@@ -131,18 +121,12 @@ const UserProfile = ({ isOpen, onClose }) => {
   };
 
   if (!user || !isOpen) return null;
-
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
 
   return (
     <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-      
-      {/* Main Modal Container */}
       <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl w-full max-w-lg rounded-[2.5rem] border border-white/20 dark:border-zinc-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] relative animate-in slide-in-from-bottom-8 duration-500">
         
-        {/* Decorative Background */}
-        <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 dark:from-indigo-900/30 dark:to-purple-900/30 pointer-events-none" />
-
         {/* Header */}
         <div className="relative p-6 flex justify-between items-start z-10">
           <div>
@@ -159,8 +143,7 @@ const UserProfile = ({ isOpen, onClose }) => {
 
         <form onSubmit={handleSave} className="flex-1 overflow-y-auto custom-scrollbar relative z-10">
           <div className="px-6 pb-6 space-y-8">
-
-            {/* 📸 HERO IMAGE UPLOAD SECTION */}
+            {/* Image Upload */}
             <div className="flex flex-col items-center">
                <div className="relative group cursor-pointer">
                  <div className={`w-28 h-28 rounded-full p-1 ${isAdmin ? 'bg-gradient-to-tr from-amber-400 to-orange-600' : 'bg-gradient-to-tr from-indigo-500 to-purple-600'} shadow-lg shadow-indigo-500/20`}>
@@ -182,7 +165,7 @@ const UserProfile = ({ isOpen, onClose }) => {
                </div>
             </div>
 
-            {/* 🗂️ FORM INPUTS */}
+            {/* Inputs */}
             <div className="space-y-6">
                 <div className="bg-white/50 dark:bg-zinc-800/50 rounded-3xl p-5 border border-zinc-100 dark:border-zinc-700/50">
                     <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-4 flex items-center gap-2">
@@ -202,7 +185,7 @@ const UserProfile = ({ isOpen, onClose }) => {
                             </div>
                             <div className="relative group">
                                 <QrCode className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
-                                <input required type="text" placeholder="Group (e.g. G1)" className="w-full pl-12 pr-4 py-4 bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 rounded-2xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                                <input required type="text" placeholder="Group" className="w-full pl-12 pr-4 py-4 bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-700 rounded-2xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
                                   value={formData.group} onChange={e => setFormData({...formData, group: e.target.value})} />
                             </div>
                         </div>
@@ -244,7 +227,6 @@ const UserProfile = ({ isOpen, onClose }) => {
           </div>
         </form>
 
-        {/* Footer */}
         <div className="p-6 border-t border-zinc-100 dark:border-zinc-800/50 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md flex flex-col sm:flex-row gap-4 z-20">
           <button type="button" onClick={handleLogout} className="order-2 sm:order-1 flex-1 py-4 rounded-2xl font-bold text-xs uppercase tracking-widest text-red-500 border-2 border-red-100 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all flex items-center justify-center gap-2 active:scale-95">
              <LogOut className="w-4 h-4" /> Sign Out
