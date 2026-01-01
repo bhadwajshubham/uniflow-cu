@@ -1,114 +1,174 @@
-import React, { Suspense, lazy } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { db } from '../../../lib/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { useAuth } from '../../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Upload, Calendar, MapPin, DollarSign, Type, Loader2 } from 'lucide-react';
 
-// Core Layouts (Keep these synchronous for immediate render)
-import Navbar from './components/layout/Navbar';
-import { AuthProvider } from './context/AuthContext';
-import { ThemeProvider } from './context/ThemeContext';
-import ProtectedRoute from './components/layout/ProtectedRoute';
+const CreateEventPage = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  
+  const [formData, setFormData] = useState({
+    title: '',
+    date: '',
+    time: '',
+    location: '',
+    description: '',
+    price: 0,
+    totalTickets: 100,
+    category: 'Workshop',
+    imageUrl: '', // You can add Image Upload logic later if needed
+    whatsappLink: '',
+    isUniversityOnly: false
+  });
 
-// 💤 LAZY LOADED PAGES (Code Splitting)
-// These chunks are only downloaded when the user visits the route.
-const HomePage = lazy(() => import('./features/events/components/HomePage'));
-const EventsPage = lazy(() => import('./features/events/components/EventsPage'));
-const EventDetailsPage = lazy(() => import('./features/events/components/EventDetailsPage'));
-const MyTicketsPage = lazy(() => import('./features/events/components/MyTicketsPage'));
-const TicketPage = lazy(() => import('./features/events/components/TicketPage'));
-const HelpPage = lazy(() => import('./features/events/components/HelpPage'));
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
 
-// Auth Pages
-const LoginPage = lazy(() => import('./features/auth/components/LoginPage'));
-const AboutPage = lazy(() => import('./features/auth/AboutPage'));
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.title || !formData.date || !formData.totalTickets) {
+      alert("Please fill required fields!");
+      return;
+    }
 
-// 🔒 ADMIN MODULES (Heavy Security Risk - Strict Lazy Loading)
-const AdminDashboard = lazy(() => import('./features/events/components/AdminDashboard'));
-const ScannerPage = lazy(() => import('./features/events/components/ScannerPage'));
-const SuperAdminDashboard = lazy(() => import('./features/events/components/SuperAdminDashboard'));
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'events'), {
+        ...formData,
+        price: Number(formData.price),
+        totalTickets: Number(formData.totalTickets),
+        ticketsSold: 0,
+        createdBy: user.uid, // 🛡️ CRITICAL: Binds event to YOU (The Organizer)
+        createdAt: serverTimestamp()
+      });
+      
+      alert("✅ Event Created Successfully!");
+      navigate('/admin'); // Redirect back to Dashboard
+    } catch (err) {
+      console.error("Error creating event:", err);
+      alert("Failed to create event.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-// 🌀 Loading Fallback Component
-const PageLoader = () => (
-  <div className="min-h-[80vh] flex flex-col items-center justify-center gap-4">
-    <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
-    <p className="text-sm font-bold text-zinc-400 uppercase tracking-widest animate-pulse">Loading Experience...</p>
-  </div>
-);
-
-const App = () => {
   return (
-    <AuthProvider>
-      <ThemeProvider>
-        <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-white transition-colors duration-300">
-          <Navbar />
+    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-6">
+      <div className="max-w-2xl mx-auto">
+        <button onClick={() => navigate('/admin')} className="mb-6 flex items-center gap-2 text-zinc-500 hover:text-indigo-600 font-bold text-xs uppercase tracking-widest">
+          <ArrowLeft className="w-4 h-4" /> Back to Console
+        </button>
+
+        <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2.5rem] border border-zinc-200 dark:border-zinc-800 shadow-xl">
+          <h1 className="text-3xl font-black dark:text-white uppercase tracking-tighter mb-8">Host New Event</h1>
           
-          {/* Suspense catches the "promise" thrown by lazy components 
-            and shows the fallback UI until the network request finishes.
-          */}
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              {/* 🏠 PUBLIC ROUTES */}
-              <Route path="/" element={<HomePage />} />
-              <Route path="/events" element={<EventsPage />} />
-              <Route path="/events/:id" element={<EventDetailsPage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/help" element={<HelpPage />} />
-              <Route path="/about" element={<AboutPage />} />
-              
-              {/* 🔒 PROTECTED STUDENT ROUTES */}
-              <Route 
-                path="/my-tickets" 
-                element={
-                  <ProtectedRoute>
-                    <MyTicketsPage />
-                  </ProtectedRoute>
-                } 
-              />
-              
-              <Route 
-                path="/tickets/:ticketId" 
-                element={
-                  <ProtectedRoute>
-                    <TicketPage />
-                  </ProtectedRoute>
-                } 
-              />
+          <form onSubmit={handleSubmit} className="space-y-6">
+            
+            {/* Title */}
+            <div>
+              <label className="block text-xs font-bold uppercase text-zinc-500 mb-2">Event Title</label>
+              <div className="relative">
+                <Type className="absolute left-4 top-3.5 w-5 h-5 text-zinc-400" />
+                <input 
+                  type="text" name="title" value={formData.title} onChange={handleChange} required
+                  className="w-full pl-12 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl border-none focus:ring-2 focus:ring-indigo-500 font-bold dark:text-white"
+                  placeholder="e.g. Hackathon 2025"
+                />
+              </div>
+            </div>
 
-              {/* 🛡️ ADMIN ROUTES (Code chunk only loads for Admins) */}
-              <Route 
-                path="/admin" 
-                element={
-                  <ProtectedRoute requireAdmin={true}>
-                    <AdminDashboard />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/scan" 
-                element={
-                  <ProtectedRoute requireAdmin={true}>
-                    <ScannerPage />
-                  </ProtectedRoute>
-                } 
-              />
+            {/* Date & Time */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold uppercase text-zinc-500 mb-2">Date</label>
+                <div className="relative">
+                  <Calendar className="absolute left-4 top-3.5 w-5 h-5 text-zinc-400" />
+                  <input type="date" name="date" value={formData.date} onChange={handleChange} required className="w-full pl-12 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl border-none font-bold dark:text-white" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase text-zinc-500 mb-2">Time</label>
+                <input type="time" name="time" value={formData.time} onChange={handleChange} required className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl border-none font-bold dark:text-white" />
+              </div>
+            </div>
 
-              {/* 👑 SUPER ADMIN ROUTE */}
-              <Route 
-                path="/super-admin" 
-                element={
-                  <ProtectedRoute superAdminOnly={true}>
-                    <SuperAdminDashboard />
-                  </ProtectedRoute>
-                } 
-              />
-              
-              {/* Fallback to Home */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
+            {/* Location */}
+            <div>
+              <label className="block text-xs font-bold uppercase text-zinc-500 mb-2">Venue / Location</label>
+              <div className="relative">
+                <MapPin className="absolute left-4 top-3.5 w-5 h-5 text-zinc-400" />
+                <input type="text" name="location" value={formData.location} onChange={handleChange} required className="w-full pl-12 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl border-none font-bold dark:text-white" placeholder="e.g. Audi Block A" />
+              </div>
+            </div>
+
+            {/* Category & Tickets */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold uppercase text-zinc-500 mb-2">Category</label>
+                <select name="category" value={formData.category} onChange={handleChange} className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl border-none font-bold dark:text-white">
+                  <option>Workshop</option>
+                  <option>Seminar</option>
+                  <option>Cultural</option>
+                  <option>Hackathon</option>
+                  <option>Sports</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase text-zinc-500 mb-2">Total Tickets</label>
+                <input type="number" name="totalTickets" value={formData.totalTickets} onChange={handleChange} required className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl border-none font-bold dark:text-white" />
+              </div>
+            </div>
+
+            {/* Price */}
+            <div>
+              <label className="block text-xs font-bold uppercase text-zinc-500 mb-2">Ticket Price (₹)</label>
+              <div className="relative">
+                <DollarSign className="absolute left-4 top-3.5 w-5 h-5 text-zinc-400" />
+                <input type="number" name="price" value={formData.price} onChange={handleChange} className="w-full pl-12 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl border-none font-bold dark:text-white" placeholder="0 for Free" />
+              </div>
+            </div>
+
+             {/* Description */}
+             <div>
+              <label className="block text-xs font-bold uppercase text-zinc-500 mb-2">Description</label>
+              <textarea name="description" value={formData.description} onChange={handleChange} rows="4" className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl border-none font-bold dark:text-white" placeholder="Event details..." />
+            </div>
+
+             {/* Image URL (Simple Input for now) */}
+             <div>
+              <label className="block text-xs font-bold uppercase text-zinc-500 mb-2">Banner Image URL</label>
+              <div className="relative">
+                <Upload className="absolute left-4 top-3.5 w-5 h-5 text-zinc-400" />
+                <input type="url" name="imageUrl" value={formData.imageUrl} onChange={handleChange} className="w-full pl-12 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl border-none font-bold dark:text-white" placeholder="https://..." />
+              </div>
+            </div>
+
+             {/* WhatsApp & Restricted */}
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input type="text" name="whatsappLink" value={formData.whatsappLink} onChange={handleChange} placeholder="WhatsApp Group Link (Optional)" className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl border-none font-bold dark:text-white" />
+                
+                <label className="flex items-center gap-3 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl cursor-pointer">
+                  <input type="checkbox" name="isUniversityOnly" checked={formData.isUniversityOnly} onChange={handleChange} className="w-5 h-5 accent-indigo-600 rounded" />
+                  <span className="text-xs font-bold uppercase text-zinc-500">Chitkara Email Only?</span>
+                </label>
+             </div>
+
+            <button type="submit" disabled={loading} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all active:scale-95">
+              {loading ? <Loader2 className="animate-spin mx-auto" /> : "Publish Event"}
+            </button>
+          </form>
         </div>
-      </ThemeProvider>
-    </AuthProvider>
+      </div>
+    </div>
   );
 };
 
-export default App;
+export default CreateEventPage;
