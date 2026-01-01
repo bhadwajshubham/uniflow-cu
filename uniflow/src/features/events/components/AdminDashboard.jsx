@@ -4,9 +4,13 @@ import { collection, query, where, onSnapshot, deleteDoc, doc, getDocs } from 'f
 import { useAuth } from '../../../context/AuthContext';
 import { 
   Users, Ticket, DollarSign, Calendar, 
-  Trash2, Edit3, Plus, Zap, Activity, FileSpreadsheet 
+  Trash2, Edit3, Plus, Zap, Activity, FileSpreadsheet, Settings 
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+
+// ✅ LINKED MODALS (Using your existing files)
+import EditEventModal from './EditEventModal';
+import ManageEventModal from './ManageEventModal'; 
 
 const AdminDashboard = () => {
   const { user } = useAuth();
@@ -17,12 +21,15 @@ const AdminDashboard = () => {
   const [totalTicketsSold, setTotalTicketsSold] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // 🛠️ STATE FOR MODALS
+  const [editEvent, setEditEvent] = useState(null);
+  const [manageEvent, setManageEvent] = useState(null);
+
   // 📡 REAL-TIME DATA LISTENER
   useEffect(() => {
     if (!user) return;
 
-    // 1. Listen to YOUR Events
-    // query both 'organizerId' (New) and 'createdBy' (Old) to catch everything
+    // Listen to YOUR Events
     const eventsRef = collection(db, 'events');
     const q = query(eventsRef, where('organizerId', '==', user.uid));
 
@@ -32,7 +39,7 @@ const AdminDashboard = () => {
         ...doc.data()
       }));
       
-      // Sort newest first (Client side sort to avoid index errors)
+      // Sort newest first
       eventList.sort((a, b) => {
         const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
         const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
@@ -41,7 +48,7 @@ const AdminDashboard = () => {
 
       setEvents(eventList);
       
-      // Calculate Stats
+      // Stats
       const revenue = eventList.reduce((acc, curr) => acc + (Number(curr.price || 0) * (curr.ticketsSold || 0)), 0);
       const tickets = eventList.reduce((acc, curr) => acc + (curr.ticketsSold || 0), 0);
       
@@ -50,8 +57,7 @@ const AdminDashboard = () => {
       setLoading(false);
     });
 
-    // 2. Listen to LIVE ATTENDANCE (Real-time)
-    // Counts any ticket created by YOU that has been SCANNED (used == true)
+    // Listen to LIVE ATTENDANCE
     const qLive = query(
       collection(db, 'registrations'),
       where('eventCreatorId', '==', user.uid),
@@ -59,7 +65,7 @@ const AdminDashboard = () => {
     );
 
     const unsubscribeLive = onSnapshot(qLive, (snapshot) => {
-      setLiveAttendance(snapshot.size); // Updates instantly when someone is scanned
+      setLiveAttendance(snapshot.size); 
     });
 
     return () => {
@@ -78,8 +84,7 @@ const AdminDashboard = () => {
     }
   };
 
-  // 📊 MASTER CSV EXPORT FUNCTION
-  // Columns: Name, Roll No, Email, Branch, Contact No, Status
+  // 📊 MASTER CSV EXPORT
   const downloadMasterCsv = async (eventId, eventTitle) => {
     try {
       const q = query(collection(db, 'registrations'), where('eventId', '==', eventId));
@@ -90,28 +95,19 @@ const AdminDashboard = () => {
         return;
       }
 
-      // 1. Define Headers
       let csvContent = "data:text/csv;charset=utf-8,";
       csvContent += "Name,Roll No,Email ID,Branch,Contact No,Status,Check-In Time\n";
 
-      // 2. Populate Rows
       snapshot.docs.forEach(doc => {
         const data = doc.data();
-        
-        // Logic for Status
         const status = data.used ? 'Present' : 'Registered';
-        
-        // Handle dates
-        const checkInTime = data.usedAt 
-          ? new Date(data.usedAt.toDate()).toLocaleTimeString() 
-          : 'Pending';
+        const checkInTime = data.usedAt ? new Date(data.usedAt.toDate()).toLocaleTimeString() : 'Pending';
 
-        // Construct Row (Handling commas in data)
         const row = [
           `"${data.userName || ''}"`,
           `"${data.userRollNo || 'N/A'}"`,
           `"${data.userEmail || ''}"`,
-          `"${data.userBranch || 'N/A'}"`, // Make sure to save branch in booking if needed
+          `"${data.userBranch || 'N/A'}"`,
           `"${data.userPhone || 'N/A'}"`,
           `"${status}"`,
           `"${checkInTime}"`
@@ -120,7 +116,6 @@ const AdminDashboard = () => {
         csvContent += row + "\n";
       });
 
-      // 3. Trigger Download
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement("a");
       link.setAttribute("href", encodedUri);
@@ -131,7 +126,7 @@ const AdminDashboard = () => {
 
     } catch (err) {
       console.error("Export failed:", err);
-      alert("Could not generate CSV. Check console.");
+      alert("Could not generate CSV.");
     }
   };
 
@@ -139,7 +134,7 @@ const AdminDashboard = () => {
     <div className="min-h-screen bg-zinc-50 dark:bg-black pb-24 px-6 pt-24">
       <div className="max-w-5xl mx-auto space-y-8">
         
-        {/* 👋 Header */}
+        {/* Header */}
         <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4">
           <div>
             <h1 className="text-3xl font-black tracking-tighter dark:text-white flex items-center gap-2">
@@ -148,7 +143,6 @@ const AdminDashboard = () => {
             <p className="text-zinc-500 font-medium">Real-time attendance & management.</p>
           </div>
           
-          {/* CREATE EVENT BUTTON */}
           <Link to="/admin/create">
             <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg shadow-indigo-500/30 transition-all active:scale-95 w-full md:w-auto justify-center">
               <Plus className="w-4 h-4" /> Create New Event
@@ -156,10 +150,9 @@ const AdminDashboard = () => {
           </Link>
         </div>
 
-        {/* 📊 STATS GRID */}
+        {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          
-          {/* LIVE ATTENDANCE CARD */}
+          {/* Live Attendance */}
           <div className="col-span-1 md:col-span-2 bg-black text-white rounded-[2rem] p-6 relative overflow-hidden shadow-2xl">
             <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600 rounded-full blur-[100px] opacity-30 -mr-16 -mt-16 animate-pulse"></div>
             <div className="relative z-10 flex flex-col h-full justify-between">
@@ -180,7 +173,7 @@ const AdminDashboard = () => {
             </div>
           </div>
 
-          {/* STATS */}
+          {/* Registrations */}
           <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-zinc-100 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
             <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/20 rounded-full flex items-center justify-center text-indigo-600 mb-4">
               <Ticket className="w-5 h-5" />
@@ -191,6 +184,7 @@ const AdminDashboard = () => {
             </div>
           </div>
 
+          {/* Revenue */}
           <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-zinc-100 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
             <div className="w-10 h-10 bg-green-50 dark:bg-green-900/20 rounded-full flex items-center justify-center text-green-600 mb-4">
               <DollarSign className="w-5 h-5" />
@@ -202,7 +196,7 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* 📋 EVENTS LIST */}
+        {/* Events List */}
         <div className="space-y-4">
           <h2 className="text-xl font-black dark:text-white px-2">Your Events</h2>
           
@@ -251,24 +245,32 @@ const AdminDashboard = () => {
                     {/* Actions */}
                     <div className="flex flex-row md:flex-col gap-2 w-full md:w-auto">
                        
-                       {/* 📥 MASTER CSV DOWNLOAD */}
+                       {/* MASTER CSV */}
                        <button 
                          onClick={() => downloadMasterCsv(event.id, event.title)}
                          className="flex-1 px-4 py-3 rounded-xl bg-green-50 dark:bg-green-900/10 text-green-600 font-bold text-xs uppercase hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors flex items-center justify-center gap-2"
                          title="Download Master List"
                        >
-                         <FileSpreadsheet className="w-4 h-4" /> Master List
+                         <FileSpreadsheet className="w-4 h-4" /> CSV
                        </button>
 
-                       {/* Manage (Placeholder) */}
+                       {/* MANAGE (Opens ManageEventModal) */}
                        <button 
-                         onClick={() => alert("Manage/Edit Feature Pending.")}
+                         onClick={() => setManageEvent(event)} 
                          className="flex-1 px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-bold text-xs uppercase hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/20 transition-colors flex items-center justify-center gap-2"
                        >
-                         <Edit3 className="w-4 h-4" /> Manage
+                         <Settings className="w-4 h-4" /> Manage
+                       </button>
+
+                       {/* EDIT (Opens EditEventModal) */}
+                       <button 
+                         onClick={() => setEditEvent(event)}
+                         className="flex-1 px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-bold text-xs uppercase hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20 transition-colors flex items-center justify-center gap-2"
+                       >
+                         <Edit3 className="w-4 h-4" /> Edit
                        </button>
                        
-                       {/* Delete */}
+                       {/* DELETE */}
                        <button 
                          onClick={() => handleDelete(event.id)}
                          className="flex-1 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/10 text-red-500 font-bold text-xs uppercase hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center justify-center gap-2"
@@ -283,6 +285,26 @@ const AdminDashboard = () => {
           )}
         </div>
       </div>
+
+      {/* 🚀 MODAL RENDERING */}
+      {/* If EditEventModal is open, pass the event data and onClose handler */}
+      {editEvent && (
+        <EditEventModal 
+          isOpen={!!editEvent} 
+          onClose={() => setEditEvent(null)} 
+          eventData={editEvent} // Assuming EditEventModal expects 'eventData' or 'event'
+        />
+      )}
+
+      {/* If ManageEventModal is open */}
+      {manageEvent && (
+        <ManageEventModal 
+          isOpen={!!manageEvent} 
+          onClose={() => setManageEvent(null)} 
+          eventData={manageEvent} 
+        />
+      )}
+
     </div>
   );
 };

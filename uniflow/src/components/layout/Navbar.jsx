@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Home, Calendar, Ticket, User, Plus, Moon, Sun, Zap } from 'lucide-react';
+import { Home, Calendar, Ticket, User, Moon, Sun, Zap, Shield } from 'lucide-react';
 
 const Navbar = () => {
   const { user, profile } = useAuth();
@@ -26,7 +26,6 @@ const Navbar = () => {
     <>
       {/* ─────────────────────────────────────────────────────────────
           1. TOP BAR (Visible on ALL screens)
-          - Now includes Desktop Navigation!
       ───────────────────────────────────────────────────────────── */}
       <nav className="sticky top-0 z-40 w-full bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-100 dark:border-zinc-800 px-4 py-3 flex justify-between items-center transition-all">
         
@@ -45,7 +44,7 @@ const Navbar = () => {
             <Link to="/" className={`text-sm font-bold transition-colors ${isActive('/') ? 'text-indigo-600' : 'text-zinc-500 hover:text-black dark:text-zinc-400 dark:hover:text-white'}`}>Home</Link>
             <Link to="/events" className={`text-sm font-bold transition-colors ${isActive('/events') ? 'text-indigo-600' : 'text-zinc-500 hover:text-black dark:text-zinc-400 dark:hover:text-white'}`}>Events</Link>
             <Link to="/my-tickets" className={`text-sm font-bold transition-colors ${isActive('/my-tickets') ? 'text-indigo-600' : 'text-zinc-500 hover:text-black dark:text-zinc-400 dark:hover:text-white'}`}>My Tickets</Link>
-            {isAdmin && <Link to="/admin" className="text-sm font-bold text-indigo-600">Admin</Link>}
+            {isAdmin && <Link to="/admin" className="text-sm font-bold text-indigo-600">Admin Console</Link>}
         </div>
 
         {/* RIGHT: Actions */}
@@ -77,30 +76,17 @@ const Navbar = () => {
 
       {/* ─────────────────────────────────────────────────────────────
           2. BOTTOM NAVIGATION BAR (Mobile Only)
-          - UI FIX: Use 'justify-around' for Students so there is no gap
-          - UI FIX: Use 'justify-between' for Admins to fit the + button
       ───────────────────────────────────────────────────────────── */}
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-xl border-t border-zinc-200 dark:border-zinc-800 pb-safe pt-2 px-6 md:hidden">
-        <div className={`flex items-center pb-2 ${isAdmin ? 'justify-between' : 'justify-around'}`}>
+        <div className="flex justify-around items-center pb-2">
           
           <NavLink to="/" icon={Home} label="Home" />
           <NavLink to="/events" icon={Calendar} label="Events" />
-
-          {/* ADMIN ACTION: Create (Only renders if Admin) */}
-          {isAdmin && (
-             <Link to="/admin/create" className="relative -top-5">
-               <div className="w-14 h-14 bg-indigo-600 rounded-full shadow-xl shadow-indigo-500/40 flex items-center justify-center text-white border-4 border-zinc-50 dark:border-zinc-950 transform hover:scale-105 active:scale-95 transition-all">
-                 <Plus className="w-7 h-7" />
-               </div>
-             </Link>
-          )}
-
-          {/* If Student, My Tix is just a normal item. If Admin, it pushes to the right. */}
           <NavLink to="/my-tickets" icon={Ticket} label="My Tix" />
-          
-          {/* If Admin, Show Scan. If Student, Show Profile */}
+
+          {/* ADMIN BUTTON (Replaces the old + button) */}
           {isAdmin ? (
-             <NavLink to="/scan" icon={Zap} label="Scan" />
+             <NavLink to="/admin" icon={Shield} label="Admin" />
           ) : (
              <NavLink to="/profile" icon={User} label="Profile" />
           )}
