@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Home, Calendar, Ticket, User, Moon, Sun, Zap, Shield, QrCode } from 'lucide-react';
+import { Home, Calendar, Ticket, User, Moon, Sun, Shield, QrCode } from 'lucide-react';
 
 const Navbar = () => {
   const { user, profile } = useAuth();
@@ -29,11 +29,18 @@ const Navbar = () => {
       ───────────────────────────────────────────────────────────── */}
       <nav className="sticky top-0 z-40 w-full bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-100 dark:border-zinc-800 px-4 py-3 flex justify-between items-center transition-all">
         
-        {/* LEFT: Logo */}
-        <Link to="/" className="flex items-center gap-2 group">
-          <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 group-hover:scale-105 transition-transform">
-            <Zap className="w-5 h-5 fill-current" />
-          </div>
+        {/* LEFT: Logo (Now using your Brand Image) */}
+        <Link to="/" className="flex items-center gap-3 group">
+          {/* 🟢 ACTION: Ensure you have 'logo.png' inside your 'public' folder */}
+          <img 
+            src="/logo.png" 
+            alt="UniFlow" 
+            className="w-8 h-8 object-contain group-hover:scale-105 transition-transform" 
+            onError={(e) => {
+              // Fallback if image not found: Just show text, no broken icon
+              e.target.style.display = 'none';
+            }}
+          />
           <span className="text-xl font-black tracking-tighter text-zinc-900 dark:text-white">
             UniFlow
           </span>
