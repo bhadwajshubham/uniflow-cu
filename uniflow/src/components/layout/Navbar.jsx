@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-// 👇 FIXED IMPORT PATH (Added another '../')
+// ✅ FIXED PATH: Go back 2 levels (../../) to reach src folder
 import { useAuth } from '../../context/AuthContext'; 
 import { Menu, X, User, Ticket, LogOut, ShieldCheck, LayoutDashboard } from 'lucide-react';
 
