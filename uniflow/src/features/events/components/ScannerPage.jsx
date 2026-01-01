@@ -1,185 +1,192 @@
-import React, { useState } from 'react';
-import { Scanner } from '@yudiel/react-qr-scanner'; // ✅ NEW WORKING LIBRARY
-import { db } from '../../../lib/firebase';
+import React, { useEffect, useState, useRef } from 'react';
+import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { useAuth } from '../../../context/AuthContext';
-import { ArrowLeft, Zap, CheckCircle, XCircle } from 'lucide-react';
+import { db } from '../../../lib/firebase';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext';
+import { ArrowLeft, CheckCircle, AlertCircle, XCircle, ShieldAlert, Zap } from 'lucide-react';
 
 const ScannerPage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [scanResult, setScanResult] = useState(null);
-  const [status, setStatus] = useState('idle'); // idle, processing, success, error
-  const [message, setMessage] = useState('Align QR Code within the frame');
-  const [lastScannedId, setLastScannedId] = useState(null);
+  const { user, profile } = useAuth();
+  const [scanResult, setScanResult] = useState(null); 
+  const [message, setMessage] = useState('');
+  const lastScannedId = useRef(null);
+  const isProcessing = useRef(false);
 
-  // 🗣️ HUMANIZED TTS ENGINE (Same as before)
-  const speak = (text) => {
-    if (!window.speechSynthesis) return;
-    window.speechSynthesis.cancel(); // Stop scanning noise
-    
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.9;  
-    utterance.pitch = 1.05; 
-    utterance.volume = 1.0;
-
-    const voices = window.speechSynthesis.getVoices();
-    const naturalVoice = voices.find(v => v.name.includes("Google US English") || v.name.includes("Zira"));
-    if (naturalVoice) utterance.voice = naturalVoice;
-
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const getRandomWelcome = (name) => {
-    const greetings = [
-      `Welcome in, ${name}!`,
-      `Good to see you, ${name}.`,
-      `Access granted for ${name}.`,
-      `You are all set, ${name}!`,
-      `Enjoy the event, ${name}.`
-    ];
-    return greetings[Math.floor(Math.random() * greetings.length)];
-  };
-
-  // 📷 HANDLE SCAN (Updated for new library)
-  const handleScan = async (detectedCodes) => {
-    // The new library returns an array of detected codes
-    if (!detectedCodes || detectedCodes.length === 0) return;
-    
-    const rawValue = detectedCodes[0].rawValue;
-    if (!rawValue) return;
-
-    // Prevent double-scanning the same ticket instantly
-    if (status !== 'idle' || rawValue === lastScannedId) return;
-
-    setLastScannedId(rawValue);
-    setStatus('processing');
-    setMessage('Verifying...');
-    
+  // 🔊 AUDIO & VOICE ENGINE (Success Beep + Name Announcement)
+  const playFeedback = (type, name = "") => {
+    // 1. Digital Beep Logic
     try {
-      // 1. Get Ticket from Firestore
-      const ticketRef = doc(db, 'registrations', rawValue);
-      const ticketSnap = await getDoc(ticketRef);
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
 
-      if (!ticketSnap.exists()) {
-        throw new Error("Invalid Ticket ID");
+      if (type === 'success') {
+        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // High pitch for success
+        oscillator.type = 'sine';
+      } else {
+        oscillator.frequency.setValueAtTime(220, audioCtx.currentTime); // Low buzz for errors
+        oscillator.type = 'square';
       }
+      oscillator.start();
+      gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.1);
+      oscillator.stop(audioCtx.currentTime + 0.1);
+    } catch (e) {
+      console.error("Audio context error:", e);
+    }
 
-      const ticket = ticketSnap.data();
+    // 2. Pro Voice Welcome (Text-to-Speech)
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel(); // Clear queue
+      let text = "";
+      if (type === 'success') text = `Welcome, ${name}`;
+      if (type === 'error') text = `Access Denied`;
+      if (type === 'warning') text = `Already Scanned`;
+      if (type === 'security') text = `Unauthorized Organizer`;
 
-      // 2. Security Check: Is this YOUR event?
-      // (Admins/SuperAdmins can scan any, Organizers only scan their own)
-      if (ticket.eventCreatorId !== user.uid && user.role !== 'super_admin' && user.role !== 'admin') {
-         setStatus('error');
-         setMessage("Wrong Event");
-         speak("This ticket is for a different organizer.");
-         setTimeout(() => setStatus('idle'), 2500);
-         return;
-      }
-
-      // 3. Duplicate Check
-      if (ticket.used) {
-        setStatus('error');
-        const time = ticket.usedAt ? new Date(ticket.usedAt.toDate()).toLocaleTimeString() : 'Earlier';
-        setMessage(`Already Used at ${time}`);
-        speak(`Stop. ${ticket.userName.split(' ')[0]} has already entered.`);
-        setTimeout(() => setStatus('idle'), 3000);
-        return;
-      }
-
-      // 4. Success: Mark as Present
-      await updateDoc(ticketRef, {
-        used: true,
-        usedAt: serverTimestamp()
-      });
-
-      setStatus('success');
-      setScanResult(ticket);
-      setMessage(`${ticket.userName} • Verified`);
-      speak(getRandomWelcome(ticket.userName.split(' ')[0]));
-      
-      // Reset after 2.5 seconds
-      setTimeout(() => {
-        setStatus('idle');
-        setScanResult(null);
-        setLastScannedId(null);
-        setMessage('Ready for next...');
-      }, 2500);
-
-    } catch (err) {
-      console.error(err);
-      setStatus('error');
-      setMessage(err.message === "Invalid Ticket ID" ? "Invalid QR Code" : "Scan Error");
-      speak("Invalid Ticket.");
-      setTimeout(() => setStatus('idle'), 2000);
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.1; // Professional speed
+      window.speechSynthesis.speak(utterance);
     }
   };
 
-  return (
-    <div className={`min-h-screen flex flex-col transition-colors duration-500 ${
-      status === 'success' ? 'bg-green-500' : 
-      status === 'error' ? 'bg-red-600' : 
-      'bg-black'
-    }`}>
+  useEffect(() => {
+    // 🛡️ SECURITY: Block non-admins at the gate
+    if (profile?.role !== 'admin' && profile?.role !== 'super_admin') return;
+
+    const scanner = new Html5QrcodeScanner(
+      "reader",
+      { 
+        fps: 15, // High FPS for smooth tracking
+        qrbox: { width: 280, height: 280 },
+        aspectRatio: 1.0,
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE] // Performance hack
+      }
+    );
+
+    const onScanSuccess = async (decodedText) => {
+      // Prevent double scans and processing loops
+      if (isProcessing.current || decodedText === lastScannedId.current) return;
       
-      {/* Header */}
-      <div className="p-6 flex justify-between items-center z-10 relative">
-        <button onClick={() => navigate('/admin')} className="p-2 bg-white/10 rounded-full text-white backdrop-blur-md hover:bg-white/20 transition-all">
-          <ArrowLeft className="w-6 h-6" />
-        </button>
-        <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full backdrop-blur-md">
-          <Zap className={`w-4 h-4 ${status === 'idle' ? 'text-white' : 'text-yellow-400 animate-pulse'}`} />
-          <span className="text-xs font-bold text-white uppercase tracking-widest">
-            {status === 'idle' ? 'Live Scanner' : status}
-          </span>
-        </div>
+      isProcessing.current = true;
+      lastScannedId.current = decodedText;
+      setScanResult('processing');
+
+      try {
+        const regRef = doc(db, 'registrations', decodedText);
+        const regSnap = await getDoc(regRef);
+
+        if (!regSnap.exists()) {
+          setScanResult('error');
+          setMessage('Invalid Ticket: Not found in database.');
+          playFeedback('error');
+        } else {
+          const data = regSnap.data();
+
+          // 🛡️ SECURITY: Cross-Event Organizer Check
+          // IEEE Admin cannot scan for NSS Event (Unless SuperAdmin)
+          if (profile.role !== 'super_admin' && data.eventCreatorId !== user.uid) {
+            setScanResult('error');
+            setMessage('Unauthorized: You are not the host of this event.');
+            playFeedback('security');
+          } 
+          else if (data.checkedIn === true || data.status === 'attended') {
+            setScanResult('warning');
+            setMessage(`Already Scanned: Welcome back, ${data.userName}`);
+            playFeedback('warning');
+          } else {
+            // Update Firestore with Entry Status
+            await updateDoc(regRef, {
+              status: 'attended',
+              checkedIn: true,
+              attendedAt: serverTimestamp()
+            });
+            setScanResult('success');
+            setMessage(`Access Granted: Welcome, ${data.userName}!`);
+            playFeedback('success', data.userName);
+          }
+        }
+      } catch (err) {
+        setScanResult('error');
+        setMessage('Network Error: Check connectivity.');
+        playFeedback('error');
+      } finally {
+        // ⚡ TURBO RESET: 800ms gap for high-speed entry lines
+        setTimeout(() => {
+          isProcessing.current = false;
+          lastScannedId.current = null;
+          setScanResult(null);
+        }, 800); 
+      }
+    };
+
+    scanner.render(onScanSuccess, (err) => {});
+    return () => scanner.clear().catch(e => console.error("Scanner clear error", e));
+  }, [profile, user]);
+
+  // Unauthorized UI
+  if (profile?.role !== 'admin' && profile?.role !== 'super_admin') {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center text-red-500">
+        <ShieldAlert className="w-20 h-20 mb-4 animate-pulse" />
+        <h1 className="text-2xl font-black uppercase tracking-tighter italic">Security Alert</h1>
+        <p className="text-zinc-500 font-bold text-xs uppercase mt-2">Scanner access restricted to organizers.</p>
+        <button onClick={() => navigate('/')} className="mt-8 px-10 py-4 bg-zinc-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest border border-zinc-800 active:scale-95 transition-all">Return to Home</button>
       </div>
+    );
+  }
 
-      {/* Camera Viewport */}
-      <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-        
-        {/* The Camera Component */}
-        <div className="absolute inset-0 w-full h-full">
-           <Scanner 
-              onScan={handleScan}
-              formats={['qr_code']} // Only scan QRs
-              components={{
-                audio: false, // Turn off library beep (we use our own TTS)
-                finder: false // We use our own UI overlay
-              }}
-              styles={{
-                container: { width: '100%', height: '100%' },
-                video: { objectFit: 'cover' }
-              }}
-           />
+  return (
+    <div className="min-h-screen bg-zinc-950 text-white pt-24 pb-12 px-6">
+      <div className="max-w-md mx-auto">
+        {/* Header Navigation */}
+        <div className="flex justify-between items-center mb-6">
+            <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-zinc-500 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
+              <ArrowLeft className="w-5 h-5" /> Exit Console
+            </button>
+            <div className="flex items-center gap-2 text-indigo-400">
+                <Zap className="w-4 h-4 fill-current animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-tighter">Scanner Active</span>
+            </div>
         </div>
 
-        {/* Overlay UI */}
-        <div className="relative z-10 flex flex-col items-center gap-6 pointer-events-none">
+        {/* Scanner Shell */}
+        <div className="bg-zinc-900 rounded-[3rem] p-8 border border-zinc-800 shadow-2xl overflow-hidden relative group">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/5 to-transparent pointer-events-none"></div>
+          <div id="reader" className="overflow-hidden rounded-[2rem] border-0 shadow-inner"></div>
           
-          {/* Scanner Box */}
-          <div className={`w-64 h-64 border-4 rounded-3xl flex items-center justify-center transition-all duration-300 ${
-            status === 'success' ? 'border-white scale-110 bg-green-500/20' : 
-            status === 'error' ? 'border-white scale-90 bg-red-600/20' : 
-            'border-white/50 animate-pulse'
-          }`}>
-             {status === 'success' && <CheckCircle className="w-24 h-24 text-white drop-shadow-lg" />}
-             {status === 'error' && <XCircle className="w-24 h-24 text-white drop-shadow-lg" />}
-          </div>
+          {/* Dynamic Result Overlays */}
+          {scanResult && (
+            <div className={`absolute inset-0 z-50 flex flex-col items-center justify-center p-8 text-center backdrop-blur-2xl animate-in zoom-in fade-in duration-200 ${
+              scanResult === 'success' ? 'bg-green-500/90' : 
+              scanResult === 'warning' ? 'bg-amber-500/90' : 
+              scanResult === 'processing' ? 'bg-indigo-600/90' : 'bg-red-600/90'
+            }`}>
+              {scanResult === 'success' && <CheckCircle className="w-24 h-24 mb-4 text-white animate-bounce" />}
+              {scanResult === 'error' && <XCircle className="w-24 h-24 mb-4 text-white" />}
+              {scanResult === 'warning' && <AlertCircle className="w-24 h-24 mb-4 text-white" />}
+              {scanResult === 'processing' && <Zap className="w-24 h-24 mb-4 text-white animate-pulse" />}
+              
+              <h2 className="text-3xl font-black uppercase tracking-tighter italic">
+                {scanResult === 'processing' ? 'Verifying...' : scanResult.toUpperCase()}
+              </h2>
+              <p className="mt-3 font-bold text-lg leading-tight text-white/90 drop-shadow-md">{message}</p>
+            </div>
+          )}
+        </div>
 
-          {/* Message Box */}
-          <div className="bg-black/60 backdrop-blur-xl px-8 py-4 rounded-2xl text-center max-w-xs shadow-2xl">
-            <p className="text-white font-black text-lg leading-tight mb-1">
-              {message}
+        {/* Footer Info */}
+        <div className="mt-10 space-y-4 text-center">
+            <p className="text-zinc-600 text-[10px] font-black uppercase tracking-[0.4em]">
+                UniFlow Gate Protocol v3.1 • Voice Enabled
             </p>
-            {scanResult && (
-               <p className="text-green-400 text-xs font-bold uppercase tracking-wider mt-1">
-                 Roll: {scanResult.userRollNo}
-               </p>
-            )}
-          </div>
-
+            <div className="flex justify-center gap-4 text-[10px] font-bold text-zinc-500 uppercase">
+                <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-green-500"></div> Auth Secure</span>
+                <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div> Cloud Sync</span>
+            </div>
         </div>
       </div>
     </div>
