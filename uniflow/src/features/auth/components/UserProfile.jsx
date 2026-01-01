@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { db, storage } from '../../lib/firebase';
+// 🟢 FIX: Added one more "../" to reach src folder
+import { useAuth } from '../../../context/AuthContext';
+import { db, storage } from '../../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { User, Mail, Phone, Hash, BookOpen, Layers, MapPin, Camera, Save, Loader2, AlertCircle } from 'lucide-react';
@@ -100,7 +101,6 @@ const UserProfile = () => {
       }
 
       // 2. Update Firestore (🛡️ EXPLICIT FIELD MAPPING)
-      // We do NOT use ...formData here to prevent Mass Assignment attacks.
       await setDoc(doc(db, 'users', user.uid), {
         displayName: formData.displayName,
         phone: formData.phone,
@@ -110,21 +110,17 @@ const UserProfile = () => {
         group: formData.group,
         residency: formData.residency,
         photoURL: finalPhotoURL,
-        email: user.email, // Read-only from auth
+        email: user.email, 
         
         // Metadata
         isProfileComplete: true,
         updatedAt: new Date(),
         
-        // 🔒 SECURITY NOTE: 
-        // We purposefully DO NOT include 'role', 'credits', or 'isAdmin' here.
-        // Even if a hacker adds them to the state, they won't be saved.
+        // 🔒 SECURITY: No 'role' or 'isAdmin' fields here
       }, { merge: true });
 
       setSuccess("Profile updated successfully!");
       setExistingPhoto(finalPhotoURL);
-      
-      // Clear success msg after 3s
       setTimeout(() => setSuccess(''), 3000);
 
     } catch (err) {
