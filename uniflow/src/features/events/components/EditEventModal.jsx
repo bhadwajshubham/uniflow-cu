@@ -153,7 +153,7 @@ const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
                </div>
             </div>
 
-            {/* Entry Structure (Solo vs Team) */}
+            {/* Participation Type (Solo vs Team) */}
             <div className="p-5 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-3xl">
                 <label className="text-[10px] font-black uppercase text-zinc-400 mb-4 block tracking-widest text-center">Participation Type</label>
                 <div className="flex justify-center gap-6">
@@ -177,7 +177,7 @@ const EditEventModal = ({ isOpen, onClose, event, onSuccess }) => {
                 )}
             </div>
 
-            {/* Branch Restriction */}
+            {/* Branch Restriction & University Only */}
             <div className="space-y-3">
                <div onClick={() => setFormData(prev => ({...prev, isUniversityOnly: !prev.isUniversityOnly}))} 
                     className={`p-4 rounded-2xl border-2 cursor-pointer flex items-center gap-4 transition-all ${formData.isUniversityOnly ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20' : 'border-zinc-200 dark:border-zinc-800 bg-transparent'}`}>
