@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-// 🟢 FIX: Added one more "../" to reach src folder
+// Correct Import Path
 import { useAuth } from '../../../context/AuthContext';
 import { db, storage } from '../../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { User, Mail, Phone, Hash, BookOpen, Layers, MapPin, Camera, Save, Loader2, AlertCircle } from 'lucide-react';
+// 🟢 FIX: Added 'Users' to the import list below
+import { User, Users, Mail, Phone, Hash, BookOpen, Layers, MapPin, Camera, Save, Loader2, AlertCircle } from 'lucide-react';
 
 const UserProfile = () => {
   const { user } = useAuth();
@@ -76,14 +77,13 @@ const UserProfile = () => {
     }
   };
 
-  // 🛡️ SECURE SAVE FUNCTION
+  // Save Function
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
     setError('');
     setSuccess('');
 
-    // Basic Client Validation
     if (formData.phone.length !== 10) {
       setError("Phone number must be 10 digits.");
       setSaving(false);
@@ -93,14 +93,12 @@ const UserProfile = () => {
     try {
       let finalPhotoURL = existingPhoto;
 
-      // 1. Upload Photo if changed
       if (photo) {
         const storageRef = ref(storage, `avatars/${user.uid}_${Date.now()}`);
         await uploadBytes(storageRef, photo);
         finalPhotoURL = await getDownloadURL(storageRef);
       }
 
-      // 2. Update Firestore (🛡️ EXPLICIT FIELD MAPPING)
       await setDoc(doc(db, 'users', user.uid), {
         displayName: formData.displayName,
         phone: formData.phone,
@@ -111,12 +109,8 @@ const UserProfile = () => {
         residency: formData.residency,
         photoURL: finalPhotoURL,
         email: user.email, 
-        
-        // Metadata
         isProfileComplete: true,
         updatedAt: new Date(),
-        
-        // 🔒 SECURITY: No 'role' or 'isAdmin' fields here
       }, { merge: true });
 
       setSuccess("Profile updated successfully!");
@@ -156,7 +150,7 @@ const UserProfile = () => {
 
         <form onSubmit={handleSave} className="space-y-6">
           
-          {/* Photo Upload */}
+          {/* Photo */}
           <div className="flex flex-col items-center gap-4">
              <div className="relative group cursor-pointer">
                 <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-zinc-100 dark:border-zinc-800 shadow-lg">
@@ -171,7 +165,7 @@ const UserProfile = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-             {/* Name */}
+             {/* Fields */}
              <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Full Name</label>
                 <div className="relative">
@@ -180,7 +174,6 @@ const UserProfile = () => {
                 </div>
              </div>
              
-             {/* Phone */}
              <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Phone (+91)</label>
                 <div className="relative">
@@ -189,16 +182,14 @@ const UserProfile = () => {
                 </div>
              </div>
 
-             {/* Roll No */}
              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Roll No / URN</label>
+                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Roll No</label>
                 <div className="relative">
                    <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                    <input name="rollNo" value={formData.rollNo} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50" placeholder="211099..." required />
                 </div>
              </div>
 
-             {/* Branch */}
              <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Branch</label>
                 <div className="relative">
@@ -209,7 +200,6 @@ const UserProfile = () => {
                 </div>
              </div>
 
-             {/* Semester */}
              <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Semester</label>
                 <div className="relative">
@@ -220,16 +210,16 @@ const UserProfile = () => {
                 </div>
              </div>
 
-             {/* Group */}
+             {/* 🟢 THIS WAS CAUSING THE CRASH */}
              <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Group (Optional)</label>
                 <div className="relative">
+                   {/* 'Users' is now correctly imported */}
                    <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                    <input name="group" value={formData.group} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50" placeholder="G1, G2..." />
                 </div>
              </div>
              
-             {/* Residency */}
              <div className="space-y-1 md:col-span-2">
                 <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Residency</label>
                 <div className="relative">
