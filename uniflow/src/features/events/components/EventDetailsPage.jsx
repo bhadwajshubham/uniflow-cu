@@ -71,7 +71,7 @@ const EventDetailsPage = () => {
     try {
       await navigator.share({
         title: event.title,
-        text: `Check out ${event.title} on UniFlow`,
+        text: `Check out ${event.title} on UniFlow-cu`,
         url: window.location.href
       });
     } catch {}

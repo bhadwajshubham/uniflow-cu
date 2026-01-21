@@ -66,7 +66,7 @@ const AboutPage = () => {
             
             <p className="text-zinc-400 max-w-lg mx-auto mb-8 text-sm leading-relaxed">
               Hi, I'm a Full-Stack Engineer passionate about solving campus problems with code. 
-              UniFlow was built to make event management seamless for everyone at Chitkara University.
+              UniFlow-cu was built to make event management seamless for everyone at Chitkara University.
             </p>
 
             {/* Social Links */}

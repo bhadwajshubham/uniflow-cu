@@ -65,7 +65,7 @@ const Consent = () => {
             Consent Required
           </h1>
           <p className="text-sm text-zinc-500 mt-2">
-            Please review and accept to continue using UniFlow
+            Please review and accept to continue using UniFlow-cu
           </p>
         </div>
 

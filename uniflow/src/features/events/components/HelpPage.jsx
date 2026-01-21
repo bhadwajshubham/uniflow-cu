@@ -30,7 +30,7 @@ const HelpPage = () => {
             <p className="text-sm text-zinc-500 mt-2 mb-6">
               Get a response within 24 hours. Best for non-urgent queries.
             </p>
-            <a href="mailto:support@uniflow.com" className="inline-flex items-center text-blue-600 font-semibold hover:gap-2 transition-all">
+            <a href="mailto:bhardwajshubham0777@gmail.com" className="inline-flex items-center text-blue-600 font-semibold hover:gap-2 transition-all">
               Send Email <ChevronRight className="w-4 h-4 ml-1" />
             </a>
           </div>

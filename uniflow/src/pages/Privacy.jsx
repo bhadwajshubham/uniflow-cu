@@ -10,7 +10,7 @@ const PrivacyPolicy = () => {
 
       <section className="space-y-6 text-sm leading-relaxed">
         <p>
-          UniFlow (“we”, “our”, “us”) is committed to protecting your privacy. This Privacy Policy, compliant with the Digital Personal Data Protection Act, 2023 (DPDP Act) and other applicable laws, explains our data practices. By using UniFlow, you consent to these practices.
+          UniFlow-cu (“we”, “our”, “us”) is committed to protecting your privacy. This Privacy Policy, compliant with the Digital Personal Data Protection Act, 2023 (DPDP Act) and other applicable laws, explains our data practices. By using UniFlow-cu, you consent to these practices.
         </p>
 
         <h2 className="text-lg font-bold mt-8">1. Information We Collect</h2>
@@ -54,7 +54,7 @@ const PrivacyPolicy = () => {
 
         <h2 className="text-lg font-bold mt-8">5. Third-Party Services</h2>
         <p>
-          UniFlow uses trusted third-party services for operation:
+          UniFlow-cu uses trusted third-party services for operation:
         </p>
         <ul className="list-disc ml-6 space-y-1">
           <li>Firebase (authentication, Firestore database for data storage)</li>
@@ -107,11 +107,11 @@ const PrivacyPolicy = () => {
 
         <h2 className="text-lg font-bold mt-8">12. Disclaimer</h2>
         <p>
-          UniFlow is a facilitator; not liable for organizer data misuse or inaccuracies.
+          UniFlow-cu is a facilitator; not liable for organizer data misuse or inaccuracies.
         </p>
 
         <h2 className="text-lg font-bold mt-8">13. Contact</h2>
-        <p className="font-bold">📧 uniflow.support@gmail.com</p>
+        <p className="font-bold">📧 bhardwajshubham0777@gmail.com</p>
         <p>For DPDP grievances, contact our DPO at the above email. If unresolved, appeal to Data Protection Board.</p>
       </section>
     </div>

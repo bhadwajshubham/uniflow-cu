@@ -63,7 +63,7 @@ const VerificationPage = () => {
             <ShieldCheck className="h-8 w-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-white">Credential Verification</h1>
-          <p className="text-indigo-100 text-sm mt-1">UniFlow Official Records</p>
+          <p className="text-indigo-100 text-sm mt-1">UniFlow-cu Official Records</p>
         </div>
 
         {/* Search Box */}
@@ -112,7 +112,7 @@ const VerificationPage = () => {
 
         {/* Footer */}
         <div className="p-4 bg-zinc-50 dark:bg-black text-center text-xs text-zinc-400 border-t border-zinc-100 dark:border-zinc-800">
-          SECURE VERIFICATION SYSTEM • UNIFLOW
+          SECURE VERIFICATION SYSTEM • UNIFLOW-CU
         </div>
 
       </div>

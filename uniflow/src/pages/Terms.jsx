@@ -9,42 +9,42 @@ const Terms = () => {
       </p>
       <section className="space-y-6 text-sm leading-relaxed">
         <p>
-          UniFlow is an independent, third-party event management and coordination
+          UniFlow-cu is an independent, third-party event management and coordination
           platform that provides technical tools for event discovery, registration,
           participation tracking, and attendance verification.
         </p>
         <p>
-          UniFlow is <strong>not an official system of any university or institution</strong>,
+          UniFlow-cu is <strong>not an official system of any university or institution</strong>,
           unless explicitly stated in writing. Any reference to university-related
           events, clubs, or societies does not imply affiliation or endorsement.
         </p>
 
         <h2 className="text-lg font-bold mt-8">1. Acceptance of Terms</h2>
         <p>
-          By accessing or using UniFlow, you agree to be bound by these Terms & Conditions and our{" "}
+          By accessing or using UniFlow-cu, you agree to be bound by these Terms & Conditions and our{" "}
           <a href="/privacy" className="underline hover:text-blue-600">Privacy Policy</a>. If you do not agree, you must not use the platform.
         </p>
 
         <h2 className="text-lg font-bold mt-8">2. Eligibility</h2>
         <ul className="list-disc ml-6 space-y-1">
-          <li>You must be at least 18 years of age to use UniFlow.</li>
+          <li>You must be at least 18 years of age to use UniFlow-cu.</li>
           <li>Users between 13–18 years may use the platform only with verifiable parental/guardian consent.</li>
           <li>You are responsible for providing accurate and truthful information.</li>
         </ul>
 
         <h2 className="text-lg font-bold mt-8">3. Platform Role</h2>
         <p>
-          UniFlow acts solely as a technology provider. We do not organize, host, supervise, or control any events listed on the platform. All events are created and managed by independent organizers.
+          UniFlow-cu acts solely as a technology provider. We do not organize, host, supervise, or control any events listed on the platform. All events are created and managed by independent organizers.
         </p>
 
         <h2 className="text-lg font-bold mt-8">4. User Accounts</h2>
         <p>
-          You are responsible for maintaining account security and all actions performed through your account. UniFlow may suspend or terminate accounts for violations.
+          You are responsible for maintaining account security and all actions performed through your account. UniFlow-cu may suspend or terminate accounts for violations.
         </p>
 
         <h2 className="text-lg font-bold mt-8">5. Data & Consent (DPDP Act Compliance)</h2>
         <p>
-          By using UniFlow, you provide explicit, informed, and granular consent for the collection and processing of your personal data under the Digital Personal Data Protection Act, 2023 (DPDP Act).
+          By using UniFlow-cu, you provide explicit, informed, and granular consent for the collection and processing of your personal data under the Digital Personal Data Protection Act, 2023 (DPDP Act).
         </p>
         <p>Data collected (only what is necessary):</p>
         <ul className="list-disc ml-6 space-y-1">
@@ -60,12 +60,12 @@ const Terms = () => {
 
         <h2 className="text-lg font-bold mt-8">6. Events & Registrations</h2>
         <p>
-          Event details are provided by organizers. UniFlow does not guarantee accuracy, availability, or execution of events.
+          Event details are provided by organizers. UniFlow-cu does not guarantee accuracy, availability, or execution of events.
         </p>
 
         <h2 className="text-lg font-bold mt-8">7. Refunds & Cancellations</h2>
         <p>
-          Refunds are governed solely by the event organizer. UniFlow only facilitates technical processing. No refunds for no-shows unless the organizer explicitly allows it.
+          Refunds are governed solely by the event organizer. UniFlow-cu only facilitates technical processing. No refunds for no-shows unless the organizer explicitly allows it.
         </p>
 
         <h2 className="text-lg font-bold mt-8">8. Organizer Responsibilities</h2>
@@ -75,22 +75,22 @@ const Terms = () => {
 
         <h2 className="text-lg font-bold mt-8">9. Third-Party Services</h2>
         <p>
-          UniFlow uses Firebase and other trusted providers. We are not liable for third-party outages, data loss, or breaches beyond our reasonable control.
+          UniFlow-cu uses Firebase and other trusted providers. We are not liable for third-party outages, data loss, or breaches beyond our reasonable control.
         </p>
 
         <h2 className="text-lg font-bold mt-8">10. Security Disclaimer</h2>
         <p>
-          We use industry-standard security measures, but no system is completely secure. UniFlow is not responsible for any data breaches, losses, or unauthorized access beyond our reasonable control, including third-party (e.g., Firebase, Cloudinary) incidents.
+          We use industry-standard security measures, but no system is completely secure. UniFlow-cu is not responsible for any data breaches, losses, or unauthorized access beyond our reasonable control, including third-party (e.g., Firebase, Cloudinary) incidents.
         </p>
 
         <h2 className="text-lg font-bold mt-8">11. Limitation of Liability</h2>
         <p>
-          UniFlow shall not be liable for indirect, incidental, or consequential damages. Total liability shall not exceed fees paid in the preceding six months. This includes no liability for data breaches, event issues, or any other incidents arising from user, organizer, or third-party actions.
+          UniFlow-cu shall not be liable for indirect, incidental, or consequential damages. Total liability shall not exceed fees paid in the preceding six months. This includes no liability for data breaches, event issues, or any other incidents arising from user, organizer, or third-party actions.
         </p>
 
         <h2 className="text-lg font-bold mt-8">12. Suspension & Termination</h2>
         <p>
-          UniFlow reserves the right to suspend or terminate access to protect platform integrity or comply with law.
+          UniFlow-cu reserves the right to suspend or terminate access to protect platform integrity or comply with law.
         </p>
 
         <h2 className="text-lg font-bold mt-8">13. Governing Law</h2>
@@ -102,9 +102,9 @@ const Terms = () => {
         <p>
           For queries, grievances, or data rights requests (access, correction, erasure, withdrawal), contact:
         </p>
-        <p className="font-bold">📧 uniflow.support@gmail.com</p>
+        <p className="font-bold">📧 bhardwajshubham0777@gmail.com</p>
         <p>
-          UniFlow acts as its own Data Protection Officer. We aim to respond within 30 days as per DPDP Act requirements. If unresolved, you may appeal to India's Data Protection Board.
+          UniFlow-cu acts as its own Data Protection Officer. We aim to respond within 30 days as per DPDP Act requirements. If unresolved, you may appeal to India's Data Protection Board.
         </p>
       </section>
     </div>

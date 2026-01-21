@@ -124,7 +124,7 @@ const CertificateModal = ({ isOpen, onClose, ticket }) => {
                      <img src="/signature.png" alt="Sign" className="h-10 mb-[-10px] opacity-70" onError={(e) => e.target.style.display='none'} />
                      <div className="w-48 h-px bg-black mt-4"></div>
                      <p className="text-xs font-bold mt-1 text-zinc-600 uppercase">Event Organizer</p>
-                     <p className="text-[9px] text-zinc-400 mt-0.5">Issued via UniFlow System</p>
+                     <p className="text-[9px] text-zinc-400 mt-0.5">Issued via UniFlow-cu System</p>
                   </div>
                </div>
             </div>
