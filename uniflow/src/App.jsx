@@ -2,6 +2,10 @@ import React from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
+import Consent from "./pages/Consent";
+import RequireConsent from "./components/RequireConsent";
+
+
 // ✅ Navbar Import (Your App-Like Navbar)
 import Navbar from './components/layout/Navbar';
 
@@ -82,6 +86,8 @@ function App() {
             <Route path="/about" element={<AboutPage />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/privacy" element={<Privacy />} />
+            <Route path="/consent" element={<Consent />} />
+
 
 
             {/* --- Student Routes --- */}
