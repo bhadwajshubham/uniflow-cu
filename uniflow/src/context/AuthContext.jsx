@@ -1,98 +1,119 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  signOut, 
-  onAuthStateChanged 
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import {
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut as firebaseSignOut,
+  onAuthStateChanged
 } from 'firebase/auth';
-import { 
-  doc, 
-  getDoc, 
-  setDoc, 
-  serverTimestamp 
+import {
+  doc,
+  getDoc,
+  setDoc,
+  serverTimestamp
 } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
+
+/**
+ * AuthContext
+ *
+ * Responsibilities:
+ * - Manage Firebase auth state
+ * - Ensure a minimal users/{uid} doc exists on first sign-in
+ * - Load & expose 'profile' (the users/{uid} doc) to app
+ * - Expose login/logout, loading state
+ *
+ * This is deliberately conservative: creating the user doc with termsAccepted:false
+ * so Firestore rules (which require existence) behave predictably.
+ */
 
 const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
+  const [user, setUser] = useState(null);       // firebase auth user
+  const [profile, setProfile] = useState(undefined); // user's firestore doc; undefined = not loaded yet, null = no doc
   const [loading, setLoading] = useState(true);
 
-  // 1. Login Function
+  // Sign-in (Google)
   const login = async () => {
-    try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      
-      // 🔥 CRITICAL FIX: Check if user exists in DB, if not, CREATE THEM
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth, provider);
+    // onAuthStateChanged handles the rest
+  };
 
-      if (!userSnap.exists()) {
-        console.log("🆕 New User Detected! Creating Database Profile...");
-        await setDoc(userRef, {
-          name: user.displayName,
-          email: user.email,
-          photoURL: user.photoURL,
-          role: 'student', // Default role
-          createdAt: serverTimestamp(),
-        });
-      } else {
-        console.log("✅ Existing User Logged In. Fetching Profile...");
-      }
-      
-      return user;
-    } catch (error) {
-      console.error("Login Error:", error);
-      throw error;
+  // Logout
+  const logout = async () => {
+    try {
+      await firebaseSignOut(auth);
+      // state will be cleared by onAuthStateChanged handler below
+    } catch (err) {
+      console.error('Logout failed', err);
     }
   };
 
-  // 2. Logout Function
-  const logout = () => signOut(auth);
-
-  // 3. Monitor Auth State & Fetch Profile
   useEffect(() => {
+    // Subscribe to Firebase auth state
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      
-      if (currentUser) {
-        // Fetch the profile from Firestore to get the ROLE
+      setLoading(true);
+      setUser(currentUser || null);
+
+      if (!currentUser) {
+        // Not logged in — clear profile
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Ensure minimal user doc exists so rules relying on exists(...) behave
         const userRef = doc(db, 'users', currentUser.uid);
-        const userSnap = await getDoc(userRef);
-        
-        if (userSnap.exists()) {
-          setProfile(userSnap.data());
-          // Debug Log
-          console.log("👤 Profile Loaded:", userSnap.data());
+        const snap = await getDoc(userRef);
+
+        if (!snap.exists()) {
+          // Create a minimal doc. We intentionally set termsAccepted:false so user is forced to accept
+          await setDoc(
+            userRef,
+            {
+              displayName: currentUser.displayName || null,
+              email: currentUser.email || null,
+              photoURL: currentUser.photoURL || null,
+              termsAccepted: false,
+              createdAt: serverTimestamp()
+            },
+            { merge: true }
+          );
+        }
+
+        // Fetch the user document again to populate profile
+        const freshSnap = await getDoc(userRef);
+        if (freshSnap.exists()) {
+          setProfile(freshSnap.data());
         } else {
-          // Fallback if DB doc is missing even after login
-          console.warn("⚠️ User authenticated but no DB profile found.");
           setProfile(null);
         }
-      } else {
+      } catch (err) {
+        console.error('Error ensuring user doc / loading profile', err);
+        // Make profile explicit null so RequireConsent can respond (but still avoid undefined race)
         setProfile(null);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     });
 
-    return unsubscribe;
+    return () => unsubscribe();
   }, []);
 
+  // Keep the context shape you were using
   const value = {
     user,
-    profile, // This contains the 'role' (admin/student)
+    profile, // user's firestore doc (object), or null (no doc), or undefined (loading)
     login,
     logout,
     loading
   };
 
+  // IMPORTANT: do not render children until initial loading finished to avoid route flicker
   return (
     <AuthContext.Provider value={value}>
       {!loading && children}
