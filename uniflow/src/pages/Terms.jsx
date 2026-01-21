@@ -1,101 +1,109 @@
 import React from "react";
 
-export default function Terms() {
+const Terms = () => {
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black px-4 py-12">
-      <div className="max-w-4xl mx-auto space-y-8">
-        
-        {/* Header */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl p-6 shadow-sm">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            Terms & Conditions
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-            Please read these terms carefully before using UniFlow.
-          </p>
-        </div>
+    <div className="max-w-4xl mx-auto px-4 py-12 text-gray-800 dark:text-gray-200">
+      <h1 className="text-3xl font-black mb-6">Terms & Conditions</h1>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">
+        Last Updated: January 21, 2026
+      </p>
 
-        {/* Content */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl p-6 shadow-sm space-y-6 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-          
-          <section>
-            <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              What UniFlow Is
-            </h2>
-            <p>
-              UniFlow is an independent, third-party event management platform
-              that provides tools for event registration, participation tracking,
-              and attendance verification.
-            </p>
-          </section>
+      <section className="space-y-6 text-sm leading-relaxed">
+        <p>
+          UniFlow is an independent, third-party event management platform that provides technical tools for event discovery, registration, participation tracking, and attendance verification.
+        </p>
+        <p>
+          <strong>UniFlow is not an official system of any university or institution</strong>, unless explicitly stated in writing. Any reference to university-related events does not imply affiliation or endorsement.
+        </p>
 
-          <section>
-            <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              Our Role
-            </h2>
-            <p>
-              UniFlow acts solely as a technology provider. Events are created
-              and managed by independent organizers such as clubs, societies,
-              or authorized individuals.
-            </p>
-          </section>
+        <h2 className="text-lg font-bold mt-8">1. Acceptance of Terms</h2>
+        <p>
+          By accessing or using UniFlow, you agree to be bound by these Terms & Conditions and our{" "}
+          <a href="/privacy" className="underline hover:text-blue-600">Privacy Policy</a>. If you do not agree, you must not use the platform.
+        </p>
 
-          <section>
-            <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              Accounts & Access
-            </h2>
-            <p>
-              You are responsible for activities performed using your account.
-              UniFlow may suspend or restrict access in case of misuse or policy
-              violations.
-            </p>
-          </section>
+        <h2 className="text-lg font-bold mt-8">2. Eligibility</h2>
+        <ul className="list-disc ml-6 space-y-1">
+          <li>You must be at least 18 years of age to use UniFlow.</li>
+          <li>Users between 13–18 years may use the platform only with verifiable parental/guardian consent.</li>
+          <li>You are responsible for providing accurate and truthful information.</li>
+        </ul>
 
-          <section>
-            <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              Tickets & Entry
-            </h2>
-            <p>
-              Tickets are intended for individual use. Entry is typically
-              granted on a first-successful-scan basis, subject to organizer
-              rules.
-            </p>
-          </section>
+        <h2 className="text-lg font-bold mt-8">3. Platform Role</h2>
+        <p>
+          UniFlow acts solely as a technology provider. We do not organize, host, supervise, or control any events. All events are created and managed by independent organizers.
+        </p>
 
-          <section>
-            <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              Service Availability & Security
-            </h2>
-            <p>
-              UniFlow is provided on an “as-is” basis. While reasonable security
-              practices are applied, uninterrupted availability or absolute
-              security cannot be guaranteed.
-            </p>
-          </section>
+        <h2 className="text-lg font-bold mt-8">4. User Accounts</h2>
+        <p>
+          You are responsible for maintaining account security and all actions performed through your account. UniFlow may suspend or terminate accounts for violations.
+        </p>
 
-          <section>
-            <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              Legal
-            </h2>
-            <p>
-              These terms are governed by the laws of India.
-            </p>
-          </section>
+        <h2 className="text-lg font-bold mt-8">5. Data & Consent (DPDP Act Compliance)</h2>
+        <p>
+          By using UniFlow, you provide explicit, informed, and granular consent for the collection and processing of your personal data under the Digital Personal Data Protection Act, 2023 (DPDP Act).
+        </p>
+        <p>Data collected (only what is necessary):</p>
+        <ul className="list-disc ml-6 space-y-1">
+          <li>Name, email address, phone number</li>
+          <li>Roll number, branch, semester, group, residency status</li>
+          <li>Optional profile photograph</li>
+          <li>Event registrations, attendance status, QR scan records</li>
+          <li>Responses to organizer-created questions (e.g., blood group, eligibility details)</li>
+        </ul>
+        <p>You may withdraw consent at any time via support email (may limit or terminate access).</p>
 
-          <section>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Questions? Contact{" "}
-              <a
-                href="mailto:bhardwajshubham0777@gmail.com"
-                className="text-blue-600 dark:text-blue-400 underline"
-              >
-                bhardwajshubham0777@gmail.com
-              </a>
-            </p>
-          </section>
+        <h2 className="text-lg font-bold mt-8">6. Events & Registrations</h2>
+        <p>
+          Event details are provided by organizers. UniFlow does not guarantee accuracy, availability, or execution of events.
+        </p>
 
-        </div>
-      </div>
+        <h2 className="text-lg font-bold mt-8">7. Refunds & Cancellations</h2>
+        <p>
+          Refunds are governed solely by the event organizer. UniFlow only facilitates technical processing. No refunds for no-shows unless the organizer explicitly allows it.
+        </p>
+
+        <h2 className="text-lg font-bold mt-8">8. Organizer Responsibilities</h2>
+        <p>
+          Organizers are solely responsible for event execution, participant safety, institutional compliance, and lawful handling of any additional data they collect.
+        </p>
+
+        <h2 className="text-lg font-bold mt-8">9. Third-Party Services</h2>
+        <p>
+          UniFlow uses Firebase and other trusted providers. We are not liable for third-party outages, data loss, or breaches beyond our reasonable control.
+        </p>
+
+        <h2 className="text-lg font-bold mt-8">10. Security Disclaimer</h2>
+        <p>
+          While we use industry-standard security measures, no system is completely secure. Use is at your own risk.
+        </p>
+
+        <h2 className="text-lg font-bold mt-8">11. Limitation of Liability</h2>
+        <p>
+          UniFlow shall not be liable for indirect, incidental, or consequential damages. Total liability shall not exceed fees paid in the preceding six months.
+        </p>
+
+        <h2 className="text-lg font-bold mt-8">12. Suspension & Termination</h2>
+        <p>
+          UniFlow reserves the right to suspend or terminate access to protect platform integrity or comply with law.
+        </p>
+
+        <h2 className="text-lg font-bold mt-8">13. Governing Law</h2>
+        <p>
+          These Terms are governed by the laws of India. Courts in Inida shall have exclusive jurisdiction.
+        </p>
+
+        <h2 className="text-lg font-bold mt-8">14. Contact & Grievance Redressal</h2>
+        <p>
+          For queries, grievances, or data rights requests (access, correction, erasure, withdrawal), contact:
+        </p>
+        <p className="font-bold">📧 bhardwajshubham0777@gmail.com</p>
+        <p>
+          UniFlow acts as its own Data Protection Officer. We aim to respond within 30 days as per DPDP Act requirements.
+        </p>
+      </section>
     </div>
   );
-}
+};
+
+export default Terms;

@@ -1,83 +1,140 @@
-import React, { useState } from "react";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "../lib/firebase";
-import { useAuth } from "../context/AuthContext";
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { db } from '../lib/firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { CheckCircle, ShieldAlert, Loader2 } from 'lucide-react';
 
-export default function Consent() {
+const Consent = () => {
   const { user } = useAuth();
-  const [checked, setChecked] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [acceptPrivacy, setAcceptPrivacy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  // 🔒 HARD BLOCK: user must be logged in
+  if (!user) {
+    navigate('/login');
+    return null;
+  }
 
   const handleAccept = async () => {
-    if (!checked || !user) return;
+    if (!acceptTerms || !acceptPrivacy) {
+      setError('You must accept both Terms & Conditions and Privacy Policy.');
+      return;
+    }
 
-    setLoading(true);
+    setSaving(true);
+    setError('');
+
     try {
-      await updateDoc(doc(db, "users", user.uid), {
-        termsAccepted: true,
-        termsAcceptedAt: serverTimestamp(),
-        termsVersion: "v1"
-      });
-      window.location.replace("/");
+      // ✅ SINGLE SOURCE OF TRUTH
+      await setDoc(
+        doc(db, 'users', user.uid),
+        {
+          termsAccepted: true,
+          termsAcceptedAt: serverTimestamp(),
+          email: user.email,
+          displayName: user.displayName || '',
+        },
+        { merge: true }
+      );
+
+      // Redirect user back safely
+      navigate(-1);
     } catch (err) {
-      console.error("Consent save failed", err);
-      alert("Something went wrong. Please try again.");
+      console.error(err);
+      setError('Failed to save consent. Please try again.');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center px-4">
-      <div className="max-w-lg w-full bg-white dark:bg-zinc-900 rounded-xl p-6 shadow-sm space-y-4">
-
-        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-          Before you continue
-        </h1>
-
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Please review and accept our Terms & Conditions and Privacy Policy to
-          continue using UniFlow.
-        </p>
-
-        <div className="text-sm space-y-2">
-          <a
-            href="/terms"
-            target="_blank"
-            className="text-blue-600 dark:text-blue-400 underline block"
-          >
-            View Terms & Conditions
-          </a>
-          <a
-            href="/privacy"
-            target="_blank"
-            className="text-blue-600 dark:text-blue-400 underline block"
-          >
-            View Privacy Policy
-          </a>
+    <div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center px-6">
+      <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-3xl p-8 border border-zinc-200 dark:border-zinc-800 shadow-xl">
+        
+        {/* Header */}
+        <div className="text-center mb-6">
+          <div className="flex justify-center mb-4">
+            <ShieldAlert className="w-10 h-10 text-indigo-600" />
+          </div>
+          <h1 className="text-2xl font-black text-zinc-900 dark:text-white">
+            Consent Required
+          </h1>
+          <p className="text-sm text-zinc-500 mt-2">
+            Please review and accept to continue using UniFlow
+          </p>
         </div>
 
-        <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
-          <input
-            type="checkbox"
-            checked={checked}
-            onChange={(e) => setChecked(e.target.checked)}
-            className="mt-1"
-          />
-          <span>
-            I have read and agree to the Terms & Conditions and Privacy Policy
-          </span>
-        </label>
+        {/* Error */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-sm font-bold">
+            {error}
+          </div>
+        )}
 
+        {/* Checkboxes */}
+        <div className="space-y-4 text-sm">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={acceptTerms}
+              onChange={(e) => setAcceptTerms(e.target.checked)}
+              className="mt-1 accent-indigo-600"
+            />
+            <span className="text-zinc-700 dark:text-zinc-300">
+              I agree to the{' '}
+              <Link
+                to="/terms"
+                target="_blank"
+                className="text-indigo-600 dark:text-indigo-400 underline font-bold"
+              >
+                Terms & Conditions
+              </Link>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={acceptPrivacy}
+              onChange={(e) => setAcceptPrivacy(e.target.checked)}
+              className="mt-1 accent-indigo-600"
+            />
+            <span className="text-zinc-700 dark:text-zinc-300">
+              I agree to the{' '}
+              <Link
+                to="/privacy"
+                target="_blank"
+                className="text-indigo-600 dark:text-indigo-400 underline font-bold"
+              >
+                Privacy Policy
+              </Link>
+            </span>
+          </label>
+        </div>
+
+        {/* Action */}
         <button
           onClick={handleAccept}
-          disabled={!checked || loading}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg disabled:opacity-50 transition"
+          disabled={saving}
+          className="mt-6 w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
-          {loading ? "Saving..." : "Continue"}
+          {saving ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <>
+              <CheckCircle className="w-5 h-5" />
+              Accept & Continue
+            </>
+          )}
         </button>
-
       </div>
     </div>
   );
-}
+};
+
+export default Consent;
