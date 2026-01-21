@@ -1,14 +1,33 @@
 import React, { useState, useEffect } from 'react';
 // Correct Import Path
 import { useAuth } from '../../../context/AuthContext';
-import { db, storage } from '../../../lib/firebase';
+import { db, storage, auth } from '../../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-// 🟢 FIX: Added 'Users' to the import list below
-import { User, Users, Mail, Phone, Hash, BookOpen, Layers, MapPin, Camera, Save, Loader2, AlertCircle } from 'lucide-react';
+import { signOut } from 'firebase/auth';
+// 🟢 FIX: Added 'Users' and necessary icons to the import list below
+import {
+  User,
+  Users,
+  Mail,
+  Phone,
+  Hash,
+  BookOpen,
+  Layers,
+  MapPin,
+  Camera,
+  Save,
+  Loader2,
+  AlertCircle,
+  CheckCircle,
+  LogOut
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const UserProfile = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -125,6 +144,16 @@ const UserProfile = () => {
     }
   };
 
+  // 🔴 LOGOUT — minimal, explicit
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigate('/login');
+    } catch (err) {
+      console.error('Logout failed', err);
+    }
+  };
+
   if (loading) return <div className="flex justify-center pt-20"><Loader2 className="animate-spin w-8 h-8 text-indigo-600"/></div>;
 
   return (
@@ -236,6 +265,26 @@ const UserProfile = () => {
           </button>
 
         </form>
+
+        {/* LOGOUT BUTTON (ADDED) */}
+        <div className="mt-6">
+          <button
+            onClick={async () => {
+              try {
+                await signOut(auth);
+                // after sign out, redirect to login
+                window.location.href = '/login';
+              } catch (err) {
+                console.error('Logout failed', err);
+              }
+            }}
+            className="w-full py-3 border border-red-300 text-red-600 dark:border-red-700 dark:text-red-400 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+          >
+            <LogOut className="w-5 h-5" />
+            Logout
+          </button>
+        </div>
+
       </div>
     </div>
   );
