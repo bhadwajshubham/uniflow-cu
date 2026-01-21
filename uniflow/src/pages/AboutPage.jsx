@@ -54,7 +54,7 @@ const AboutPage = () => {
             <div className="inline-block p-1 rounded-full bg-gradient-to-tr from-indigo-400 to-purple-400 mb-4">
                {/* 🖼️ REPLACE WITH YOUR PHOTO URL */}
                <img 
-                 src="https://avatars.githubusercontent.com/u/159251372?s=400&u=4eecd2cbd40ec6d3130fa7b5da8b8deda57e7f04&v=4" 
+                 src="https://avatars.githubusercontent.com/u/159251372?s=400&u=fae706d629454f4209ac7aa2100bca12ec4bef20&v=4" 
                  alt="Shubham" 
                  className="w-24 h-24 rounded-full border-4 border-black object-cover"
                  onError={(e) => e.target.src = 'https://ui-avatars.com/api/?name=Shubham&background=random'}

@@ -23,6 +23,13 @@ import TicketPage from './features/events/components/TicketPage';
 import AdminDashboard from './features/events/components/AdminDashboard';
 import ScannerPage from './features/events/components/ScannerPage';
 
+// ✅ Public Trust Pages
+import About from './pages/AboutPage';
+import Terms from './pages/Terms';
+import Privacy from './pages/Privacy';
+import AboutPage from './pages/AboutPage';
+
+
 // 🛡️ Protected Route Wrapper
 const ProtectedRoute = ({ children, requireAdmin = false }) => {
   const { user, profile, loading } = useAuth();
@@ -72,6 +79,10 @@ function App() {
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/:id" element={<EventDetailsPage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/privacy" element={<Privacy />} />
+
 
             {/* --- Student Routes --- */}
             {/* UserProfile is now a route. We wrap it to handle the 'isOpen' prop */}
