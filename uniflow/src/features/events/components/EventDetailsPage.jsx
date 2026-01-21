@@ -15,13 +15,8 @@ import {
 } from 'firebase/firestore';
 import { useAuth } from '../../../context/AuthContext';
 import {
-  Calendar,
-  MapPin,
-  Clock,
-  Users,
   ArrowLeft,
   Share2,
-  Ticket,
   Loader2,
   ShieldCheck
 } from 'lucide-react';
@@ -35,27 +30,30 @@ const EventDetailsPage = () => {
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
   const [alreadyBooked, setAlreadyBooked] = useState(false);
+  const [answers, setAnswers] = useState({});
+
+  /* ---------------- FETCH EVENT ---------------- */
 
   useEffect(() => {
     const fetchEvent = async () => {
       try {
         const docSnap = await getDoc(doc(db, 'events', id));
-        if (docSnap.exists()) {
-          const eventData = { id: docSnap.id, ...docSnap.data() };
-          setEvent(eventData);
-
-          // Check if already booked
-          if (user) {
-            const q = query(
-              collection(db, 'registrations'),
-              where('eventId', '==', id),
-              where('userId', '==', user.uid)
-            );
-            const snapshot = await getDocs(q);
-            if (!snapshot.empty) setAlreadyBooked(true);
-          }
-        } else {
+        if (!docSnap.exists()) {
           navigate('/events');
+          return;
+        }
+
+        const eventData = { id: docSnap.id, ...docSnap.data() };
+        setEvent(eventData);
+
+        if (user) {
+          const q = query(
+            collection(db, 'registrations'),
+            where('eventId', '==', id),
+            where('userId', '==', user.uid)
+          );
+          const snap = await getDocs(q);
+          if (!snap.empty) setAlreadyBooked(true);
         }
       } catch (err) {
         console.error(err);
@@ -67,109 +65,99 @@ const EventDetailsPage = () => {
     fetchEvent();
   }, [id, navigate, user]);
 
+  /* ---------------- SHARE ---------------- */
+
   const handleShare = async () => {
     try {
       await navigator.share({
         title: event.title,
-        text: `Check out ${event.title} on UniFlow!`,
+        text: `Check out ${event.title} on UniFlow`,
         url: window.location.href
       });
-    } catch {
-      // silently ignore
-    }
+    } catch {}
   };
 
+  /* ---------------- ANSWERS ---------------- */
+
+  const handleAnswerChange = (qid, value) => {
+    setAnswers(prev => ({ ...prev, [qid]: value }));
+  };
+
+  /* ---------------- REGISTER ---------------- */
+
   const handleRegister = async () => {
-    // 🔐 AUTH GATE
+    // 🔐 AUTH
     if (!user) {
       navigate('/login');
       return;
     }
 
-    // 🔴 CONSENT GATE (ONLY ADDITION)
+    // 🔐 CONSENT
     if (!profile || profile.termsAccepted !== true) {
       navigate('/consent');
       return;
     }
 
-    // Existing constraints (UNCHANGED)
+    // 🛑 SOLD OUT
     if (event.ticketsSold >= event.totalTickets) {
       alert('Housefull!');
       return;
     }
 
+    // 🛑 DUPLICATE
     if (alreadyBooked) {
-      alert('You already have a ticket!');
+      alert('You already registered!');
       return;
+    }
+
+    // 🛡 CUSTOM QUESTION VALIDATION
+    if (event.customQuestions?.length) {
+      const missing = event.customQuestions.find(
+        q => q.required && !answers[q.id]
+      );
+      if (missing) {
+        alert(`Please answer: ${missing.label}`);
+        return;
+      }
     }
 
     setRegistering(true);
 
     try {
-      const safeCreatorId =
-        event.createdBy || event.organizerId || 'admin_fallback';
-
-      const newTicket = {
+      const ticket = {
         eventId: event.id,
-        eventTitle: event.title || 'Untitled Event',
-        eventCreatorId: safeCreatorId,
-        eventDate: event.date || 'Date TBA',
-        eventTime: event.time || 'Time TBA',
-        eventLocation: event.location || 'Location TBA',
+        eventTitle: event.title,
+        eventDate: event.date,
+        eventTime: event.time,
+        eventLocation: event.location,
         userId: user.uid,
         userName: user.displayName || 'Student',
         userEmail: user.email,
-        userRollNo: profile?.rollNo || 'N/A',
-        userPhone: profile?.phone || 'N/A',
-        userPhoto: user.photoURL || '',
+        userRollNo: profile?.rollNo || '',
+        userPhone: profile?.phone || '',
+        answers, // ✅ STORED SAFELY
         purchasedAt: serverTimestamp(),
-        checkedIn: false,
         status: 'confirmed',
-        price: event.price || 0,
-        used: false,
-        qrCodeString: `${event.id}_${user.uid}_${Date.now()}`
+        checkedIn: false
       };
 
-      // 1. Create ticket
-      const docRef = await addDoc(collection(db, 'registrations'), newTicket);
+      const ref = await addDoc(collection(db, 'registrations'), ticket);
 
-      // 2. Increment sold count
       await updateDoc(doc(db, 'events', event.id), {
         ticketsSold: increment(1)
       });
 
-      // 3. Email (UNCHANGED)
-      const appUrl = window.location.origin;
-      const ticketLink = `${appUrl}/tickets/${docRef.id}`;
-
-      const emailHtml = `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>Ticket Confirmed 🎟️</h2>
-          <p>You are registered for <strong>${event.title}</strong></p>
-          <a href="${ticketLink}">View Ticket</a>
-        </div>
-      `;
-
-      fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: user.email,
-          subject: `🎟️ Ticket: ${event.title}`,
-          html: emailHtml
-        })
-      }).catch(() => {});
-
-      alert('✅ Ticket Booked! Email Sent.');
-      setAlreadyBooked(true);
+      alert('✅ Registration Successful');
       navigate('/my-tickets');
     } catch (err) {
       console.error(err);
-      alert('Booking failed: ' + err.message);
+      alert('Registration failed');
     } finally {
       setRegistering(false);
     }
   };
+
+  /* ---------------- UI ---------------- */
 
   if (loading) {
     return (
@@ -184,32 +172,22 @@ const EventDetailsPage = () => {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-24 px-6">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <button
-            onClick={() => navigate('/events')}
-            className="flex items-center gap-2 text-zinc-500 hover:text-indigo-600 font-bold text-xs uppercase"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back to Events
-          </button>
 
-          <button
-            onClick={handleShare}
-            className="p-3 bg-white dark:bg-zinc-900 rounded-2xl border"
-          >
-            <Share2 className="w-5 h-5" />
+        {/* HEADER */}
+        <div className="flex justify-between mb-6">
+          <button onClick={() => navigate('/events')} className="flex gap-2 text-sm">
+            <ArrowLeft size={16} /> Back
+          </button>
+          <button onClick={handleShare}>
+            <Share2 />
           </button>
         </div>
 
-        {/* Event Card */}
-        <div className="bg-white dark:bg-zinc-900 rounded-3xl border overflow-hidden">
-          <div className="h-64 sm:h-96 relative">
+        {/* EVENT CARD */}
+        <div className="bg-white dark:bg-zinc-900 rounded-3xl overflow-hidden border">
+          <div className="h-64 relative">
             {event.imageUrl ? (
-              <img
-                src={event.imageUrl}
-                alt={event.title}
-                className="w-full h-full object-cover"
-              />
+              <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full bg-indigo-600" />
             )}
@@ -217,25 +195,72 @@ const EventDetailsPage = () => {
             <div className="absolute bottom-6 left-6 text-white">
               <h1 className="text-3xl font-black">{event.title}</h1>
               {event.isUniversityOnly && (
-                <p className="text-xs flex items-center gap-1">
-                  <ShieldCheck className="w-4 h-4" /> University Only
+                <p className="flex gap-1 items-center text-xs">
+                  <ShieldCheck size={14} /> University Only
                 </p>
               )}
             </div>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 p-8">
+          <div className="p-8 grid md:grid-cols-3 gap-8">
+            {/* DESCRIPTION */}
             <div className="md:col-span-2 space-y-4">
-              <p className="text-zinc-600 dark:text-zinc-400">
-                {event.description}
-              </p>
+              <p>{event.description}</p>
+
+              {/* CUSTOM QUESTIONS */}
+              {event.customQuestions?.length > 0 && (
+                <div className="space-y-4 mt-6">
+                  <h3 className="font-black text-sm uppercase">
+                    Registration Questions
+                  </h3>
+
+                  {event.customQuestions.map(q => (
+                    <div key={q.id} className="space-y-1">
+                      <label className="text-sm font-bold">
+                        {q.label} {q.required && '*'}
+                      </label>
+
+                      {q.type === 'text' && (
+                        <input
+                          className="w-full p-2 rounded border"
+                          onChange={e => handleAnswerChange(q.id, e.target.value)}
+                        />
+                      )}
+
+                      {q.type === 'number' && (
+                        <input
+                          type="number"
+                          className="w-full p-2 rounded border"
+                          onChange={e => handleAnswerChange(q.id, e.target.value)}
+                        />
+                      )}
+
+                      {q.type === 'select' && (
+                        <select
+                          className="w-full p-2 rounded border"
+                          onChange={e => handleAnswerChange(q.id, e.target.value)}
+                        >
+                          <option value="">Select</option>
+                          {q.options.map(opt => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {q.type === 'checkbox' && (
+                        <input
+                          type="checkbox"
+                          onChange={e => handleAnswerChange(q.id, e.target.checked)}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
+            {/* ACTION */}
             <div className="bg-zinc-50 dark:bg-black/40 p-6 rounded-2xl">
-              <p className="text-3xl font-black text-indigo-600 mb-4">
-                {event.price === 0 ? 'FREE' : `₹${event.price}`}
-              </p>
-
               <button
                 onClick={handleRegister}
                 disabled={registering || alreadyBooked}
@@ -244,17 +269,11 @@ const EventDetailsPage = () => {
                 {registering ? (
                   <Loader2 className="animate-spin mx-auto" />
                 ) : alreadyBooked ? (
-                  'Ticket Confirmed'
+                  'Already Registered'
                 ) : (
-                  'Book Now'
+                  'Register Now'
                 )}
               </button>
-
-              {event.ticketsSold >= event.totalTickets && (
-                <p className="text-center text-red-500 text-xs mt-3">
-                  Sold Out
-                </p>
-              )}
             </div>
           </div>
         </div>

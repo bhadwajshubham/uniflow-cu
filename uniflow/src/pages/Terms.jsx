@@ -7,13 +7,16 @@ const Terms = () => {
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">
         Last Updated: January 21, 2026
       </p>
-
       <section className="space-y-6 text-sm leading-relaxed">
         <p>
-          UniFlow is an independent, third-party event management platform that provides technical tools for event discovery, registration, participation tracking, and attendance verification.
+          UniFlow is an independent, third-party event management and coordination
+          platform that provides technical tools for event discovery, registration,
+          participation tracking, and attendance verification.
         </p>
         <p>
-          <strong>UniFlow is not an official system of any university or institution</strong>, unless explicitly stated in writing. Any reference to university-related events does not imply affiliation or endorsement.
+          UniFlow is <strong>not an official system of any university or institution</strong>,
+          unless explicitly stated in writing. Any reference to university-related
+          events, clubs, or societies does not imply affiliation or endorsement.
         </p>
 
         <h2 className="text-lg font-bold mt-8">1. Acceptance of Terms</h2>
@@ -31,7 +34,7 @@ const Terms = () => {
 
         <h2 className="text-lg font-bold mt-8">3. Platform Role</h2>
         <p>
-          UniFlow acts solely as a technology provider. We do not organize, host, supervise, or control any events. All events are created and managed by independent organizers.
+          UniFlow acts solely as a technology provider. We do not organize, host, supervise, or control any events listed on the platform. All events are created and managed by independent organizers.
         </p>
 
         <h2 className="text-lg font-bold mt-8">4. User Accounts</h2>
@@ -51,7 +54,9 @@ const Terms = () => {
           <li>Event registrations, attendance status, QR scan records</li>
           <li>Responses to organizer-created questions (e.g., blood group, eligibility details)</li>
         </ul>
-        <p>You may withdraw consent at any time via support email (may limit or terminate access).</p>
+        <p>
+          University data is shared only with organizers via Firebase Firestore and Cloudinary (for images), with your consent. You may withdraw consent at any time via support email or app settings (may limit or terminate access).
+        </p>
 
         <h2 className="text-lg font-bold mt-8">6. Events & Registrations</h2>
         <p>
@@ -65,7 +70,7 @@ const Terms = () => {
 
         <h2 className="text-lg font-bold mt-8">8. Organizer Responsibilities</h2>
         <p>
-          Organizers are solely responsible for event execution, participant safety, institutional compliance, and lawful handling of any additional data they collect.
+          Organizers are solely responsible for event execution, participant safety, institutional compliance, and lawful handling of any additional data they collect. Organizers confirm they have the legal authority to collect any additional participant information they request and are responsible for its lawful use.
         </p>
 
         <h2 className="text-lg font-bold mt-8">9. Third-Party Services</h2>
@@ -75,12 +80,12 @@ const Terms = () => {
 
         <h2 className="text-lg font-bold mt-8">10. Security Disclaimer</h2>
         <p>
-          While we use industry-standard security measures, no system is completely secure. Use is at your own risk.
+          We use industry-standard security measures, but no system is completely secure. UniFlow is not responsible for any data breaches, losses, or unauthorized access beyond our reasonable control, including third-party (e.g., Firebase, Cloudinary) incidents.
         </p>
 
         <h2 className="text-lg font-bold mt-8">11. Limitation of Liability</h2>
         <p>
-          UniFlow shall not be liable for indirect, incidental, or consequential damages. Total liability shall not exceed fees paid in the preceding six months.
+          UniFlow shall not be liable for indirect, incidental, or consequential damages. Total liability shall not exceed fees paid in the preceding six months. This includes no liability for data breaches, event issues, or any other incidents arising from user, organizer, or third-party actions.
         </p>
 
         <h2 className="text-lg font-bold mt-8">12. Suspension & Termination</h2>
@@ -90,16 +95,16 @@ const Terms = () => {
 
         <h2 className="text-lg font-bold mt-8">13. Governing Law</h2>
         <p>
-          These Terms are governed by the laws of India. Courts in Inida shall have exclusive jurisdiction.
+          These Terms are governed by the laws of India. Courts in Delhi shall have exclusive jurisdiction.
         </p>
 
         <h2 className="text-lg font-bold mt-8">14. Contact & Grievance Redressal</h2>
         <p>
           For queries, grievances, or data rights requests (access, correction, erasure, withdrawal), contact:
         </p>
-        <p className="font-bold">📧 bhardwajshubham0777@gmail.com</p>
+        <p className="font-bold">📧 uniflow.support@gmail.com</p>
         <p>
-          UniFlow acts as its own Data Protection Officer. We aim to respond within 30 days as per DPDP Act requirements.
+          UniFlow acts as its own Data Protection Officer. We aim to respond within 30 days as per DPDP Act requirements. If unresolved, you may appeal to India's Data Protection Board.
         </p>
       </section>
     </div>

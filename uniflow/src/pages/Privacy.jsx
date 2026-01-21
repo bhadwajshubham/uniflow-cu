@@ -42,17 +42,6 @@ const PrivacyPolicy = () => {
           <li>Usage timestamps</li>
         </ul>
 
-        <h2 className="text-lg font-bold mt-8">2. How We Use Your Information</h2>
-        <ul className="list-disc ml-6 space-y-1">
-          <li>Account management and authentication</li>
-          <li>Event registration and verification</li>
-          <li>Notifications and communications</li>
-          <li>Platform improvement and analytics</li>
-          <li>Fraud prevention and security</li>
-          <li>Legal compliance</li>
-        </ul>
-        <p>We do not sell or rent your data.</p>
-
         <h2 className="text-lg font-bold mt-8">3. Consent & Legal Basis (DPDP Compliance)</h2>
         <p>
           Processing is based on your explicit, informed consent (verifiable under DPDP Act), contractual necessity, or legitimate interests. Consent is granular and withdrawable without affecting prior processing.
@@ -60,12 +49,20 @@ const PrivacyPolicy = () => {
 
         <h2 className="text-lg font-bold mt-8">4. Data Storage & Security</h2>
         <p>
-          Data is stored on secure, India-compliant cloud servers with encryption (at rest and in transit). We notify breaches per DPDP Act requirements.
+          Data is stored on secure, India-compliant cloud servers with encryption (at rest and in transit). We are not responsible for breaches beyond our control, but will notify affected users and authorities per DPDP Act requirements.
         </p>
 
         <h2 className="text-lg font-bold mt-8">5. Third-Party Services</h2>
         <p>
-          We use Firebase (authentication/storage) and others. They comply with DPDP; we’re not liable for their independent failures.
+          UniFlow uses trusted third-party services for operation:
+        </p>
+        <ul className="list-disc ml-6 space-y-1">
+          <li>Firebase (authentication, Firestore database for data storage)</li>
+          <li>Cloudinary (image storage and processing for profile photos)</li>
+          <li>Others for email delivery and hosting</li>
+        </ul>
+        <p>
+          They comply with DPDP; we’re not liable for their independent failures or breaches beyond our control.
         </p>
 
         <h2 className="text-lg font-bold mt-8">6. Data Sharing</h2>
@@ -74,6 +71,9 @@ const PrivacyPolicy = () => {
           <li>Service providers (under strict contracts)</li>
           <li>Legal requirements</li>
         </ul>
+        <p>
+          University data shared only with organizers via Firebase Firestore and Cloudinary, strictly for event purposes.
+        </p>
 
         <h2 className="text-lg font-bold mt-8">7. Data Retention</h2>
         <p>
@@ -88,7 +88,7 @@ const PrivacyPolicy = () => {
           <li>Nominate a data heir</li>
           <li>File grievances</li>
         </ul>
-        <p>Requests via support email; responded within 30 days.</p>
+        <p>Requests via support email; responded within 30 days. If unresolved, appeal to Data Protection Board.</p>
 
         <h2 className="text-lg font-bold mt-8">9. Account Deletion</h2>
         <p>
@@ -97,7 +97,7 @@ const PrivacyPolicy = () => {
 
         <h2 className="text-lg font-bold mt-8">10. Children’s Privacy</h2>
         <p>
-          Not for under 13. Under 18 requires verifiable parental consent per DPDP Act.
+          Not for under under 13. Under 18 requires verifiable parental consent per DPDP Act.
         </p>
 
         <h2 className="text-lg font-bold mt-8">11. Changes to Policy</h2>
@@ -111,8 +111,8 @@ const PrivacyPolicy = () => {
         </p>
 
         <h2 className="text-lg font-bold mt-8">13. Contact</h2>
-        <p className="font-bold">📧 bhardwajshubham0777@gmail.com</p>
-        <p>For DPDP grievances, contact our DPO at the above email.</p>
+        <p className="font-bold">📧 uniflow.support@gmail.com</p>
+        <p>For DPDP grievances, contact our DPO at the above email. If unresolved, appeal to Data Protection Board.</p>
       </section>
     </div>
   );
