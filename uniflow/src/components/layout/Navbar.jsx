@@ -37,7 +37,7 @@ const Navbar = () => {
             className="w-8 h-8 object-contain rounded-lg group-hover:scale-105 transition-transform" 
           />
           <span className="text-xl font-black tracking-tighter text-zinc-900 dark:text-white">
-            UniFlow
+            UniFlow-CU
           </span>
         </Link>
 
