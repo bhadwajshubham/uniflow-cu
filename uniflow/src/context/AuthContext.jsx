@@ -15,36 +15,33 @@ import {
 import { auth, db } from '../lib/firebase';
 
 /**
- * AuthContext
+ * 🛡️ AuthContext — FINAL HARDENED VERSION
  *
- * Responsibilities:
- * - Manage Firebase auth state
- * - Ensure a minimal users/{uid} doc exists on first sign-in
- * - Load & expose 'profile' (the users/{uid} doc) to app
- * - Expose login/logout, loading state
- *
- * SECURITY NOTE:
- * User provisioning is done inside a Firestore transaction
- * to prevent race conditions and privilege escalation.
+ * Security Guarantees:
+ * - Atomic user provisioning (no race conditions)
+ * - Auth token is the single source of truth (email)
+ * - Privilege escalation is detected AND persisted
+ * - Pre-seeded Firestore attacks are neutralized
  */
 
-const AuthContext = createContext();
+// 🔐 HARD ADMIN ALLOWLIST (temporary until Custom Claims)
+const ADMIN_ALLOWLIST = [
+  'bhardwajshubham0777@gmail.com'
+];
 
+const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null); // Firebase auth user
-  const [profile, setProfile] = useState(undefined); // undefined = loading, null = no doc
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(undefined);
   const [loading, setLoading] = useState(true);
 
-  // Google Sign-in
   const login = async () => {
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
-    // onAuthStateChanged handles the rest
   };
 
-  // Logout
   const logout = async () => {
     try {
       await firebaseSignOut(auth);
@@ -64,41 +61,64 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
+      const userRef = doc(db, 'users', currentUser.uid);
+
       try {
-        const userRef = doc(db, 'users', currentUser.uid);
-
-        /**
-         * 🔐 CRITICAL SECURITY FIX
-         * Atomic user provisioning to prevent race conditions.
-         * Ensures only ONE initialization can ever occur.
-         */
-        await runTransaction(db, async (transaction) => {
-          const snap = await transaction.get(userRef);
-
+        // 🔒 ATOMIC USER CREATION (RACE SAFE)
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(userRef);
           if (!snap.exists()) {
-            transaction.set(
-              userRef,
-              {
-                displayName: currentUser.displayName || null,
-                email: currentUser.email || null,
-                photoURL: currentUser.photoURL || null,
-                termsAccepted: false,
-                createdAt: serverTimestamp()
-              },
-              { merge: true }
-            );
+            tx.set(userRef, {
+              displayName: currentUser.displayName || null,
+              email: currentUser.email,
+              photoURL: currentUser.photoURL || null,
+              role: 'student',
+              termsAccepted: false,
+              createdAt: serverTimestamp()
+            });
           }
         });
 
-        // Load profile after ensuring existence
+        // 🔍 LOAD PROFILE
         const freshSnap = await getDoc(userRef);
-        if (freshSnap.exists()) {
-          setProfile(freshSnap.data());
-        } else {
+        if (!freshSnap.exists()) {
           setProfile(null);
+          setLoading(false);
+          return;
         }
+
+        const data = freshSnap.data();
+        let needsUpdate = false;
+        const updates = {};
+
+        // 🔐 EMAIL = AUTH SOURCE OF TRUTH
+        if (data.email !== currentUser.email) {
+          updates.email = currentUser.email;
+          data.email = currentUser.email;
+          needsUpdate = true;
+        }
+
+        // 🔥 PRIVILEGE SANITIZATION (PERSISTED)
+        if (
+          (data.role === 'admin' || data.role === 'super_admin') &&
+          !ADMIN_ALLOWLIST.includes(currentUser.email)
+        ) {
+          console.warn(
+            `🚨 SECURITY: Unauthorized admin detected for ${currentUser.email}. Revoking.`
+          );
+          updates.role = 'student';
+          data.role = 'student';
+          needsUpdate = true;
+        }
+
+        // 💾 WRITE FIX BACK TO FIRESTORE (CRITICAL)
+        if (needsUpdate) {
+          await setDoc(userRef, updates, { merge: true });
+        }
+
+        setProfile(data);
       } catch (err) {
-        console.error('Error ensuring user doc / loading profile', err);
+        console.error('AuthContext fatal error:', err);
         setProfile(null);
       } finally {
         setLoading(false);
@@ -108,17 +128,16 @@ export const AuthProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  const value = {
-    user,
-    profile,
-    login,
-    logout,
-    loading
-  };
-
-  // Prevent route flicker until auth + profile are ready
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={{
+        user,
+        profile,
+        login,
+        logout,
+        loading
+      }}
+    >
       {!loading && children}
     </AuthContext.Provider>
   );
