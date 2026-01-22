@@ -97,7 +97,8 @@ const PrivacyPolicy = () => {
 
         <h2 className="text-lg font-bold mt-8">10. Children’s Privacy</h2>
         <p>
-          Not for under under 13. Under 18 requires verifiable parental consent per DPDP Act.
+          UniFlow-cu is not intended for children under 13 years of age. UniFlow-cu is not intended for children under 13 years of age. Users between 13 and 18 years may use the platform only with verifiable parental or guardian consent, as required under applicable law.
+
         </p>
 
         <h2 className="text-lg font-bold mt-8">11. Changes to Policy</h2>
@@ -112,7 +113,8 @@ const PrivacyPolicy = () => {
 
         <h2 className="text-lg font-bold mt-8">13. Contact</h2>
         <p className="font-bold">📧 bhardwajshubham0777@gmail.com</p>
-        <p>For DPDP grievances, contact our DPO at the above email. If unresolved, appeal to Data Protection Board.</p>
+        <p>UniFlow-cu has not appointed a formal Data Protection Officer. Privacy-related requests and grievances may be raised at the contact email below.
+        If unresolved, appeal to Data Protection Board.</p>
       </section>
     </div>
   );

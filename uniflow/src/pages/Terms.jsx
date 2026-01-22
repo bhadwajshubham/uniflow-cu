@@ -85,7 +85,7 @@ const Terms = () => {
 
         <h2 className="text-lg font-bold mt-8">11. Limitation of Liability</h2>
         <p>
-          UniFlow-cu shall not be liable for indirect, incidental, or consequential damages. Total liability shall not exceed fees paid in the preceding six months. This includes no liability for data breaches, event issues, or any other incidents arising from user, organizer, or third-party actions.
+         UniFlow-cu shall not be liable for any indirect, incidental, or consequential damages arising from participation in events listed on the platform. UniFlow-cu acts solely as a technology facilitator and does not organize or control events. Participation in any event is voluntary, and any loss, injury, or dispute is the sole responsibility of the respective event organizer. This includes no liability for data breaches, event issues, or any other incidents arising from user, organizer, or third-party actions.
         </p>
 
         <h2 className="text-lg font-bold mt-8">12. Suspension & Termination</h2>
@@ -95,7 +95,9 @@ const Terms = () => {
 
         <h2 className="text-lg font-bold mt-8">13. Governing Law</h2>
         <p>
-          These Terms are governed by the laws of India. Courts in Delhi shall have exclusive jurisdiction.
+          These Terms are governed by the laws of India.
+
+
         </p>
 
         <h2 className="text-lg font-bold mt-8">14. Contact & Grievance Redressal</h2>
@@ -104,7 +106,8 @@ const Terms = () => {
         </p>
         <p className="font-bold">📧 bhardwajshubham0777@gmail.com</p>
         <p>
-          UniFlow-cu acts as its own Data Protection Officer. We aim to respond within 30 days as per DPDP Act requirements. If unresolved, you may appeal to India's Data Protection Board.
+          UniFlow-cu has not appointed a formal Data Protection Officer. Privacy-related requests and grievances may be raised at the contact email below.
+   We aim to respond within 30 days as per DPDP Act requirements. If unresolved, you may appeal to India's Data Protection Board.
         </p>
       </section>
     </div>

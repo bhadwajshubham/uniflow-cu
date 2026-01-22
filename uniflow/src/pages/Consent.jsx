@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { CheckCircle, ShieldAlert, Loader2 } from 'lucide-react';
 
 const Consent = () => {
@@ -30,23 +30,30 @@ const Consent = () => {
     setError('');
 
     try {
-      // ✅ SINGLE SOURCE OF TRUTH (Firestore)
+      const userRef = doc(db, 'users', user.uid);
+      const snap = await getDoc(userRef);
+      const existing = snap.exists() ? snap.data() : {};
+
+      /**
+       * 🛡️ DATA INTEGRITY FIX
+       * Do NOT overwrite existing profile fields.
+       * Only fill missing values.
+       */
       await setDoc(
-        doc(db, 'users', user.uid),
+        userRef,
         {
           termsAccepted: true,
           termsAcceptedAt: serverTimestamp(),
-          email: user.email,
-          displayName: user.displayName || '',
+          email: existing.email || user.email,
+          ...(existing.displayName ? {} : { displayName: user.displayName || '' })
         },
         { merge: true }
       );
 
       /**
-       * 🔥 CRITICAL FIX
-       * Force full app reload so AuthContext re-reads Firestore
-       * Prevents infinite consent loop
-       * This is intentional and production-safe
+       * 🔁 FORCE RELOAD (INTENTIONAL)
+       * Ensures AuthContext re-reads Firestore
+       * Prevents infinite consent redirect loops
        */
       window.location.replace('/');
     } catch (err) {
