@@ -29,19 +29,24 @@ const Consent = () => {
     setError('');
 
     try {
-      // 🔐 AUTH PROVIDER IS SOURCE OF TRUTH
       await setDoc(
         doc(db, 'users', user.uid),
         {
           termsAccepted: true,
           termsAcceptedAt: serverTimestamp(),
-          email: user.email, // 🔒 FORCE AUTH EMAIL
+          email: user.email,              // 🔒 AUTH IS SOURCE OF TRUTH
+          displayName: user.displayName || ''
         },
         { merge: true }
       );
 
-      // 🔥 HARD RELOAD TO RE-HYDRATE CONTEXT
-      window.location.replace('/');
+      /**
+       * ✅ FIX:
+       * Let AuthContext re-run naturally
+       * This avoids checkbox stuck + UI confusion
+       */
+      navigate('/', { replace: true });
+
     } catch (err) {
       console.error(err);
       setError('Failed to save consent. Please try again.');
@@ -52,13 +57,13 @@ const Consent = () => {
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center px-6">
-      <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-3xl p-8 border border-zinc-200 dark:border-zinc-800 shadow-xl">
+      <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-3xl p-8 border shadow-xl">
 
         <div className="text-center mb-6">
-          <ShieldAlert className="w-10 h-10 mx-auto text-indigo-600" />
-          <h1 className="text-2xl font-black mt-4">Consent Required</h1>
+          <ShieldAlert className="w-10 h-10 text-indigo-600 mx-auto mb-3" />
+          <h1 className="text-2xl font-black">Consent Required</h1>
           <p className="text-sm text-zinc-500 mt-2">
-            Please review and accept to continue using UniFlow
+            Please review and accept to continue
           </p>
         </div>
 
@@ -69,8 +74,12 @@ const Consent = () => {
         )}
 
         <div className="space-y-4 text-sm">
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input type="checkbox" checked={acceptTerms} onChange={e => setAcceptTerms(e.target.checked)} />
+          <label className="flex gap-3">
+            <input
+              type="checkbox"
+              checked={acceptTerms}
+              onChange={e => setAcceptTerms(e.target.checked)}
+            />
             <span>
               I agree to the{' '}
               <Link to="/terms" target="_blank" className="underline font-bold">
@@ -79,8 +88,12 @@ const Consent = () => {
             </span>
           </label>
 
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input type="checkbox" checked={acceptPrivacy} onChange={e => setAcceptPrivacy(e.target.checked)} />
+          <label className="flex gap-3">
+            <input
+              type="checkbox"
+              checked={acceptPrivacy}
+              onChange={e => setAcceptPrivacy(e.target.checked)}
+            />
             <span>
               I agree to the{' '}
               <Link to="/privacy" target="_blank" className="underline font-bold">
@@ -93,7 +106,7 @@ const Consent = () => {
         <button
           onClick={handleAccept}
           disabled={saving}
-          className="mt-6 w-full py-4 bg-indigo-600 text-white rounded-xl font-black flex justify-center gap-2"
+          className="mt-6 w-full py-4 bg-indigo-600 text-white rounded-xl font-black flex justify-center gap-2 disabled:opacity-50"
         >
           {saving ? <Loader2 className="animate-spin" /> : <CheckCircle />}
           Accept & Continue
