@@ -2,9 +2,9 @@ import React, { useState, useRef } from 'react';
 import { db } from '../../../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../../../context/AuthContext';
-import { X, Calendar, Clock, MapPin, Globe, GraduationCap, DollarSign, Users, Layers, ShieldAlert, Loader2, Image as ImageIcon, UploadCloud, Trash2 } from 'lucide-react';
+import { X, Calendar, Clock, MapPin, Globe, DollarSign, Users, Layers, ShieldAlert, Loader2, UploadCloud, Trash2 } from 'lucide-react';
 
-// ✅ CORRECT IMPORT PATH (Same feature folder)
+// ✅ CORRECT IMPORT PATH
 import { uploadImage } from '../services/uploadService'; 
 
 // 1. 🛡️ CLEAN STATE
@@ -22,7 +22,9 @@ const INITIAL_STATE = {
   imageUrl: '',
   isUniversityOnly: false,
   type: 'solo',
-  teamSize: 1
+  teamSize: 1,
+  // 🆕 ADDED
+  customQuestions: []
 };
 
 const CreateEventModal = ({ isOpen, onClose }) => {
@@ -37,41 +39,30 @@ const CreateEventModal = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
+  // ==============================
   // 🖱️ DRAG & DROP HANDLERS
+  // ==============================
   const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
+    e.preventDefault(); e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
+    else if (e.type === "dragleave") setDragActive(false);
   };
 
   const handleDrop = async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      await processFile(e.dataTransfer.files[0]);
-    }
+    if (e.dataTransfer.files?.[0]) await processFile(e.dataTransfer.files[0]);
   };
 
   const handleFileSelect = async (e) => {
-    if (e.target.files && e.target.files[0]) {
-      await processFile(e.target.files[0]);
-    }
+    if (e.target.files?.[0]) await processFile(e.target.files[0]);
   };
 
   const processFile = async (file) => {
-    if (!file.type.startsWith("image/")) {
-      alert("Please upload an image file (PNG, JPG).");
-      return;
-    }
-    
+    if (!file.type.startsWith("image/")) return alert("Please upload an image file (PNG, JPG).");
     setImageUploading(true);
     try {
-      const url = await uploadImage(file); // ☁️ Upload to Cloudinary
+      const url = await uploadImage(file);
       setFormData(prev => ({ ...prev, imageUrl: url }));
     } catch (error) {
       alert("Image upload failed. Please try again.");
@@ -85,19 +76,52 @@ const CreateEventModal = ({ isOpen, onClose }) => {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  // ==============================
+  // 🆕 CUSTOM QUESTIONS LOGIC (Moved to correct place)
+  // ==============================
+  const addQuestion = () => {
+    setFormData(prev => ({
+      ...prev,
+      customQuestions: [
+        ...prev.customQuestions,
+        {
+          id: crypto.randomUUID(),
+          label: '',
+          type: 'text', // text | number | select | checkbox
+          required: false,
+          options: []
+        }
+      ]
+    }));
+  };
+
+  const updateQuestion = (id, key, value) => {
+    setFormData(prev => ({
+      ...prev,
+      customQuestions: prev.customQuestions.map(q =>
+        q.id === id ? { ...q, [key]: value } : q
+      )
+    }));
+  };
+
+  const removeQuestion = (id) => {
+    setFormData(prev => ({
+      ...prev,
+      customQuestions: prev.customQuestions.filter(q => q.id !== id)
+    }));
+  };
+
+  // ==============================
+  // 🚀 SUBMIT HANDLER
+  // ==============================
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (imageUploading) {
-      alert("Please wait for the image to finish uploading.");
-      return;
-    }
+    if (imageUploading) return alert("Please wait for the image to finish uploading.");
     setLoading(true);
 
     const priceNum = Number(formData.price);
     const ticketsNum = Number(formData.totalTickets);
     const teamSizeNum = Number(formData.teamSize);
-    const titleClean = formData.title.trim();
-    const whatsappClean = formData.whatsappLink.trim();
 
     // VALIDATION
     if (isNaN(priceNum) || isNaN(ticketsNum) || priceNum < 0 || ticketsNum < 1) {
@@ -108,20 +132,15 @@ const CreateEventModal = ({ isOpen, onClose }) => {
       alert("Logic Error: Team size must be at least 2.");
       setLoading(false); return;
     }
-    const eventDateTime = new Date(`${formData.date}T${formData.time}`);
-    if (eventDateTime < new Date()) {
-      alert("Logic Error: Cannot schedule events in the past.");
-      setLoading(false); return;
-    }
 
     try {
       await addDoc(collection(db, 'events'), {
         ...formData,
-        title: titleClean,
+        title: formData.title.trim(),
         description: formData.description.trim(),
         price: priceNum,
         totalTickets: ticketsNum,
-        whatsappLink: whatsappClean,
+        whatsappLink: formData.whatsappLink.trim(),
         teamSize: formData.type === 'team' ? teamSizeNum : 1,
         ticketsSold: 0,
         organizerId: user.uid,
@@ -147,11 +166,14 @@ const CreateEventModal = ({ isOpen, onClose }) => {
     }));
   };
 
+  // ==============================
+  // 🎨 UI RENDER
+  // ==============================
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300">
       <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-3xl rounded-[2.5rem] shadow-2xl border border-white/20 dark:border-zinc-800 flex flex-col max-h-[90vh] overflow-hidden">
         
-        {/* 🎨 Header */}
+        {/* Header */}
         <div className="p-6 border-b border-zinc-100 dark:border-zinc-900 flex justify-between items-center bg-white/80 dark:bg-black/80 backdrop-blur-md">
           <div className="flex items-center gap-3">
              <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600">
@@ -175,35 +197,35 @@ const CreateEventModal = ({ isOpen, onClose }) => {
                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1 tracking-widest">Event Poster</label>
                
                <div 
-                  className={`relative w-full h-64 rounded-3xl border-2 border-dashed transition-all duration-300 overflow-hidden flex flex-col items-center justify-center group
-                  ${dragActive ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/10' : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-black'}
-                  ${formData.imageUrl ? 'border-solid border-none' : ''}`}
-                  onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
+                 className={`relative w-full h-64 rounded-3xl border-2 border-dashed transition-all duration-300 overflow-hidden flex flex-col items-center justify-center group
+                 ${dragActive ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/10' : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-black'}
+                 ${formData.imageUrl ? 'border-solid border-none' : ''}`}
+                 onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
                >
-                  {imageUploading ? (
-                     <div className="flex flex-col items-center gap-3 animate-pulse">
-                        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-                        <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest">Uploading Visuals...</span>
-                     </div>
-                  ) : formData.imageUrl ? (
-                     <>
-                        <img src={formData.imageUrl} alt="Preview" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                           <button type="button" onClick={removeImage} className="px-4 py-2 bg-red-500 text-white rounded-xl font-bold text-xs flex items-center gap-2 hover:scale-105 transition-transform">
-                              <Trash2 className="w-4 h-4" /> Remove
-                           </button>
-                        </div>
-                     </>
-                  ) : (
-                     <div className="text-center p-6 cursor-pointer" onClick={() => fileInputRef.current.click()}>
-                        <div className="w-16 h-16 bg-white dark:bg-zinc-900 rounded-full flex items-center justify-center shadow-lg mx-auto mb-4 group-hover:scale-110 transition-transform">
-                           <UploadCloud className="w-8 h-8 text-zinc-400 group-hover:text-indigo-500 transition-colors" />
-                        </div>
-                        <h3 className="text-sm font-black text-zinc-700 dark:text-zinc-300">Drag poster here or <span className="text-indigo-500 underline">browse</span></h3>
-                        <p className="text-[10px] text-zinc-400 mt-2 font-medium uppercase tracking-wide">Supports JPG, PNG (Max 5MB)</p>
-                     </div>
-                  )}
-                  <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileSelect} />
+                 {imageUploading ? (
+                    <div className="flex flex-col items-center gap-3 animate-pulse">
+                       <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+                       <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest">Uploading Visuals...</span>
+                    </div>
+                 ) : formData.imageUrl ? (
+                    <>
+                       <img src={formData.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <button type="button" onClick={removeImage} className="px-4 py-2 bg-red-500 text-white rounded-xl font-bold text-xs flex items-center gap-2 hover:scale-105 transition-transform">
+                             <Trash2 className="w-4 h-4" /> Remove
+                          </button>
+                       </div>
+                    </>
+                 ) : (
+                    <div className="text-center p-6 cursor-pointer" onClick={() => fileInputRef.current.click()}>
+                       <div className="w-16 h-16 bg-white dark:bg-zinc-900 rounded-full flex items-center justify-center shadow-lg mx-auto mb-4 group-hover:scale-110 transition-transform">
+                          <UploadCloud className="w-8 h-8 text-zinc-400 group-hover:text-indigo-500 transition-colors" />
+                       </div>
+                       <h3 className="text-sm font-black text-zinc-700 dark:text-zinc-300">Drag poster here or <span className="text-indigo-500 underline">browse</span></h3>
+                       <p className="text-[10px] text-zinc-400 mt-2 font-medium uppercase tracking-wide">Supports JPG, PNG (Max 5MB)</p>
+                    </div>
+                 )}
+                 <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileSelect} />
                </div>
             </div>
 
@@ -308,20 +330,81 @@ const CreateEventModal = ({ isOpen, onClose }) => {
                 </div>
             </div>
 
+            {/* 🆕 REGISTRATION QUESTIONS UI */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-black uppercase text-zinc-500">
+                Registration Questions (Optional)
+              </h3>
+
+              {formData.customQuestions.map((q, index) => (
+                <div
+                  key={q.id}
+                  className="p-4 border border-zinc-200 dark:border-zinc-800 rounded-2xl space-y-2 bg-zinc-50 dark:bg-zinc-900"
+                >
+                  <input
+                    type="text"
+                    placeholder={`Question ${index + 1}`}
+                    value={q.label}
+                    onChange={e => updateQuestion(q.id, 'label', e.target.value)}
+                    className="w-full p-2 bg-transparent border-b border-zinc-300 dark:border-zinc-700 outline-none text-sm font-bold"
+                  />
+
+                  <select
+                    value={q.type}
+                    onChange={e => updateQuestion(q.id, 'type', e.target.value)}
+                    className="w-full p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black text-xs"
+                  >
+                    <option value="text">Text</option>
+                    <option value="number">Number</option>
+                    <option value="select">Select</option>
+                    <option value="checkbox">Checkbox</option>
+                  </select>
+
+                  <div className="flex justify-between items-center pt-2">
+                    <label className="flex items-center gap-2 text-xs font-bold text-zinc-500">
+                        <input
+                        type="checkbox"
+                        checked={q.required}
+                        onChange={e => updateQuestion(q.id, 'required', e.target.checked)}
+                        className="accent-indigo-600"
+                        />
+                        Required
+                    </label>
+
+                    <button
+                        type="button"
+                        onClick={() => removeQuestion(q.id)}
+                        className="text-red-500 text-xs font-bold hover:underline"
+                    >
+                        Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={addQuestion}
+                className="text-indigo-600 font-bold text-sm hover:underline"
+              >
+                + Add Question
+              </button>
+            </div>
+
             {/* 🛡️ Strict Mode */}
             <div className={`p-4 rounded-2xl border-2 cursor-pointer flex items-center justify-between transition-all ${formData.isUniversityOnly ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/10' : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300'}`}
                 onClick={() => setFormData(prev => ({...prev, isUniversityOnly: !prev.isUniversityOnly}))}>
                 <div className="flex items-center gap-3">
-                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${formData.isUniversityOnly ? 'bg-indigo-600 text-white' : 'bg-zinc-200 text-zinc-400'}`}>
-                      <ShieldAlert className="w-4 h-4" />
-                   </div>
-                   <div>
-                      <p className="text-xs font-black uppercase dark:text-white">Strict Mode</p>
-                      <p className="text-[10px] text-zinc-500 font-medium">Only Chitkara Emails Allowed</p>
-                   </div>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${formData.isUniversityOnly ? 'bg-indigo-600 text-white' : 'bg-zinc-200 text-zinc-400'}`}>
+                        <ShieldAlert className="w-4 h-4" />
+                    </div>
+                    <div>
+                        <p className="text-xs font-black uppercase dark:text-white">Strict Mode</p>
+                        <p className="text-[10px] text-zinc-500 font-medium">Only Chitkara Emails Allowed</p>
+                    </div>
                 </div>
                 <div className={`w-10 h-6 rounded-full p-1 transition-colors ${formData.isUniversityOnly ? 'bg-indigo-600' : 'bg-zinc-300'}`}>
-                   <div className={`w-4 h-4 bg-white rounded-full shadow-md transition-transform ${formData.isUniversityOnly ? 'translate-x-4' : ''}`}></div>
+                    <div className={`w-4 h-4 bg-white rounded-full shadow-md transition-transform ${formData.isUniversityOnly ? 'translate-x-4' : ''}`}></div>
                 </div>
             </div>
 
@@ -331,10 +414,10 @@ const CreateEventModal = ({ isOpen, onClose }) => {
         {/* 🦶 Footer */}
         <div className="p-6 border-t border-zinc-100 dark:border-zinc-900 bg-white dark:bg-zinc-950 flex gap-4">
           <button onClick={onClose} className="flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-all">
-             Dismiss
+              Dismiss
           </button>
           <button type="submit" form="create-form" disabled={loading || imageUploading} 
-             className="flex-[2] py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-200 dark:shadow-none active:scale-95 flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+              className="flex-[2] py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-200 dark:shadow-none active:scale-95 flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
             {loading ? <Loader2 className="animate-spin" /> : 'LAUNCH EVENT'}
           </button>
         </div>
