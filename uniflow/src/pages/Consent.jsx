@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
@@ -6,7 +6,7 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { CheckCircle, ShieldAlert, Loader2 } from 'lucide-react';
 
 const Consent = () => {
-  const { user } = useAuth();
+  const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
 
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -14,9 +14,26 @@ const Consent = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // 🔒 HARD BLOCK: user must be logged in
-  if (!user) {
-    navigate('/login');
+  /**
+   * 🔒 HARD RULES
+   * - Not logged in → login
+   * - Profile still loading → wait
+   * - Already accepted → redirect away
+   */
+  useEffect(() => {
+    if (loading) return;
+
+    if (!user) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    if (profile?.termsAccepted === true) {
+      navigate('/', { replace: true });
+    }
+  }, [user, profile, loading, navigate]);
+
+  if (loading || !user || profile?.termsAccepted === true) {
     return null;
   }
 
@@ -30,20 +47,21 @@ const Consent = () => {
     setError('');
 
     try {
-      // ✅ SINGLE SOURCE OF TRUTH
       await setDoc(
         doc(db, 'users', user.uid),
         {
           termsAccepted: true,
           termsAcceptedAt: serverTimestamp(),
-          email: user.email,
-          displayName: user.displayName || '',
         },
         { merge: true }
       );
 
-      // Redirect user back safely
-      navigate(-1);
+      /**
+       * ✅ IMPORTANT
+       * Do NOT go back
+       * Go to a clean route so guards re-evaluate correctly
+       */
+      navigate('/', { replace: true });
     } catch (err) {
       console.error(err);
       setError('Failed to save consent. Please try again.');
@@ -55,7 +73,7 @@ const Consent = () => {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center px-6">
       <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-3xl p-8 border border-zinc-200 dark:border-zinc-800 shadow-xl">
-        
+
         {/* Header */}
         <div className="text-center mb-6">
           <div className="flex justify-center mb-4">
@@ -65,7 +83,7 @@ const Consent = () => {
             Consent Required
           </h1>
           <p className="text-sm text-zinc-500 mt-2">
-            Please review and accept to continue using UniFlow-cu
+            Please review and accept to continue using UniFlow
           </p>
         </div>
 
@@ -90,7 +108,7 @@ const Consent = () => {
               <Link
                 to="/terms"
                 target="_blank"
-                className="text-indigo-600 dark:text-indigo-400 underline font-bold"
+                className="text-indigo-600 underline font-bold"
               >
                 Terms & Conditions
               </Link>
@@ -109,7 +127,7 @@ const Consent = () => {
               <Link
                 to="/privacy"
                 target="_blank"
-                className="text-indigo-600 dark:text-indigo-400 underline font-bold"
+                className="text-indigo-600 underline font-bold"
               >
                 Privacy Policy
               </Link>
@@ -121,7 +139,7 @@ const Consent = () => {
         <button
           onClick={handleAccept}
           disabled={saving}
-          className="mt-6 w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          className="mt-6 w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {saving ? (
             <Loader2 className="w-5 h-5 animate-spin" />
