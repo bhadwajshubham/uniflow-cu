@@ -1,9 +1,9 @@
 import admin from "firebase-admin";
 import nodemailer from "nodemailer";
 
-// ─────────────────────────────────────────────
-// 🔐 Firebase Admin Init (Safe Singleton)
-// ─────────────────────────────────────────────
+/* ─────────────────────────────────────────────
+   🔐 Firebase Admin Init (Safe Singleton)
+───────────────────────────────────────────── */
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(
@@ -14,29 +14,57 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-// ─────────────────────────────────────────────
-// 📧 Mail Transport (Gmail SMTP)
-// ─────────────────────────────────────────────
+/* ─────────────────────────────────────────────
+   📧 Mail Transport (Gmail SMTP)
+───────────────────────────────────────────── */
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: process.env.EMAIL_USER, // your gmail
-    pass: process.env.EMAIL_PASS, // app password
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
   },
 });
 
-// ─────────────────────────────────────────────
-// 🚀 API HANDLER
-// ─────────────────────────────────────────────
+/* ─────────────────────────────────────────────
+   🧠 HTML BUILDER (BACKEND SOURCE OF TRUTH)
+───────────────────────────────────────────── */
+function buildTicketEmail({ userEmail, event, registration }) {
+  return `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto">
+      <h2>🎟️ Registration Confirmed</h2>
+      <p>Hello <strong>${userEmail}</strong>,</p>
+
+      <p>You have successfully registered for:</p>
+
+      <div style="padding:16px;border:1px solid #eee;border-radius:8px">
+        <h3>${event.title}</h3>
+        <p><strong>Date:</strong> ${event.date} ${event.time}</p>
+        <p><strong>Location:</strong> ${event.location}</p>
+        <p><strong>Type:</strong> ${event.type}</p>
+      </div>
+
+      <p style="margin-top:16px">
+        Please keep this email for entry verification.
+      </p>
+
+      <p style="margin-top:24px;font-size:12px;color:#666">
+        UniFlow-cu is a technology platform. Event execution is the responsibility
+        of the organizer.
+      </p>
+    </div>
+  `;
+}
+
+/* ─────────────────────────────────────────────
+   🚀 API HANDLER
+───────────────────────────────────────────── */
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    // ─────────────────────────────
-    // 🔐 AUTH VERIFICATION
-    // ─────────────────────────────
+    /* ───────── AUTH ───────── */
     const authHeader = req.headers.authorization || "";
     if (!authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -52,46 +80,32 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: "Invalid token" });
     }
 
-    // ─────────────────────────────
-    // 📦 PAYLOAD VALIDATION
-    // ─────────────────────────────
-    const { eventId, subject, html } = req.body;
+    /* ───────── PAYLOAD ───────── */
+    const { eventId, registrationId } = req.body;
 
-    if (!eventId || !subject || !html) {
+    if (!eventId || !registrationId) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // ─────────────────────────────
-    // 🛑 RATE LIMIT (1 EMAIL / EVENT / USER)
-    // ─────────────────────────────
-    const throttleRef = db
-      .collection("email_logs")
-      .doc(`${uid}_${eventId}`);
+    /* ───────── FETCH DATA ───────── */
+    const eventSnap = await db.collection("events").doc(eventId).get();
+    const regSnap = await db.collection("registrations").doc(registrationId).get();
 
-    const existing = await throttleRef.get();
-    if (existing.exists) {
-      return res.status(429).json({
-        error: "Email already sent for this event",
-      });
+    if (!eventSnap.exists || !regSnap.exists) {
+      return res.status(404).json({ error: "Event or registration not found" });
     }
 
-    // ─────────────────────────────
-    // 📧 SEND EMAIL
-    // ─────────────────────────────
+    const event = eventSnap.data();
+    const registration = regSnap.data();
+
+    /* ───────── SEND EMAIL ───────── */
+    const html = buildTicketEmail({ userEmail, event, registration });
+
     await transporter.sendMail({
       from: `"UniFlow-cu" <${process.env.EMAIL_USER}>`,
       to: userEmail,
-      subject,
+      subject: `🎟️ Ticket Confirmed: ${event.title}`,
       html,
-    });
-
-    // ─────────────────────────────
-    // 🧾 LOG SEND (SOURCE OF TRUTH)
-    // ─────────────────────────────
-    await throttleRef.set({
-      uid,
-      eventId,
-      sentAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
     return res.status(200).json({ success: true });
