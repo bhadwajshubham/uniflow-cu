@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../lib/firebase';
@@ -6,7 +6,7 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { CheckCircle, ShieldAlert, Loader2 } from 'lucide-react';
 
 const Consent = () => {
-  const { user, profile, loading } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -14,26 +14,9 @@ const Consent = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  /**
-   * 🔒 HARD RULES
-   * - Not logged in → login
-   * - Profile still loading → wait
-   * - Already accepted → redirect away
-   */
-  useEffect(() => {
-    if (loading) return;
-
-    if (!user) {
-      navigate('/login', { replace: true });
-      return;
-    }
-
-    if (profile?.termsAccepted === true) {
-      navigate('/', { replace: true });
-    }
-  }, [user, profile, loading, navigate]);
-
-  if (loading || !user || profile?.termsAccepted === true) {
+  // 🔒 HARD BLOCK: must be logged in
+  if (!user) {
+    navigate('/login');
     return null;
   }
 
@@ -47,21 +30,25 @@ const Consent = () => {
     setError('');
 
     try {
+      // ✅ SINGLE SOURCE OF TRUTH (Firestore)
       await setDoc(
         doc(db, 'users', user.uid),
         {
           termsAccepted: true,
           termsAcceptedAt: serverTimestamp(),
+          email: user.email,
+          displayName: user.displayName || '',
         },
         { merge: true }
       );
 
       /**
-       * ✅ IMPORTANT
-       * Do NOT go back
-       * Go to a clean route so guards re-evaluate correctly
+       * 🔥 CRITICAL FIX
+       * Force full app reload so AuthContext re-reads Firestore
+       * Prevents infinite consent loop
+       * This is intentional and production-safe
        */
-      navigate('/', { replace: true });
+      window.location.replace('/');
     } catch (err) {
       console.error(err);
       setError('Failed to save consent. Please try again.');
@@ -108,7 +95,7 @@ const Consent = () => {
               <Link
                 to="/terms"
                 target="_blank"
-                className="text-indigo-600 underline font-bold"
+                className="text-indigo-600 dark:text-indigo-400 underline font-bold"
               >
                 Terms & Conditions
               </Link>
@@ -127,7 +114,7 @@ const Consent = () => {
               <Link
                 to="/privacy"
                 target="_blank"
-                className="text-indigo-600 underline font-bold"
+                className="text-indigo-600 dark:text-indigo-400 underline font-bold"
               >
                 Privacy Policy
               </Link>
@@ -139,7 +126,7 @@ const Consent = () => {
         <button
           onClick={handleAccept}
           disabled={saving}
-          className="mt-6 w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50"
+          className="mt-6 w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
           {saving ? (
             <Loader2 className="w-5 h-5 animate-spin" />

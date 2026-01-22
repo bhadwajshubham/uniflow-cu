@@ -98,50 +98,63 @@ const EventDetailsPage = () => {
       return;
     }
 
-    // 🛑 SOLD OUT
-    if (event.ticketsSold >= event.totalTickets) {
-      alert('Housefull!');
-      return;
-    }
-
-    // 🛑 DUPLICATE
-    if (alreadyBooked) {
-      alert('You already registered!');
-      return;
-    }
-
-    // 🛡 CUSTOM QUESTION VALIDATION
-    if (event.customQuestions?.length) {
-      const missing = event.customQuestions.find(
-        q => q.required && !answers[q.id]
-      );
-      if (missing) {
-        alert(`Please answer: ${missing.label}`);
-        return;
-      }
-    }
-
     setRegistering(true);
 
     try {
+      // 🔒 FRESH EVENT CHECK (prevents overselling)
+      const freshSnap = await getDoc(doc(db, 'events', event.id));
+      if (!freshSnap.exists()) {
+        alert('Event not found');
+        return;
+      }
+
+      const freshEvent = freshSnap.data();
+      if (freshEvent.ticketsSold >= freshEvent.totalTickets) {
+        alert('Housefull!');
+        return;
+      }
+
+      // 🛑 DUPLICATE
+      if (alreadyBooked) {
+        alert('You already registered!');
+        return;
+      }
+
+      // 🛡 CUSTOM QUESTION VALIDATION
+      if (event.customQuestions?.length) {
+        const missing = event.customQuestions.find(
+          q => q.required && !answers[q.id]
+        );
+        if (missing) {
+          alert(`Please answer: ${missing.label}`);
+          return;
+        }
+      }
+
       const ticket = {
         eventId: event.id,
         eventTitle: event.title,
         eventDate: event.date,
         eventTime: event.time,
         eventLocation: event.location,
+
         userId: user.uid,
         userName: user.displayName || 'Student',
         userEmail: user.email,
+
         userRollNo: profile?.rollNo || '',
         userPhone: profile?.phone || '',
-        answers, // ✅ STORED SAFELY
+
+        answers, // ✅ custom question answers
+
         purchasedAt: serverTimestamp(),
-        status: 'confirmed',
-        checkedIn: false
+
+        // ✅ MUST MATCH RULES
+        status: 'registered',
+        used: false
       };
 
-      const ref = await addDoc(collection(db, 'registrations'), ticket);
+      await addDoc(collection(db, 'registrations'), ticket);
 
       await updateDoc(doc(db, 'events', event.id), {
         ticketsSold: increment(1)

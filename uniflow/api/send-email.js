@@ -1,55 +1,102 @@
-import nodemailer from 'nodemailer';
+import admin from "firebase-admin";
+import nodemailer from "nodemailer";
 
-export default async function handler(req, res) {
-  // 1. Check Method
-  if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Method not allowed' });
-  }
-
-  // 2. Debugging: Check if Variables exist (Don't log the actual password!)
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
-    console.error("❌ MISSING ENV VARIABLES: User or Pass is undefined.");
-    return res.status(500).json({ error: 'Server Configuration Error: Missing Credentials' });
-  }
-
-  const { to, subject, html } = req.body;
-
-  // 3. Configure Gmail
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_PASS // Ensure this is the 16-digit App Password
-    }
+// ─────────────────────────────────────────────
+// 🔐 Firebase Admin Init (Safe Singleton)
+// ─────────────────────────────────────────────
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(
+      JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+    ),
   });
+}
+
+const db = admin.firestore();
+
+// ─────────────────────────────────────────────
+// 📧 Mail Transport (Gmail SMTP)
+// ─────────────────────────────────────────────
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER, // your gmail
+    pass: process.env.EMAIL_PASS, // app password
+  },
+});
+
+// ─────────────────────────────────────────────
+// 🚀 API HANDLER
+// ─────────────────────────────────────────────
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
   try {
-    // 4. Verify Connection First
-    await new Promise((resolve, reject) => {
-      transporter.verify(function (error, success) {
-        if (error) {
-          console.error("❌ SMTP Connection Failed:", error);
-          reject(error);
-        } else {
-          console.log("✅ SMTP Connected. Ready to send.");
-          resolve(success);
-        }
+    // ─────────────────────────────
+    // 🔐 AUTH VERIFICATION
+    // ─────────────────────────────
+    const authHeader = req.headers.authorization || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const token = authHeader.split("Bearer ")[1];
+    const decoded = await admin.auth().verifyIdToken(token);
+
+    const uid = decoded.uid;
+    const userEmail = decoded.email;
+
+    if (!uid || !userEmail) {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+
+    // ─────────────────────────────
+    // 📦 PAYLOAD VALIDATION
+    // ─────────────────────────────
+    const { eventId, subject, html } = req.body;
+
+    if (!eventId || !subject || !html) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // ─────────────────────────────
+    // 🛑 RATE LIMIT (1 EMAIL / EVENT / USER)
+    // ─────────────────────────────
+    const throttleRef = db
+      .collection("email_logs")
+      .doc(`${uid}_${eventId}`);
+
+    const existing = await throttleRef.get();
+    if (existing.exists) {
+      return res.status(429).json({
+        error: "Email already sent for this event",
       });
-    });
+    }
 
-    // 5. Send Email
+    // ─────────────────────────────
+    // 📧 SEND EMAIL
+    // ─────────────────────────────
     await transporter.sendMail({
-      from: '"UniFlow Events" <noreply@uniflow.com>',
-      to,
+      from: `"UniFlow-cu" <${process.env.EMAIL_USER}>`,
+      to: userEmail,
       subject,
-      html
+      html,
     });
 
-    console.log(`✅ Email sent successfully to ${to}`);
-    return res.status(200).json({ success: true });
+    // ─────────────────────────────
+    // 🧾 LOG SEND (SOURCE OF TRUTH)
+    // ─────────────────────────────
+    await throttleRef.set({
+      uid,
+      eventId,
+      sentAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
 
-  } catch (error) {
-    console.error('❌ Email Sending Failed:', error);
-    return res.status(500).json({ error: error.message });
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error("Email send failed:", err);
+    return res.status(500).json({ error: "Email failed" });
   }
 }
