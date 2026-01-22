@@ -22,8 +22,8 @@ const db = admin.firestore();
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    user: process.env.EMAIL_USER, // ✅ SOURCE OF TRUTH
+    pass: process.env.EMAIL_PASS, // ✅ APP PASSWORD
   },
 });
 
@@ -36,8 +36,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log("ADMIN APPS:", admin.apps.length);
-
     const authHeader = req.headers.authorization || "";
     if (!authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -62,7 +60,7 @@ export default async function handler(req, res) {
     const userEmail = decoded.email;
 
     await transporter.sendMail({
-      from: `"UniFlow" <${process.env.EMAIL_USER}>`,
+      from: `"UniFlow" <${process.env.EMAIL_USER}>`, // ✅ FIXED
       to: userEmail,
       subject: `🎟️ Ticket Confirmed: ${event.title}`,
       html: `
