@@ -1,275 +1,176 @@
 import { db } from '../../../lib/firebase';
-import {
-  doc,
-  runTransaction,
-  serverTimestamp,
-  collection,
-  query,
-  where,
-  getDocs,
-  limit,
-} from 'firebase/firestore';
+import { doc, runTransaction, serverTimestamp, collection, query, where, getDocs, limit } from 'firebase/firestore';
 
-/* ─────────────────────────────
-   🔒 RESTRICTION VALIDATION (UX Only)
-───────────────────────────── */
+// Helper: Validation Logic
 const validateRestrictions = (eventData, user, studentData) => {
-  if (eventData.isUniversityOnly === true) {
-    const email = user.email.toLowerCase();
-    if (!email.endsWith('@chitkara.edu.in')) {
-      throw new Error(
-        '🚫 This event is restricted to @chitkara.edu.in email IDs.'
-      );
-    }
+  if (eventData.isUniversityOnly && !user.email.toLowerCase().endsWith('@chitkara.edu.in')) {
+    throw new Error("🚫 Restricted: Official @chitkara.edu.in email required.");
   }
-
-  if (eventData.allowedBranches === 'CSE/AI Only') {
-    if (
-      studentData.branch !== 'B.E. (C.S.E.)' &&
-      studentData.branch !== 'B.E. (C.S.E. AI)'
-    ) {
-      throw new Error(
-        '🚫 This event is restricted to CSE / CSE-AI students.'
-      );
-    }
+  if (eventData.allowedBranches === 'CSE/AI Only' && 
+      !['B.E. (C.S.E.)', 'B.E. (C.S.E. AI)'].includes(studentData.branch)) {
+    throw new Error("🚫 Restricted: CSE & AI branches only.");
   }
 };
 
-/* ─────────────────────────────
-   📧 EMAIL (FIRE & FORGET)
-   ✅ CORRECT API PATH
-───────────────────────────── */
-const triggerEmail = async ({ email, name, ticketId, event }) => {
-  try {
-    await fetch('/api/send-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email,
-        name,
-        ticketId,
-        eventName: event.title,
-        eventDate: event.date,
-        eventLocation: event.location,
-      }),
-    });
-  } catch (err) {
-    // Email failure should NEVER break registration
-    console.warn('Email failed (ignored):', err.message);
-  }
-};
-
-/* ─────────────────────────────
-   1️⃣ INDIVIDUAL REGISTRATION
-───────────────────────────── */
+// 1. INDIVIDUAL REGISTRATION
 export const registerForEvent = async (eventId, user, studentData) => {
-  if (!user) throw new Error('User must be logged in');
-
+  if (!user) throw new Error("User must be logged in");
+  
   const eventRef = doc(db, 'events', eventId);
-  const ticketId = `${eventId}_${user.uid}`;
-  const registrationRef = doc(db, 'registrations', ticketId);
+  const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
+  // Stats ref for analytics (optional, keeps track of emails sent via Cloud Function)
+  const statsRef = doc(db, "system_stats", "daily_emails");
 
-  let eventSnapshotData = null;
+  try {
+    await runTransaction(db, async (transaction) => {
+      // READ PHASE
+      const eventDoc = await transaction.get(eventRef);
+      const existingReg = await transaction.get(registrationRef);
+      const statsSnap = await transaction.get(statsRef);
 
-  await runTransaction(db, async (transaction) => {
-    const eventSnap = await transaction.get(eventRef);
-    const regSnap = await transaction.get(registrationRef);
+      if (!eventDoc.exists()) throw new Error("Event does not exist");
+      const eventData = eventDoc.data();
+      
+      validateRestrictions(eventData, user, studentData);
 
-    if (!eventSnap.exists()) throw new Error('Event not found');
-    if (regSnap.exists()) throw new Error('Already registered');
+      if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) throw new Error("Sold Out!");
+      if (existingReg.exists()) throw new Error("You are already registered.");
 
-    const eventData = eventSnap.data();
-    eventSnapshotData = eventData;
+      // WRITE PHASE
+      transaction.set(registrationRef, {
+        eventId,
+        eventTitle: eventData.title,
+        organizerName: eventData.organizerName || 'UniFlow Club',
+        eventDate: eventData.date,
+        eventTime: eventData.time || 'TBA',
+        eventLocation: eventData.location,
+        userId: user.uid,
+        userEmail: user.email,
+        userName: user.displayName,
+        rollNo: studentData.rollNo,
+        phone: studentData.phone,
+        branch: studentData.branch,
+        type: 'individual',
+        status: 'confirmed',
+        createdAt: serverTimestamp(),
+        emailSent: false // Cloud function listens to this and flips it to true
+      });
 
-    validateRestrictions(eventData, user, studentData);
-
-    if ((eventData.ticketsSold || 0) >= eventData.totalTickets) {
-      throw new Error('Housefull! Event is sold out.');
-    }
-
-    transaction.set(registrationRef, {
-      ticketId,
-      eventId,
-      eventTitle: eventData.title,
-      organizerName: eventData.organizerName || 'UniFlow',
-      eventDate: eventData.date,
-      eventLocation: eventData.location,
-
-      userId: user.uid,
-      userEmail: user.email,
-      userName: user.displayName || studentData.name || '',
-
-      rollNo: studentData.rollNo || '',
-      phone: studentData.phone || '',
-      branch: studentData.branch || '',
-
-      type: 'individual',
-      status: 'confirmed',
-      createdAt: serverTimestamp(),
+      transaction.update(eventRef, { ticketsSold: (eventData.ticketsSold || 0) + 1 });
+      
+      // Update Stats counter for the Cloud Function to track
+      if (statsSnap.exists()) {
+        transaction.update(statsRef, { count: (statsSnap.data().count || 0) + 1 });
+      } else {
+        transaction.set(statsRef, { count: 1 });
+      }
     });
 
-    transaction.update(eventRef, {
-      ticketsSold: (eventData.ticketsSold || 0) + 1,
-    });
-  });
-
-  triggerEmail({
-    email: user.email,
-    name: user.displayName || studentData.name || 'Student',
-    ticketId,
-    event: eventSnapshotData,
-  });
-
-  return { success: true, ticketId };
+    return { success: true };
+  } catch (error) { throw error; }
 };
 
-/* ─────────────────────────────
-   2️⃣ CREATE TEAM
-───────────────────────────── */
+// 2. CREATE TEAM REGISTRATION
 export const registerTeam = async (eventId, user, teamName, studentData) => {
-  if (!user) throw new Error('User must be logged in');
-  if (!teamName || teamName.trim().length < 3) {
-    throw new Error('Team name must be at least 3 characters');
-  }
+  if (!user) throw new Error("Login required");
+  if (!teamName || teamName.length < 3) throw new Error("Invalid Team Name");
 
   const eventRef = doc(db, 'events', eventId);
-  const ticketId = `${eventId}_${user.uid}`;
-  const registrationRef = doc(db, 'registrations', ticketId);
+  const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
+  const teamCode = Math.random().toString(36).substring(2, 8).toUpperCase(); 
 
-  const teamCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-  let eventSnapshotData = null;
+  try {
+    await runTransaction(db, async (transaction) => {
+      const eventDoc = await transaction.get(eventRef);
+      const existingReg = await transaction.get(registrationRef);
 
-  await runTransaction(db, async (transaction) => {
-    const eventSnap = await transaction.get(eventRef);
-    const regSnap = await transaction.get(registrationRef);
+      if (!eventDoc.exists()) throw new Error("Event not found");
+      const eventData = eventDoc.data();
 
-    if (!eventSnap.exists()) throw new Error('Event not found');
-    if (regSnap.exists()) throw new Error('Already registered');
+      validateRestrictions(eventData, user, studentData);
 
-    const eventData = eventSnap.data();
-    eventSnapshotData = eventData;
+      if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) throw new Error("Sold Out!");
+      if (existingReg.exists()) throw new Error("Already registered.");
 
-    validateRestrictions(eventData, user, studentData);
+      transaction.set(registrationRef, {
+        eventId,
+        eventTitle: eventData.title,
+        userId: user.uid,
+        userEmail: user.email,
+        userName: user.displayName,
+        type: 'team_leader',
+        teamName: teamName.trim(),
+        teamCode: teamCode,
+        teamSize: 1,
+        maxTeamSize: eventData.teamSize || 4,
+        status: 'confirmed',
+        createdAt: serverTimestamp(),
+        emailSent: false
+      });
 
-    if ((eventData.ticketsSold || 0) >= eventData.totalTickets) {
-      throw new Error('Event is sold out');
-    }
-
-    transaction.set(registrationRef, {
-      ticketId,
-      eventId,
-      eventTitle: eventData.title,
-
-      userId: user.uid,
-      userEmail: user.email,
-      userName: user.displayName || studentData.name || '',
-
-      rollNo: studentData.rollNo || '',
-      branch: studentData.branch || '',
-
-      type: 'team_leader',
-      teamName: teamName.trim(),
-      teamCode,
-      teamSize: 1,
-      maxTeamSize: eventData.teamSize || 4,
-
-      status: 'confirmed',
-      createdAt: serverTimestamp(),
+      transaction.update(eventRef, { ticketsSold: (eventData.ticketsSold || 0) + 1 });
     });
 
-    transaction.update(eventRef, {
-      ticketsSold: (eventData.ticketsSold || 0) + 1,
-    });
-  });
-
-  triggerEmail({
-    email: user.email,
-    name: user.displayName || studentData.name,
-    ticketId,
-    event: eventSnapshotData,
-  });
-
-  return { success: true, teamCode, ticketId };
+    return { success: true, teamCode };
+  } catch (error) { throw error; }
 };
 
-/* ─────────────────────────────
-   3️⃣ JOIN TEAM
-───────────────────────────── */
+// 3. JOIN TEAM REGISTRATION
 export const joinTeam = async (eventId, user, teamCode, studentData) => {
-  if (!user) throw new Error('User must be logged in');
-  if (!teamCode) throw new Error('Team code is required');
+  if (!user) throw new Error("Login required");
+  if (!teamCode) throw new Error("Team Code required");
 
   const eventRef = doc(db, 'events', eventId);
-  const ticketId = `${eventId}_${user.uid}`;
-  const registrationRef = doc(db, 'registrations', ticketId);
-
+  const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
+  
   const q = query(
-    collection(db, 'registrations'),
+    collection(db, 'registrations'), 
     where('eventId', '==', eventId),
-    where('teamCode', '==', teamCode.toUpperCase()),
+    where('teamCode', '==', teamCode.trim().toUpperCase()),
     where('type', '==', 'team_leader'),
     limit(1)
   );
 
-  const leaderSnap = await getDocs(q);
-  if (leaderSnap.empty) throw new Error('Invalid team code');
+  const leaderQuerySnap = await getDocs(q);
+  if (leaderQuerySnap.empty) throw new Error("Invalid Team Code");
+  const leaderRef = leaderQuerySnap.docs[0].ref;
 
-  const leaderRef = leaderSnap.docs[0].ref;
-  let eventSnapshotData = null;
+  try {
+    await runTransaction(db, async (transaction) => {
+      const eventDoc = await transaction.get(eventRef);
+      const existingReg = await transaction.get(registrationRef);
+      const leaderDoc = await transaction.get(leaderRef);
 
-  await runTransaction(db, async (transaction) => {
-    const eventSnap = await transaction.get(eventRef);
-    const regSnap = await transaction.get(registrationRef);
-    const leaderDoc = await transaction.get(leaderRef);
+      if (!leaderDoc.exists()) throw new Error("Team Disbanded");
+      const leaderData = leaderDoc.data();
+      if (leaderData.teamSize >= leaderData.maxTeamSize) throw new Error("Team Full");
 
-    if (!eventSnap.exists()) throw new Error('Event not found');
-    if (regSnap.exists()) throw new Error('Already registered');
+      if (!eventDoc.exists()) throw new Error("Event not found");
+      const eventData = eventDoc.data();
 
-    const leaderData = leaderDoc.data();
-    if (leaderData.teamSize >= leaderData.maxTeamSize) {
-      throw new Error('Team is full');
-    }
+      validateRestrictions(eventData, user, studentData);
 
-    const eventData = eventSnap.data();
-    eventSnapshotData = eventData;
+      if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) throw new Error("Sold Out");
+      if (existingReg.exists()) throw new Error("Already registered");
 
-    validateRestrictions(eventData, user, studentData);
+      transaction.set(registrationRef, {
+        eventId,
+        eventTitle: eventData.title,
+        userId: user.uid,
+        userEmail: user.email,
+        userName: user.displayName,
+        type: 'team_member',
+        teamName: leaderData.teamName,
+        teamCode: leaderData.teamCode,
+        status: 'confirmed',
+        createdAt: serverTimestamp(),
+        emailSent: false
+      });
 
-    transaction.set(registrationRef, {
-      ticketId,
-      eventId,
-      eventTitle: eventData.title,
-
-      userId: user.uid,
-      userEmail: user.email,
-      userName: user.displayName || studentData.name || '',
-
-      rollNo: studentData.rollNo || '',
-      branch: studentData.branch || '',
-
-      type: 'team_member',
-      teamName: leaderData.teamName,
-      teamCode: leaderData.teamCode,
-
-      status: 'confirmed',
-      createdAt: serverTimestamp(),
+      transaction.update(leaderRef, { teamSize: leaderData.teamSize + 1 });
+      transaction.update(eventRef, { ticketsSold: (eventData.ticketsSold || 0) + 1 });
     });
 
-    transaction.update(leaderRef, {
-      teamSize: leaderData.teamSize + 1,
-    });
-
-    transaction.update(eventRef, {
-      ticketsSold: (eventData.ticketsSold || 0) + 1,
-    });
-  });
-
-  triggerEmail({
-    email: user.email,
-    name: user.displayName || studentData.name,
-    ticketId,
-    event: eventSnapshotData,
-  });
-
-  return { success: true, ticketId };
+    return { success: true };
+  } catch (error) { throw error; }
 };
