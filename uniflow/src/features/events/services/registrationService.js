@@ -11,11 +11,9 @@ import {
 } from 'firebase/firestore';
 
 /* ─────────────────────────────
-   🔒 RESTRICTION VALIDATION (UX ONLY)
-   Real security = Firestore Rules
+   🔒 RESTRICTION VALIDATION (UX Only)
 ───────────────────────────── */
 const validateRestrictions = (eventData, user, studentData) => {
-  // University-only events
   if (eventData.isUniversityOnly === true) {
     const email = user.email.toLowerCase();
     if (!email.endsWith('@chitkara.edu.in')) {
@@ -25,7 +23,6 @@ const validateRestrictions = (eventData, user, studentData) => {
     }
   }
 
-  // Branch restriction
   if (eventData.allowedBranches === 'CSE/AI Only') {
     if (
       studentData.branch !== 'B.E. (C.S.E.)' &&
@@ -40,23 +37,24 @@ const validateRestrictions = (eventData, user, studentData) => {
 
 /* ─────────────────────────────
    📧 EMAIL (FIRE & FORGET)
-   ZERO impact on registration
+   ✅ CORRECT API PATH
 ───────────────────────────── */
-const triggerEmail = async (email, event) => {
+const triggerEmail = async ({ email, name, ticketId, event }) => {
   try {
-    await fetch('/api/sendEmail', {
+    await fetch('/api/send-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: email,
-        eventTitle: event.title,
-        date: event.date,
-        time: event.time || '',
-        location: event.location,
+        email,
+        name,
+        ticketId,
+        eventName: event.title,
+        eventDate: event.date,
+        eventLocation: event.location,
       }),
     });
   } catch (err) {
-    // SILENT FAIL — NEVER BLOCK REGISTRATION
+    // Email failure should NEVER break registration
     console.warn('Email failed (ignored):', err.message);
   }
 };
@@ -71,7 +69,7 @@ export const registerForEvent = async (eventId, user, studentData) => {
   const ticketId = `${eventId}_${user.uid}`;
   const registrationRef = doc(db, 'registrations', ticketId);
 
-  let eventSnapshot = null;
+  let eventSnapshotData = null;
 
   await runTransaction(db, async (transaction) => {
     const eventSnap = await transaction.get(eventRef);
@@ -81,7 +79,7 @@ export const registerForEvent = async (eventId, user, studentData) => {
     if (regSnap.exists()) throw new Error('Already registered');
 
     const eventData = eventSnap.data();
-    eventSnapshot = eventData;
+    eventSnapshotData = eventData;
 
     validateRestrictions(eventData, user, studentData);
 
@@ -115,8 +113,12 @@ export const registerForEvent = async (eventId, user, studentData) => {
     });
   });
 
-  // 🔔 async email (non-blocking)
-  triggerEmail(user.email, eventSnapshot);
+  triggerEmail({
+    email: user.email,
+    name: user.displayName || studentData.name || 'Student',
+    ticketId,
+    event: eventSnapshotData,
+  });
 
   return { success: true, ticketId };
 };
@@ -133,9 +135,9 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
   const eventRef = doc(db, 'events', eventId);
   const ticketId = `${eventId}_${user.uid}`;
   const registrationRef = doc(db, 'registrations', ticketId);
-  const teamCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-  let eventSnapshot = null;
+  const teamCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+  let eventSnapshotData = null;
 
   await runTransaction(db, async (transaction) => {
     const eventSnap = await transaction.get(eventRef);
@@ -145,7 +147,7 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
     if (regSnap.exists()) throw new Error('Already registered');
 
     const eventData = eventSnap.data();
-    eventSnapshot = eventData;
+    eventSnapshotData = eventData;
 
     validateRestrictions(eventData, user, studentData);
 
@@ -161,6 +163,7 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
       userId: user.uid,
       userEmail: user.email,
       userName: user.displayName || studentData.name || '',
+
       rollNo: studentData.rollNo || '',
       branch: studentData.branch || '',
 
@@ -179,7 +182,12 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
     });
   });
 
-  triggerEmail(user.email, eventSnapshot);
+  triggerEmail({
+    email: user.email,
+    name: user.displayName || studentData.name,
+    ticketId,
+    event: eventSnapshotData,
+  });
 
   return { success: true, teamCode, ticketId };
 };
@@ -207,7 +215,7 @@ export const joinTeam = async (eventId, user, teamCode, studentData) => {
   if (leaderSnap.empty) throw new Error('Invalid team code');
 
   const leaderRef = leaderSnap.docs[0].ref;
-  let eventSnapshot = null;
+  let eventSnapshotData = null;
 
   await runTransaction(db, async (transaction) => {
     const eventSnap = await transaction.get(eventRef);
@@ -219,11 +227,11 @@ export const joinTeam = async (eventId, user, teamCode, studentData) => {
 
     const leaderData = leaderDoc.data();
     if (leaderData.teamSize >= leaderData.maxTeamSize) {
-      throw new Error('Team is already full');
+      throw new Error('Team is full');
     }
 
     const eventData = eventSnap.data();
-    eventSnapshot = eventData;
+    eventSnapshotData = eventData;
 
     validateRestrictions(eventData, user, studentData);
 
@@ -235,6 +243,7 @@ export const joinTeam = async (eventId, user, teamCode, studentData) => {
       userId: user.uid,
       userEmail: user.email,
       userName: user.displayName || studentData.name || '',
+
       rollNo: studentData.rollNo || '',
       branch: studentData.branch || '',
 
@@ -255,7 +264,12 @@ export const joinTeam = async (eventId, user, teamCode, studentData) => {
     });
   });
 
-  triggerEmail(user.email, eventSnapshot);
+  triggerEmail({
+    email: user.email,
+    name: user.displayName || studentData.name,
+    ticketId,
+    event: eventSnapshotData,
+  });
 
   return { success: true, ticketId };
 };
