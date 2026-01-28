@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer';
 
 export default async function handler(req, res) {
-  // 1. CORS Headers
+  // 1. Allow connection from anywhere
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -10,60 +10,58 @@ export default async function handler(req, res) {
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
 
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  // 2. CHECK ENVIRONMENT VARIABLES (The #1 Cause of Failure)
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
+    return res.status(500).json({ 
+      error: 'CONFIGURATION_ERROR', 
+      message: 'Vercel Env Variables are MISSING. Go to Vercel Settings -> Environment Variables.' 
+    });
   }
 
   const { to, email, subject, html } = req.body;
   const recipient = to || email;
 
-  if (!recipient) {
-    return res.status(400).json({ error: 'No recipient provided' });
-  }
-
   try {
-    // 2. Setup Transporter
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_PASS
+        pass: process.env.GMAIL_PASS.replace(/\s/g, '') // 🛡️ AUTOMATICALLY REMOVE SPACES
       }
     });
 
-    // 3. Verify Connection FIRST (Debug Step)
+    // 3. Verify Login
     await new Promise((resolve, reject) => {
-      transporter.verify(function (error, success) {
-        if (error) reject(error);
-        else resolve(success);
+      transporter.verify((error, success) => {
+        if (error) {
+          console.error("Login Failed:", error);
+          reject(new Error(`LOGIN_FAILED: ${error.message}`));
+        } else {
+          resolve(success);
+        }
       });
     });
 
-    // 4. Send Email
+    // 4. Send
     const info = await transporter.sendMail({
-      from: '"UniFlow Team" <noreply@uniflow.com>',
+      from: '"UniFlow Events" <noreply@uniflow.com>',
       to: recipient,
-      subject: subject || "Ticket Confirmation",
+      subject: subject || "Ticket Confirmed",
       html: html || "<p>Ticket Confirmed</p>",
     });
 
-    console.log("✅ Email Sent:", info.messageId);
     return res.status(200).json({ success: true, id: info.messageId });
 
   } catch (error) {
-    console.error("❌ BACKEND ERROR:", error);
+    console.error("❌ CRITICAL EMAIL ERROR:", error);
     
-    // 🚨 THIS IS THE IMPORTANT PART
-    // We send the ACTUAL error message back to you
+    // 🚨 RETURN THE EXACT ERROR TO THE FRONTEND
     return res.status(500).json({ 
-      error: 'Email Failed', 
-      details: error.message,  // e.g. "Invalid login"
-      code: error.code         // e.g. "EAUTH"
+      error: 'CRITICAL_DEBUG_ERROR', 
+      details: error.message, // This will say "Invalid Login" or "Username not accepted"
+      originalError: error.toString() 
     });
   }
 }
