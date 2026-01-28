@@ -4,21 +4,9 @@ import { db, storage, auth } from '../../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
-import {
-  User,
-  Users,
-  Phone,
-  Hash,
-  BookOpen,
-  Layers,
-  MapPin,
-  Camera,
-  Save,
-  Loader2,
-  AlertCircle,
-  CheckCircle,
-  LogOut,
-  ShieldCheck // Added for Badge
+import { 
+  User, Phone, BookOpen, Layers, MapPin, LogOut, ShieldCheck, 
+  CheckCircle, Hash, Camera, Edit2, Save, X, Loader2, AlertCircle 
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -26,19 +14,21 @@ const UserProfile = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  // Mode: View (ID Card) vs Edit (Form)
+  const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
-  // Extra state for Badge
-  const [termsAccepted, setTermsAccepted] = useState(false);
 
+  // Data State
+  const [profile, setProfile] = useState(null); // Display Data
   const [formData, setFormData] = useState({
     displayName: '',
     phone: '',
     rollNo: '',
-    branch: 'CSE',
+    branch: 'B.E. (CSE)',
+    customBranch: '', // For "Others" logic
     semester: '1st',
     group: '',
     residency: 'Day Scholar'
@@ -46,42 +36,52 @@ const UserProfile = () => {
   
   const [photo, setPhoto] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [existingPhoto, setExistingPhoto] = useState(null);
 
+  // 🔄 1. FETCH FRESH DATA (Loop Fix)
   useEffect(() => {
     if (!user) return;
     const fetchData = async () => {
       try {
+        // Hum seedha DB call kar rahe hain taaki "Consent Loop" na ho
         const docRef = doc(db, 'users', user.uid);
         const docSnap = await getDoc(docRef);
+        
         if (docSnap.exists()) {
           const data = docSnap.data();
+          setProfile(data);
+          
+          // Logic to handle "Others" branch
+          const isStandard = ['B.E. (CSE)', 'B.E. (CSE-AI)', 'B.E. (ECE)', 'B.E. (ME)'].includes(data.branch);
+          
           setFormData({
             displayName: data.displayName || user.displayName || '',
             phone: data.phone || '',
             rollNo: data.rollNo || '',
-            branch: data.branch || 'CSE',
+            branch: isStandard ? data.branch : 'Others',
+            customBranch: isStandard ? '' : data.branch,
             semester: data.semester || '1st',
             group: data.group || '',
             residency: data.residency || 'Day Scholar'
           });
-          setExistingPhoto(data.photoURL || user.photoURL);
-          setTermsAccepted(data.termsAccepted || false); // Fetch Consent Status
         }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
+      } catch (err) { 
+        console.error(err); 
+      } finally { 
+        setLoading(false); 
       }
     };
     fetchData();
   }, [user]);
 
+  // 🛡️ 2. INPUT VALIDATION HANDLERS
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
     if (name === 'phone') {
+        // Only Numbers allowed, Max 10
         if (/^\d{0,10}$/.test(value)) setFormData({ ...formData, [name]: value });
     } else if (name === 'rollNo') {
+        // Alphanumeric Only
         if (/^[a-zA-Z0-9]{0,15}$/.test(value)) setFormData({ ...formData, [name]: value });
     } else {
         setFormData({ ...formData, [name]: value });
@@ -92,204 +92,227 @@ const UserProfile = () => {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) { 
-        setError("File size must be less than 2MB");
-        return;
-      }
+      if (file.size > 2 * 1024 * 1024) { setError("Max file size is 2MB"); return; }
       setPhoto(file);
       setPreview(URL.createObjectURL(file));
     }
   };
 
+  // 💾 3. SAVE WITH STRICT VALIDATION
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
     setError('');
-    setSuccess('');
 
-    if (formData.phone.length !== 10) {
-      setError("Phone number must be exactly 10 digits.");
-      setSaving(false); return;
-    }
-    if (formData.rollNo.length < 5) {
-      setError("Please enter a valid Roll Number.");
-      setSaving(false); return;
-    }
-    if (!formData.displayName.trim()) {
-        setError("Name cannot be empty.");
-        setSaving(false); return;
-    }
+    // Validations
+    if (formData.phone.length !== 10) { setError("Phone number must be exactly 10 digits."); setSaving(false); return; }
+    if (formData.rollNo.length < 5) { setError("Enter a valid Roll Number."); setSaving(false); return; }
+    if (!formData.displayName.trim()) { setError("Name cannot be empty."); setSaving(false); return; }
+    
+    // Branch Logic
+    const finalBranch = formData.branch === 'Others' ? formData.customBranch.trim() : formData.branch;
+    if (!finalBranch) { setError("Please specify your Branch/Course."); setSaving(false); return; }
 
     try {
-      let finalPhotoURL = existingPhoto;
+      let finalPhotoURL = profile?.photoURL || user.photoURL;
+      
+      // Upload Photo if changed
       if (photo) {
         const storageRef = ref(storage, `avatars/${user.uid}_${Date.now()}`);
         await uploadBytes(storageRef, photo);
         finalPhotoURL = await getDownloadURL(storageRef);
       }
 
-      await setDoc(doc(db, 'users', user.uid), {
+      const updatedData = {
         displayName: formData.displayName.trim(),
         phone: formData.phone,
         rollNo: formData.rollNo.toUpperCase(),
-        branch: formData.branch,
+        branch: finalBranch,
         semester: formData.semester,
         group: formData.group.trim().toUpperCase(),
         residency: formData.residency,
         photoURL: finalPhotoURL,
         isProfileComplete: true,
         updatedAt: new Date(),
-      }, { merge: true });
+        // TermsAccepted ko hum yahan change nahi kar rahe, wo Event Page se aata hai
+        termsAccepted: profile?.termsAccepted || false 
+      };
 
-      setSuccess("Profile updated successfully!");
-      setExistingPhoto(finalPhotoURL);
+      await setDoc(doc(db, 'users', user.uid), updatedData, { merge: true });
+
+      setProfile(updatedData); // Update UI Instantly
+      setSuccess("Profile Updated Successfully!");
       setTimeout(() => setSuccess(''), 3000);
+      setIsEditing(false); // Close Form
 
     } catch (err) {
-      console.error("Save failed:", err);
-      if (err.code === 'permission-denied') {
-          setError("Security Error: Check permissions.");
-      } else {
-          setError("Failed to update. Check connection.");
-      }
+      setError("Update failed: " + err.message);
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) return <div className="flex justify-center pt-20"><Loader2 className="animate-spin w-8 h-8 text-indigo-600"/></div>;
+  const handleLogout = async () => { await signOut(auth); navigate('/login'); };
+
+  if (loading) return <div className="min-h-screen flex justify-center items-center"><Loader2 className="animate-spin w-8 h-8 text-indigo-600"/></div>;
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-24 pb-12 px-6">
-      <div className="max-w-2xl mx-auto bg-white dark:bg-zinc-900 rounded-3xl p-8 border border-zinc-200 dark:border-zinc-800 shadow-xl">
-        
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-black text-zinc-900 dark:text-white">Student ID</h1>
-          <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest mt-1 mb-4">Update your official details</p>
-          
-          {/* ✅ CONSENT BADGE (Only visual, no logic) */}
-          {termsAccepted && (
-            <div className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold border border-green-200">
-              <ShieldCheck className="w-3 h-3" /> Terms Accepted
+    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-20 pb-24 px-4">
+      <div className="max-w-md mx-auto">
+
+        {/* --- HEADER: PHOTO & TOGGLE --- */}
+        <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 mb-6 relative">
+          <div className="h-32 bg-gradient-to-r from-indigo-600 to-purple-600 relative">
+             {/* Edit Button */}
+             <button 
+                onClick={() => setIsEditing(!isEditing)}
+                className="absolute top-4 right-4 bg-white/20 backdrop-blur-md text-white p-2 rounded-full hover:bg-white/30 transition z-10"
+             >
+                {isEditing ? <X className="w-5 h-5" /> : <Edit2 className="w-5 h-5" />}
+             </button>
+          </div>
+
+          <div className="absolute top-16 left-1/2 -translate-x-1/2">
+             <div className="w-28 h-28 bg-white dark:bg-zinc-900 rounded-full p-1.5 shadow-2xl relative group">
+                <img 
+                  src={preview || profile?.photoURL || `https://ui-avatars.com/api/?name=${profile?.displayName}`} 
+                  alt="Profile" 
+                  className="w-full h-full rounded-full object-cover border-2 border-zinc-100"
+                />
+                {isEditing && (
+                  <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center cursor-pointer">
+                    <Camera className="w-8 h-8 text-white" />
+                    <input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
+                  </div>
+                )}
+             </div>
+          </div>
+
+          <div className="pt-16 pb-6 px-6 text-center mt-2">
+            <h2 className="text-2xl font-black text-zinc-900 dark:text-white">
+              {profile?.displayName || "Student Name"}
+            </h2>
+            <p className="text-zinc-500 text-sm mb-3">{user?.email}</p>
+            
+            {/* BADGES */}
+            <div className="flex justify-center gap-2 flex-wrap">
+              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-[10px] font-bold uppercase flex items-center">
+                <ShieldCheck className="w-3 h-3 mr-1" /> Verified
+              </span>
+              {profile?.termsAccepted && (
+                <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold uppercase flex items-center">
+                  <CheckCircle className="w-3 h-3 mr-1" /> Consent Given
+                </span>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 font-bold text-sm flex items-center gap-2 rounded-r-lg">
-            <AlertCircle className="w-5 h-5" /> {error}
+        {/* MESSAGES */}
+        {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-xl text-sm flex items-center font-bold"><AlertCircle className="w-4 h-4 mr-2"/>{error}</div>}
+        {success && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-xl text-sm flex items-center font-bold"><CheckCircle className="w-4 h-4 mr-2"/>{success}</div>}
+
+        {/* --- VIEW MODE (ID CARD) --- */}
+        {!isEditing ? (
+          <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
+             {/* Rows */}
+             <div className="flex items-center p-4">
+                <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 mr-4"><Hash className="w-5 h-5"/></div>
+                <div><p className="text-[10px] text-zinc-400 font-bold uppercase">Roll No</p><p className="font-bold text-gray-800">{profile?.rollNo || "Not Set"}</p></div>
+             </div>
+             <div className="flex items-center p-4">
+                <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center text-purple-600 mr-4"><BookOpen className="w-5 h-5"/></div>
+                <div><p className="text-[10px] text-zinc-400 font-bold uppercase">Branch</p><p className="font-bold text-gray-800">{profile?.branch || "Not Set"}</p></div>
+             </div>
+             <div className="flex items-center p-4">
+                <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center text-green-600 mr-4"><Phone className="w-5 h-5"/></div>
+                <div><p className="text-[10px] text-zinc-400 font-bold uppercase">Phone</p><p className="font-bold text-gray-800">{profile?.phone || "Not Set"}</p></div>
+             </div>
+             <div className="grid grid-cols-3 divide-x divide-zinc-100">
+                <div className="p-4 text-center">
+                   <p className="text-[10px] text-zinc-400 font-bold uppercase">Sem</p><p className="font-bold text-sm">{profile?.semester}</p>
+                </div>
+                <div className="p-4 text-center">
+                   <p className="text-[10px] text-zinc-400 font-bold uppercase">Group</p><p className="font-bold text-sm">{profile?.group || "-"}</p>
+                </div>
+                <div className="p-4 text-center">
+                   <p className="text-[10px] text-zinc-400 font-bold uppercase">Stay</p><p className="font-bold text-xs mt-1">{profile?.residency}</p>
+                </div>
+             </div>
           </div>
-        )}
+        ) : (
+          /* --- EDIT MODE (FORM WITH VALIDATION) --- */
+          <form onSubmit={handleSave} className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border border-zinc-200 p-6 space-y-4">
+            
+            <div>
+              <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Full Name</label>
+              <input name="displayName" value={formData.displayName} onChange={handleChange} className="w-full p-3 bg-zinc-50 rounded-xl font-bold border-none outline-none focus:ring-2 focus:ring-indigo-500/50" />
+            </div>
 
-        {success && (
-          <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 font-bold text-sm flex items-center gap-2 rounded-r-lg">
-            <CheckCircle className="w-5 h-5" /> {success}
-          </div>
-        )}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                 <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Phone</label>
+                 <input name="phone" value={formData.phone} onChange={handleChange} placeholder="10 digits" className="w-full p-3 bg-zinc-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-indigo-500/50" />
+              </div>
+              <div>
+                 <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Roll No</label>
+                 <input name="rollNo" value={formData.rollNo} onChange={handleChange} className="w-full p-3 bg-zinc-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-indigo-500/50" />
+              </div>
+            </div>
 
-        <form onSubmit={handleSave} className="space-y-6">
-          
-          {/* Photo */}
-          <div className="flex flex-col items-center gap-4">
-             <div className="relative group cursor-pointer">
-                <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-zinc-100 dark:border-zinc-800 shadow-lg">
-                   <img src={preview || existingPhoto || `https://ui-avatars.com/api/?name=${user.displayName}`} alt="Profile" className="w-full h-full object-cover" />
-                </div>
-                <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                   <Camera className="w-6 h-6 text-white" />
-                </div>
-                <input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
-             </div>
-             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Tap to change photo</p>
-          </div>
+            {/* BRANCH DROPDOWN + OTHERS */}
+            <div>
+              <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Branch / Course</label>
+              <select name="branch" value={formData.branch} onChange={handleChange} className="w-full p-3 bg-zinc-50 rounded-xl font-bold outline-none mb-2 appearance-none">
+                <option>B.E. (CSE)</option>
+                <option>B.E. (CSE-AI)</option>
+                <option>B.E. (ECE)</option>
+                <option>B.E. (ME)</option>
+                <option>Others</option>
+              </select>
+              {formData.branch === 'Others' && (
+                <input 
+                  name="customBranch" 
+                  value={formData.customBranch} 
+                  onChange={handleChange} 
+                  placeholder="Specify Branch (e.g. BBA, Pharmacy)" 
+                  className="w-full p-3 bg-zinc-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-indigo-500/50"
+                />
+              )}
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-             {/* Fields */}
-             <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Full Name</label>
-                <div className="relative">
-                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                   <input name="displayName" value={formData.displayName} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50" placeholder="John Doe" required />
-                </div>
-             </div>
-             
-             <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Phone (+91)</label>
-                <div className="relative">
-                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                   <input name="phone" value={formData.phone} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50" placeholder="9876543210" required />
-                </div>
-             </div>
-
-             <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Roll No</label>
-                <div className="relative">
-                   <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                   <input name="rollNo" value={formData.rollNo} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50" placeholder="211099..." required />
-                </div>
-             </div>
-
-             <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Branch</label>
-                <div className="relative">
-                   <BookOpen className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                   <select name="branch" value={formData.branch} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none">
-                      <option>CSE</option><option>CSE (AI)</option><option>ECE</option><option>ME</option><option>BBA</option><option>Pharmacy</option>
-                   </select>
-                </div>
-             </div>
-
-             <div className="space-y-1">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
                 <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Semester</label>
-                <div className="relative">
-                   <Layers className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                   <select name="semester" value={formData.semester} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none">
-                      <option>1st</option><option>2nd</option><option>3rd</option><option>4th</option><option>5th</option><option>6th</option><option>7th</option><option>8th</option>
-                   </select>
-                </div>
-             </div>
+                <select name="semester" value={formData.semester} onChange={handleChange} className="w-full p-3 bg-zinc-50 rounded-xl font-bold outline-none appearance-none">
+                   {['1st','2nd','3rd','4th','5th','6th','7th','8th'].map(n => <option key={n}>{n}</option>)}
+                </select>
+              </div>
+              <div>
+                 <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Group</label>
+                 <input name="group" value={formData.group} onChange={handleChange} placeholder="Optional" className="w-full p-3 bg-zinc-50 rounded-xl font-bold outline-none" />
+              </div>
+            </div>
 
-             <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Group (Optional)</label>
-                <div className="relative">
-                   <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                   <input name="group" value={formData.group} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50" placeholder="G1, G2..." />
-                </div>
-             </div>
-             
-             <div className="space-y-1 md:col-span-2">
-                <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Residency</label>
-                <div className="relative">
-                   <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                   <select name="residency" value={formData.residency} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none">
-                      <option>Day Scholar</option><option>Hosteller (Boys)</option><option>Hosteller (Girls)</option>
-                   </select>
-                </div>
-             </div>
-          </div>
+            <div>
+               <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Residency</label>
+               <select name="residency" value={formData.residency} onChange={handleChange} className="w-full p-3 bg-zinc-50 rounded-xl font-bold outline-none appearance-none">
+                  <option>Day Scholar</option>
+                  <option>Hosteller (Boys)</option>
+                  <option>Hosteller (Girls)</option>
+               </select>
+            </div>
 
-          <button type="submit" disabled={saving} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black uppercase tracking-widest shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-            {saving ? <Loader2 className="animate-spin w-5 h-5" /> : <><Save className="w-5 h-5" /> Save Changes</>}
-          </button>
+            <button type="submit" disabled={saving} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black uppercase tracking-widest flex items-center justify-center gap-2">
+               {saving ? <Loader2 className="animate-spin w-5 h-5"/> : <><Save className="w-5 h-5"/> Save Details</>}
+            </button>
+          </form>
+        )}
 
-        </form>
-
-        <div className="mt-6">
-          <button
-            onClick={async () => {
-              try {
-                await signOut(auth);
-                navigate('/login');
-              } catch (err) {
-                console.error('Logout failed', err);
-              }
-            }}
-            className="w-full py-3 border border-red-300 text-red-600 dark:border-red-700 dark:text-red-400 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
-          >
-            <LogOut className="w-5 h-5" />
-            Logout
-          </button>
-        </div>
+        {/* Logout */}
+        <button onClick={handleLogout} className="w-full mt-6 bg-white border border-red-100 text-red-600 font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-red-50">
+          <LogOut className="w-5 h-5" /> Sign Out
+        </button>
 
       </div>
     </div>
