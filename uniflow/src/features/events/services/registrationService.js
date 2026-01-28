@@ -1,314 +1,275 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { db, auth } from '../../../lib/firebase';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { Calendar, MapPin, Clock, Users, ArrowLeft, Share2, AlertCircle, CheckCircle } from 'lucide-react';
-import { registerForEvent, registerTeam, joinTeam } from '../services/registrationService';
+import { db } from '../../../lib/firebase';
+import { doc, runTransaction, serverTimestamp, collection, query, where, getDocs, limit } from 'firebase/firestore';
 
-const EventDetails = () => {
-  const { id } = useParams();
-  const navigate = useNavigate();
+/**
+ * 📧 PROFESSIONAL EMAIL SENDER
+ * Includes: QR Code Image & Deep Link Button
+ */
+const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, details) => {
+  // 1. LOCALHOST GUARD
+  if (window.location.hostname === 'localhost' && window.location.port === '5173') {
+    console.log("🛑 Localhost: Email skipped (Mock Mode).");
+    return;
+  }
+
+  console.log(`📨 Sending professional email to ${userEmail}...`);
   
-  // State Management
-  const [event, setEvent] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [registering, setRegistering] = useState(false);
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null); // Local Profile State
-  
-  // Modals
-  const [showConsentModal, setShowConsentModal] = useState(false);
-  const [showTeamModal, setShowTeamModal] = useState(false);
-  const [teamMode, setTeamMode] = useState('create'); // 'create' or 'join'
-  const [teamName, setTeamName] = useState('');
-  const [teamCode, setTeamCode] = useState('');
+  // 2. GENERATE ASSETS
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${ticketId}`;
+  const appUrl = window.location.origin; 
+  const ticketLink = `${appUrl}/tickets`;
 
-  // 1. Fetch Event & User Profile
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        
-        // A. Get Current User
-        const currentUser = auth.currentUser;
-        setUser(currentUser);
-
-        if (currentUser) {
-          // Fetch Profile (Check Consent Status)
-          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-          if (userDoc.exists()) {
-            setProfile(userDoc.data());
-          }
-        }
-
-        // B. Fetch Event Details
-        const eventDoc = await getDoc(doc(db, "events", id));
-        if (eventDoc.exists()) {
-          setEvent({ id: eventDoc.id, ...eventDoc.data() });
-        } else {
-          alert("Event not found!");
-          navigate('/dashboard');
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [id, navigate]);
-
-  // 🛠️ FIX 1: HANDLE CONSENT (The Loop Breaker)
-  const handleAgreeToTerms = async () => {
-    if (!user) return;
-
-    try {
-      setRegistering(true); // Show loading spinner
-      const userRef = doc(db, "users", user.uid);
-
-      // 1. Update Backend
-      await updateDoc(userRef, {
-        termsAccepted: true,
-        updatedAt: serverTimestamp()
-      });
-
-      // 2. ⚡ FORCE UPDATE LOCAL STATE (This fixes the loop)
-      // Hum React ko bata rahe hain: "Bhai maan le, ab true hai"
-      setProfile(prev => ({ ...prev, termsAccepted: true }));
-      
-      // 3. Close Modal & Auto-Trigger Registration
-      setShowConsentModal(false);
-      
-      // Optional: Agar direct register karwana hai accept karte hi:
-      // handleIndividualRegistration(); 
-      
-      alert("Terms Accepted! You can now book your ticket.");
-
-    } catch (error) {
-      console.error("Consent Error:", error);
-      alert("Failed to update terms. Please try again.");
-    } finally {
-      setRegistering(false);
-    }
-  };
-
-  // 2. CHECK REQUIREMENTS BEFORE ACTION
-  const checkRequirements = () => {
-    if (!user) {
-      alert("Please login first");
-      navigate('/login');
-      return false;
-    }
-    // Agar Profile load nahi hui ya Terms Accepted nahi hain -> Show Modal
-    if (!profile || !profile.termsAccepted) {
-      setShowConsentModal(true);
-      return false; // Stop here
-    }
-    return true; // All good
-  };
-
-  // 3. INDIVIDUAL REGISTRATION
-  const handleIndividualRegistration = async () => {
-    if (!checkRequirements()) return; // Check Consent First
-
-    try {
-      setRegistering(true);
-      // Using the new service we made earlier
-      await registerForEvent(event.id, user, profile); 
-      alert("🎉 Ticket Booked Successfully! Check your Email.");
-      navigate('/tickets');
-    } catch (error) {
-      console.error("Booking Failed:", error);
-      alert("Booking Failed: " + error.message);
-    } finally {
-      setRegistering(false);
-    }
-  };
-
-  // 4. TEAM REGISTRATION HANDLER
-  const handleTeamAction = async () => {
-    if (!checkRequirements()) return;
-
-    try {
-      setRegistering(true);
-      if (teamMode === 'create') {
-        const res = await registerTeam(event.id, user, teamName, profile);
-        alert(`Team Created! Code: ${res.teamCode}`);
-      } else {
-        await joinTeam(event.id, user, teamCode, profile);
-        alert("Joined Team Successfully!");
-      }
-      navigate('/tickets');
-    } catch (error) {
-      alert(error.message);
-    } finally {
-      setRegistering(false);
-      setShowTeamModal(false);
-    }
-  };
-
-  if (loading) return <div className="p-10 text-center">Loading Event...</div>;
-  if (!event) return null;
-
-  return (
-    <div className="max-w-4xl mx-auto p-4 pb-24">
-      {/* --- HEADER --- */}
-      <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 mb-4">
-        <ArrowLeft className="w-4 h-4 mr-2" /> Back
-      </button>
-
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
-        <div className="h-48 bg-indigo-600 relative">
-           {/* Placeholder for Event Image */}
-           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-           <div className="absolute bottom-4 left-6 text-white">
-             <h1 className="text-3xl font-bold">{event.title}</h1>
-             <p className="opacity-90">{event.category} • {event.type}</p>
-           </div>
-        </div>
-
-        <div className="p-6">
-          <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-6">
-            <div className="flex items-center"><Calendar className="w-4 h-4 mr-2"/> {event.date}</div>
-            <div className="flex items-center"><Clock className="w-4 h-4 mr-2"/> {event.time}</div>
-            <div className="flex items-center"><MapPin className="w-4 h-4 mr-2"/> {event.location}</div>
-          </div>
-
-          <div className="prose max-w-none text-gray-700 mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">About Event</h3>
-            <p>{event.description}</p>
-          </div>
-
-          {/* --- ACTION BUTTONS --- */}
-          <div className="flex flex-col sm:flex-row gap-3 border-t pt-6">
-            {event.maxTeamSize > 1 ? (
-              <button 
-                onClick={() => { if(checkRequirements()) setShowTeamModal(true); }}
-                className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 transition"
-              >
-                Register as Team
-              </button>
-            ) : (
-              <button 
-                onClick={handleIndividualRegistration}
-                disabled={registering}
-                className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 transition disabled:opacity-50"
-              >
-                {registering ? "Booking..." : "Book Individual Ticket"}
-              </button>
-            )}
-            
-            <button className="p-3 border rounded-xl hover:bg-gray-50">
-              <Share2 className="w-5 h-5 text-gray-600" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* --- MODAL 1: CONSENT (Terms & Conditions) --- */}
-      {showConsentModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full animate-in fade-in zoom-in duration-200">
-            <div className="text-center mb-4">
-              <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <AlertCircle className="w-6 h-6 text-indigo-600" />
+  try {
+    const response = await fetch('/api', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: userEmail,
+        email: userEmail,
+        subject: `🎟️ Ticket Confirmed: ${eventTitle}`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f5; padding: 20px; margin: 0;">
+            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+              <div style="background-color: #4f46e5; padding: 30px 20px; text-align: center;">
+                <h1 style="color: #ffffff; margin: 0; font-size: 24px;">UniFlow Events</h1>
               </div>
-              <h3 className="text-xl font-bold">One-Time Consent</h3>
-              <p className="text-gray-500 text-sm mt-1">Please agree to the rules to continue.</p>
-            </div>
-            
-            <div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-600 mb-6 h-32 overflow-y-auto">
-              <ul className="list-disc pl-4 space-y-1">
-                <li>I agree to follow the code of conduct.</li>
-                <li>I understand tickets are non-transferable.</li>
-                <li>I consent to photography during the event.</li>
-                <li>I will carry my ID card to the venue.</li>
-              </ul>
-            </div>
-
-            <div className="flex gap-3">
-              <button 
-                onClick={() => setShowConsentModal(false)}
-                className="flex-1 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleAgreeToTerms}
-                disabled={registering}
-                className="flex-1 py-2.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700"
-              >
-                {registering ? "Updating..." : "I Agree & Continue"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- MODAL 2: TEAM SELECTION --- */}
-      {showTeamModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold mb-4">Team Registration</h3>
-            
-            <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
-              <button 
-                onClick={() => setTeamMode('create')}
-                className={`flex-1 py-2 rounded-md text-sm font-medium transition ${teamMode === 'create' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
-              >
-                Create Team
-              </button>
-              <button 
-                onClick={() => setTeamMode('join')}
-                className={`flex-1 py-2 rounded-md text-sm font-medium transition ${teamMode === 'join' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
-              >
-                Join Team
-              </button>
-            </div>
-
-            {teamMode === 'create' ? (
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Team Name</label>
-                <input 
-                  type="text" 
-                  value={teamName}
-                  onChange={(e) => setTeamName(e.target.value)}
-                  className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
-                  placeholder="e.g. Code Blasters"
-                />
+              <div style="padding: 30px 20px; text-align: center;">
+                <h2 style="color: #18181b; margin-top: 0;">You're going to ${eventTitle}! 🚀</h2>
+                <p style="color: #52525b; font-size: 16px; line-height: 1.5;">
+                  Hi <strong>${userName}</strong>, your spot is confirmed. <br/>
+                  Simply scan this QR code at the entrance.
+                </p>
+                <div style="margin: 25px 0;">
+                  <img src="${qrCodeUrl}" alt="Ticket QR Code" style="width: 180px; height: 180px; border: 2px solid #e4e4e7; border-radius: 12px; padding: 10px;" />
+                  <p style="color: #71717a; font-size: 14px; margin-top: 5px; font-family: monospace;">ID: ${ticketId}</p>
+                </div>
+                <div style="background-color: #f4f4f5; border-radius: 8px; padding: 15px; text-align: left; margin-bottom: 25px;">
+                  ${details}
+                </div>
+                <a href="${ticketLink}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                  View Ticket in App
+                </a>
               </div>
-            ) : (
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Team Code</label>
-                <input 
-                  type="text" 
-                  value={teamCode}
-                  onChange={(e) => setTeamCode(e.target.value)}
-                  className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none uppercase"
-                  placeholder="e.g. A1B2C3"
-                />
+              <div style="background-color: #fafafa; padding: 20px; text-align: center; border-top: 1px solid #e4e4e7;">
+                <p style="color: #a1a1aa; font-size: 12px; margin: 0;">
+                  Need help? Contact support via the UniFlow App.<br/>
+                  &copy; ${new Date().getFullYear()} UniFlow. All rights reserved.
+                </p>
               </div>
-            )}
+            </div>
+          </body>
+          </html>
+        `
+      })
+    });
 
-            <button 
-              onClick={handleTeamAction}
-              disabled={registering}
-              className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700"
-            >
-              {registering ? "Processing..." : (teamMode === 'create' ? "Create & Register" : "Join & Register")}
-            </button>
-            <button 
-              onClick={() => setShowTeamModal(false)}
-              className="w-full mt-3 text-gray-500 text-sm hover:underline"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.indexOf("application/json") !== -1) {
+      const data = await response.json();
+      if (!response.ok) console.warn("⚠️ Email API Warning:", data);
+      else console.log("✅ Professional Email Sent!");
+    }
+  } catch (err) {
+    console.error("❌ Email Error:", err);
+  }
 };
 
-export default EventDetails;
+// Validation Helper
+const validateRestrictions = (eventData, user, studentData) => {
+  if (eventData.isUniversityOnly && !user.email.toLowerCase().endsWith('@chitkara.edu.in')) {
+    throw new Error("🚫 Restricted: Official @chitkara.edu.in email required.");
+  }
+};
+
+// 1. INDIVIDUAL REGISTRATION
+export const registerForEvent = async (eventId, user, profile, answers = {}) => {
+  if (!user) throw new Error("User must be logged in");
+  
+  const eventRef = doc(db, 'events', eventId);
+  const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
+  const statsRef = doc(db, "system_stats", "daily_emails");
+  
+  let eventDataForEmail = {}; 
+
+  try {
+    await runTransaction(db, async (transaction) => {
+      const eventDoc = await transaction.get(eventRef);
+      const existingReg = await transaction.get(registrationRef);
+      const statsSnap = await transaction.get(statsRef);
+
+      if (!eventDoc.exists()) throw new Error("Event not found");
+      eventDataForEmail = eventDoc.data();
+
+      validateRestrictions(eventDataForEmail, user, profile);
+
+      if ((eventDataForEmail.ticketsSold || 0) >= parseInt(eventDataForEmail.totalTickets)) {
+        throw new Error("SOLD_OUT");
+      }
+      if (existingReg.exists()) {
+        throw new Error("ALREADY_BOOKED");
+      }
+
+      const newTicket = {
+        eventId,
+        eventTitle: eventDataForEmail.title,
+        eventDate: eventDataForEmail.date,
+        eventTime: eventDataForEmail.time || 'TBA',
+        eventLocation: eventDataForEmail.location,
+        userId: user.uid,
+        userEmail: user.email,
+        userName: user.displayName,
+        userRollNo: profile?.rollNo || 'N/A',
+        userPhone: profile?.phone || 'N/A',
+        answers: answers,
+        type: 'individual',
+        status: 'confirmed',
+        createdAt: serverTimestamp(),
+        used: false
+      };
+
+      transaction.set(registrationRef, newTicket);
+      transaction.update(eventRef, { ticketsSold: (eventDataForEmail.ticketsSold || 0) + 1 });
+      
+      if (statsSnap.exists()) {
+        transaction.update(statsRef, { count: (statsSnap.data().count || 0) + 1 });
+      } else {
+        transaction.set(statsRef, { count: 1 });
+      }
+    });
+
+    await sendConfirmationEmail(
+      user.email,
+      user.displayName,
+      eventDataForEmail.title,
+      `${eventId}_${user.uid}`,
+      `<p style="margin: 5px 0;"><strong>📅 Date:</strong> ${eventDataForEmail.date}</p>
+       <p style="margin: 5px 0;"><strong>📍 Location:</strong> ${eventDataForEmail.location}</p>`
+    );
+
+    return { success: true };
+
+  } catch (error) {
+    console.error("Registration Error:", error);
+    throw error;
+  }
+};
+
+// 2. CREATE TEAM
+export const registerTeam = async (eventId, user, teamName, studentData) => {
+  if (!user) throw new Error("Login required");
+  if (!teamName || teamName.length < 3) throw new Error("Invalid Team Name");
+
+  const eventRef = doc(db, 'events', eventId);
+  const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
+  const teamCode = Math.random().toString(36).substring(2, 8).toUpperCase(); 
+  
+  try {
+    await runTransaction(db, async (transaction) => {
+      const eventDoc = await transaction.get(eventRef);
+      const existingReg = await transaction.get(registrationRef);
+
+      if (!eventDoc.exists()) throw new Error("Event not found");
+      const eventData = eventDoc.data();
+
+      validateRestrictions(eventData, user, studentData);
+
+      if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) throw new Error("Sold Out");
+      if (existingReg.exists()) throw new Error("Already registered");
+
+      transaction.set(registrationRef, {
+        eventId,
+        eventTitle: eventData.title,
+        userId: user.uid,
+        userEmail: user.email,
+        userName: user.displayName,
+        type: 'team_leader',
+        teamName: teamName.trim(),
+        teamCode: teamCode,
+        teamSize: 1,
+        maxTeamSize: eventData.teamSize || 4,
+        status: 'confirmed',
+        createdAt: serverTimestamp(),
+      });
+
+      transaction.update(eventRef, { ticketsSold: (eventData.ticketsSold || 0) + 1 });
+    });
+
+    await sendConfirmationEmail(
+      user.email,
+      user.displayName,
+      "Team Event", 
+      `${eventId}_${user.uid}`,
+      `<p><strong>Team:</strong> ${teamName}</p><p><strong>Code:</strong> ${teamCode}</p>`
+    );
+
+    return { success: true, teamCode };
+  } catch (error) { throw error; }
+};
+
+// 3. JOIN TEAM
+export const joinTeam = async (eventId, user, teamCode, studentData) => {
+  if (!user) throw new Error("Login required");
+  if (!teamCode) throw new Error("Team Code required");
+
+  const eventRef = doc(db, 'events', eventId);
+  const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
+  const q = query(
+    collection(db, 'registrations'), 
+    where('eventId', '==', eventId),
+    where('teamCode', '==', teamCode.trim().toUpperCase()),
+    where('type', '==', 'team_leader'),
+    limit(1)
+  );
+
+  try {
+    const leaderSnap = await getDocs(q);
+    if (leaderSnap.empty) throw new Error("Invalid Team Code");
+    const leaderRef = leaderSnap.docs[0].ref;
+    let teamName = "";
+
+    await runTransaction(db, async (transaction) => {
+      const eventDoc = await transaction.get(eventRef);
+      const existingReg = await transaction.get(registrationRef);
+      const leaderDoc = await transaction.get(leaderRef);
+
+      if (!leaderDoc.exists()) throw new Error("Team Disbanded");
+      const leaderData = leaderDoc.data();
+      teamName = leaderData.teamName;
+      if (leaderData.teamSize >= leaderData.maxTeamSize) throw new Error("Team Full");
+
+      const eventData = eventDoc.data();
+      validateRestrictions(eventData, user, studentData);
+
+      if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) throw new Error("Sold Out");
+      if (existingReg.exists()) throw new Error("Already registered");
+
+      transaction.set(registrationRef, {
+        eventId,
+        eventTitle: eventData.title,
+        userId: user.uid,
+        userEmail: user.email,
+        userName: user.displayName,
+        type: 'team_member',
+        teamName: leaderData.teamName,
+        teamCode: leaderData.teamCode,
+        status: 'confirmed',
+        createdAt: serverTimestamp(),
+      });
+
+      transaction.update(leaderRef, { teamSize: leaderData.teamSize + 1 });
+      transaction.update(eventRef, { ticketsSold: (eventData.ticketsSold || 0) + 1 });
+    });
+
+    await sendConfirmationEmail(
+      user.email,
+      user.displayName,
+      "Team Event",
+      `${eventId}_${user.uid}`,
+      `<p>Joined Team: <strong>${teamName}</strong></p>`
+    );
+
+    return { success: true };
+  } catch (error) { throw error; }
+};

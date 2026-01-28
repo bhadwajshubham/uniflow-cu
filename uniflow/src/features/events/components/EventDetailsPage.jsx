@@ -1,218 +1,314 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { db } from '../../../lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
-import { useAuth } from '../../../context/AuthContext';
-// ✅ Import the Fixed Service
-import { registerForEvent } from '../services/registrationService';
-import { ArrowLeft, Share2, Loader2, MapPin, Calendar, Clock, CheckCircle, Ticket } from 'lucide-react';
-import QRCode from 'react-qr-code'; 
+import { db, auth } from '../../../lib/firebase';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { Calendar, MapPin, Clock, Users, ArrowLeft, Share2, AlertCircle, CheckCircle } from 'lucide-react';
+import { registerForEvent, registerTeam, joinTeam } from '../services/registrationService';
 
-const EventDetailsPage = () => {
+const EventDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
-
+  
+  // State Management
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
-  const [alreadyBooked, setAlreadyBooked] = useState(false);
-  const [answers, setAnswers] = useState({});
-  const [successTicket, setSuccessTicket] = useState(null);
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null); // Local Profile State
+  
+  // Modals
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [showTeamModal, setShowTeamModal] = useState(false);
+  const [teamMode, setTeamMode] = useState('create'); // 'create' or 'join'
+  const [teamName, setTeamName] = useState('');
+  const [teamCode, setTeamCode] = useState('');
 
-  // 1. Fetch Event
+  // 1. Fetch Event & User Profile
   useEffect(() => {
-    const init = async () => {
+    const fetchData = async () => {
       try {
-        const docSnap = await getDoc(doc(db, 'events', id));
-        if (!docSnap.exists()) return navigate('/events');
+        setLoading(true);
         
-        setEvent({ id: docSnap.id, ...docSnap.data() });
+        // A. Get Current User
+        const currentUser = auth.currentUser;
+        setUser(currentUser);
 
-        if (user) {
-          // Check if booked
-          const ticketSnap = await getDoc(doc(db, 'registrations', `${id}_${user.uid}`));
-          if (ticketSnap.exists()) setAlreadyBooked(true);
+        if (currentUser) {
+          // Fetch Profile (Check Consent Status)
+          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+          if (userDoc.exists()) {
+            setProfile(userDoc.data());
+          }
         }
-      } catch (err) {
-        console.error(err);
+
+        // B. Fetch Event Details
+        const eventDoc = await getDoc(doc(db, "events", id));
+        if (eventDoc.exists()) {
+          setEvent({ id: eventDoc.id, ...eventDoc.data() });
+        } else {
+          alert("Event not found!");
+          navigate('/dashboard');
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
       } finally {
         setLoading(false);
       }
     };
-    init();
-  }, [id, user, navigate]);
 
-  // 2. Handle Registration
-  const handleRegister = async () => {
-    if (!user) return navigate('/login');
-    if (!profile?.termsAccepted) return navigate('/consent');
+    fetchData();
+  }, [id, navigate]);
 
-    if (event.customQuestions?.length) {
-      const missing = event.customQuestions.find(q => q.required && !answers[q.id]);
-      if (missing) return alert(`Please answer: ${missing.label}`);
-    }
-
-    setRegistering(true);
+  // 🛠️ FIX 1: HANDLE CONSENT (The Loop Breaker)
+  const handleAgreeToTerms = async () => {
+    if (!user) return;
 
     try {
-      // 🚀 Use the new Service (triggers DB + Email)
-      await registerForEvent(event.id, user, profile, answers);
-      
-      setAlreadyBooked(true);
-      setSuccessTicket({
-        id: `${event.id}_${user.uid}`,
-        title: event.title,
-        userName: user.displayName,
-        ...event
+      setRegistering(true); // Show loading spinner
+      const userRef = doc(db, "users", user.uid);
+
+      // 1. Update Backend
+      await updateDoc(userRef, {
+        termsAccepted: true,
+        updatedAt: serverTimestamp()
       });
 
-    } catch (err) {
-      const msg = err.message;
-      if (msg.includes("SOLD_OUT")) alert("😢 Sold Out!");
-      else if (msg.includes("ALREADY_BOOKED")) alert("You already have a ticket!");
-      else if (msg.includes("Restricted")) alert(msg);
-      else alert("Registration failed. Try again.");
+      // 2. ⚡ FORCE UPDATE LOCAL STATE (This fixes the loop)
+      // Hum React ko bata rahe hain: "Bhai maan le, ab true hai"
+      setProfile(prev => ({ ...prev, termsAccepted: true }));
+      
+      // 3. Close Modal & Auto-Trigger Registration
+      setShowConsentModal(false);
+      
+      // Optional: Agar direct register karwana hai accept karte hi:
+      // handleIndividualRegistration(); 
+      
+      alert("Terms Accepted! You can now book your ticket.");
+
+    } catch (error) {
+      console.error("Consent Error:", error);
+      alert("Failed to update terms. Please try again.");
     } finally {
       setRegistering(false);
     }
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-indigo-600"/></div>;
+  // 2. CHECK REQUIREMENTS BEFORE ACTION
+  const checkRequirements = () => {
+    if (!user) {
+      alert("Please login first");
+      navigate('/login');
+      return false;
+    }
+    // Agar Profile load nahi hui ya Terms Accepted nahi hain -> Show Modal
+    if (!profile || !profile.termsAccepted) {
+      setShowConsentModal(true);
+      return false; // Stop here
+    }
+    return true; // All good
+  };
+
+  // 3. INDIVIDUAL REGISTRATION
+  const handleIndividualRegistration = async () => {
+    if (!checkRequirements()) return; // Check Consent First
+
+    try {
+      setRegistering(true);
+      // Using the new service we made earlier
+      await registerForEvent(event.id, user, profile); 
+      alert("🎉 Ticket Booked Successfully! Check your Email.");
+      navigate('/tickets');
+    } catch (error) {
+      console.error("Booking Failed:", error);
+      alert("Booking Failed: " + error.message);
+    } finally {
+      setRegistering(false);
+    }
+  };
+
+  // 4. TEAM REGISTRATION HANDLER
+  const handleTeamAction = async () => {
+    if (!checkRequirements()) return;
+
+    try {
+      setRegistering(true);
+      if (teamMode === 'create') {
+        const res = await registerTeam(event.id, user, teamName, profile);
+        alert(`Team Created! Code: ${res.teamCode}`);
+      } else {
+        await joinTeam(event.id, user, teamCode, profile);
+        alert("Joined Team Successfully!");
+      }
+      navigate('/tickets');
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setRegistering(false);
+      setShowTeamModal(false);
+    }
+  };
+
+  if (loading) return <div className="p-10 text-center">Loading Event...</div>;
   if (!event) return null;
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-20 pb-12 px-4 md:px-6">
-      <div className="max-w-4xl mx-auto">
-        
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <button onClick={() => navigate('/events')} className="flex items-center gap-2 text-sm font-bold text-zinc-500 hover:text-indigo-600 transition-colors">
-            <ArrowLeft size={18} /> BACK
-          </button>
-          <button onClick={() => navigator.share?.({ title: event.title, url: window.location.href })} className="p-2 bg-white dark:bg-zinc-900 rounded-full shadow-sm hover:bg-zinc-100">
-            <Share2 size={18} className="text-zinc-600 dark:text-zinc-300" />
-          </button>
+    <div className="max-w-4xl mx-auto p-4 pb-24">
+      {/* --- HEADER --- */}
+      <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 mb-4">
+        <ArrowLeft className="w-4 h-4 mr-2" /> Back
+      </button>
+
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
+        <div className="h-48 bg-indigo-600 relative">
+           {/* Placeholder for Event Image */}
+           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+           <div className="absolute bottom-4 left-6 text-white">
+             <h1 className="text-3xl font-bold">{event.title}</h1>
+             <p className="opacity-90">{event.category} • {event.type}</p>
+           </div>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8">
-            <div className="md:col-span-1 space-y-6">
-                <div className="rounded-3xl overflow-hidden shadow-xl aspect-[3/4] relative group">
-                    {/* 🛡️ FIX: FALLBACK IMAGE */}
-                    <img 
-                      src={event.imageUrl || "https://placehold.co/600x800?text=No+Image"} 
-                      alt={event.title} 
-                      className="w-full h-full object-cover" 
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-6">
-                        <span className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest w-max rounded-md mb-2">{event.category}</span>
-                        <h1 className="text-2xl font-black text-white leading-tight">{event.title}</h1>
-                    </div>
-                </div>
-            </div>
+        <div className="p-6">
+          <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-6">
+            <div className="flex items-center"><Calendar className="w-4 h-4 mr-2"/> {event.date}</div>
+            <div className="flex items-center"><Clock className="w-4 h-4 mr-2"/> {event.time}</div>
+            <div className="flex items-center"><MapPin className="w-4 h-4 mr-2"/> {event.location}</div>
+          </div>
 
-            <div className="md:col-span-2 space-y-8 bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-100 dark:border-zinc-800 shadow-sm">
-                {/* Event Details */}
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-zinc-50 dark:bg-black rounded-2xl border border-zinc-100 dark:border-zinc-800">
-                        <Calendar className="w-5 h-5 text-indigo-600 mb-2" />
-                        <p className="text-xs font-bold text-zinc-400 uppercase">Date</p>
-                        <p className="font-bold text-zinc-900 dark:text-white">{event.date}</p>
-                    </div>
-                    <div className="p-4 bg-zinc-50 dark:bg-black rounded-2xl border border-zinc-100 dark:border-zinc-800">
-                        <Clock className="w-5 h-5 text-indigo-600 mb-2" />
-                        <p className="text-xs font-bold text-zinc-400 uppercase">Time</p>
-                        <p className="font-bold text-zinc-900 dark:text-white">{event.time}</p>
-                    </div>
-                    <div className="col-span-2 p-4 bg-zinc-50 dark:bg-black rounded-2xl border border-zinc-100 dark:border-zinc-800 flex items-center gap-4">
-                        <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full text-indigo-600"><MapPin className="w-5 h-5" /></div>
-                        <div>
-                            <p className="text-xs font-bold text-zinc-400 uppercase">Venue</p>
-                            <p className="font-bold text-zinc-900 dark:text-white">{event.location}</p>
-                        </div>
-                    </div>
-                </div>
+          <div className="prose max-w-none text-gray-700 mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">About Event</h3>
+            <p>{event.description}</p>
+          </div>
 
-                <div className="prose dark:prose-invert text-sm text-zinc-600 dark:text-zinc-400 font-medium">
-                    <p>{event.description}</p>
-                </div>
-
-                {/* Custom Questions */}
-                {event.customQuestions?.length > 0 && !alreadyBooked && (
-                    <div className="space-y-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                        <h3 className="text-xs font-black uppercase tracking-widest text-indigo-600">Required Details</h3>
-                        {event.customQuestions.map(q => (
-                            <div key={q.id} className="space-y-2">
-                                <label className="text-sm font-bold text-zinc-700 dark:text-zinc-300">
-                                    {q.label} {q.required && <span className="text-red-500">*</span>}
-                                </label>
-                                {q.type === 'select' ? (
-                                    <select className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                                        onChange={e => setAnswers({...answers, [q.id]: e.target.value})}>
-                                        <option value="">Select an option</option>
-                                        {q.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                    </select>
-                                ) : (
-                                    <input type={q.type === 'number' ? 'number' : 'text'} 
-                                        className="w-full p-3 rounded-xl bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                                        onChange={e => setAnswers({...answers, [q.id]: e.target.value})} />
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                <button 
-                    onClick={handleRegister}
-                    disabled={registering || alreadyBooked}
-                    className={`w-full py-5 rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3
-                    ${alreadyBooked 
-                        ? 'bg-green-500 text-white cursor-default shadow-green-200 dark:shadow-none' 
-                        : 'bg-indigo-600 text-white shadow-indigo-200 dark:shadow-none hover:bg-indigo-700'
-                    } disabled:opacity-70 disabled:cursor-not-allowed`}
-                >
-                    {registering ? <Loader2 className="animate-spin" /> : alreadyBooked ? (
-                        <> <CheckCircle className="w-5 h-5" /> Ticket Confirmed </>
-                    ) : (
-                        <> <Ticket className="w-5 h-5" /> Book My Seat </>
-                    )}
-                </button>
-            </div>
+          {/* --- ACTION BUTTONS --- */}
+          <div className="flex flex-col sm:flex-row gap-3 border-t pt-6">
+            {event.maxTeamSize > 1 ? (
+              <button 
+                onClick={() => { if(checkRequirements()) setShowTeamModal(true); }}
+                className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 transition"
+              >
+                Register as Team
+              </button>
+            ) : (
+              <button 
+                onClick={handleIndividualRegistration}
+                disabled={registering}
+                className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 transition disabled:opacity-50"
+              >
+                {registering ? "Booking..." : "Book Individual Ticket"}
+              </button>
+            )}
+            
+            <button className="p-3 border rounded-xl hover:bg-gray-50">
+              <Share2 className="w-5 h-5 text-gray-600" />
+            </button>
+          </div>
         </div>
-
-        {/* Success Modal */}
-        {successTicket && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in zoom-in-95 duration-300">
-                <div className="bg-white text-black w-full max-w-sm rounded-[2rem] overflow-hidden shadow-2xl relative">
-                    <div className="h-3 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
-                    <div className="p-8 text-center space-y-6">
-                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-600 mb-2">
-                            <CheckCircle className="w-8 h-8" />
-                        </div>
-                        <div className="space-y-1">
-                            <h2 className="text-2xl font-black uppercase tracking-tight">You're In!</h2>
-                            <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Please Screenshot This Ticket</p>
-                        </div>
-                        <div className="bg-zinc-50 border-2 border-dashed border-zinc-300 p-6 rounded-2xl relative">
-                            <div className="w-40 h-40 bg-white mx-auto rounded-xl p-2 shadow-sm mb-4">
-                                <QRCode value={successTicket.id} size={160} />
-                            </div>
-                            <p className="text-[10px] font-mono text-zinc-400 break-all">{successTicket.id}</p>
-                        </div>
-                        <button 
-                            onClick={() => navigate('/my-tickets')}
-                            className="w-full py-4 bg-black text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-zinc-800 transition-all"
-                        >
-                            View All Tickets
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
-
       </div>
+
+      {/* --- MODAL 1: CONSENT (Terms & Conditions) --- */}
+      {showConsentModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full animate-in fade-in zoom-in duration-200">
+            <div className="text-center mb-4">
+              <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <AlertCircle className="w-6 h-6 text-indigo-600" />
+              </div>
+              <h3 className="text-xl font-bold">One-Time Consent</h3>
+              <p className="text-gray-500 text-sm mt-1">Please agree to the rules to continue.</p>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-600 mb-6 h-32 overflow-y-auto">
+              <ul className="list-disc pl-4 space-y-1">
+                <li>I agree to follow the code of conduct.</li>
+                <li>I understand tickets are non-transferable.</li>
+                <li>I consent to photography during the event.</li>
+                <li>I will carry my ID card to the venue.</li>
+              </ul>
+            </div>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowConsentModal(false)}
+                className="flex-1 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleAgreeToTerms}
+                disabled={registering}
+                className="flex-1 py-2.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700"
+              >
+                {registering ? "Updating..." : "I Agree & Continue"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL 2: TEAM SELECTION --- */}
+      {showTeamModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4">Team Registration</h3>
+            
+            <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
+              <button 
+                onClick={() => setTeamMode('create')}
+                className={`flex-1 py-2 rounded-md text-sm font-medium transition ${teamMode === 'create' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+              >
+                Create Team
+              </button>
+              <button 
+                onClick={() => setTeamMode('join')}
+                className={`flex-1 py-2 rounded-md text-sm font-medium transition ${teamMode === 'join' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+              >
+                Join Team
+              </button>
+            </div>
+
+            {teamMode === 'create' ? (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Team Name</label>
+                <input 
+                  type="text" 
+                  value={teamName}
+                  onChange={(e) => setTeamName(e.target.value)}
+                  className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  placeholder="e.g. Code Blasters"
+                />
+              </div>
+            ) : (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Team Code</label>
+                <input 
+                  type="text" 
+                  value={teamCode}
+                  onChange={(e) => setTeamCode(e.target.value)}
+                  className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none uppercase"
+                  placeholder="e.g. A1B2C3"
+                />
+              </div>
+            )}
+
+            <button 
+              onClick={handleTeamAction}
+              disabled={registering}
+              className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700"
+            >
+              {registering ? "Processing..." : (teamMode === 'create' ? "Create & Register" : "Join & Register")}
+            </button>
+            <button 
+              onClick={() => setShowTeamModal(false)}
+              className="w-full mt-3 text-gray-500 text-sm hover:underline"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-export default EventDetailsPage;
+export default EventDetails;
