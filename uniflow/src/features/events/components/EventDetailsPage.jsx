@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom'; // Link import kiya
 import { db, auth } from '../../../lib/firebase';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { Calendar, MapPin, Clock, ArrowLeft, Share2, Shield, Check } from 'lucide-react';
@@ -20,7 +20,7 @@ const EventDetails = () => {
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [showTeamModal, setShowTeamModal] = useState(false);
   
-  // Consent Checkbox State (UI Logic)
+  // Consent Checkbox State
   const [termsChecked, setTermsChecked] = useState(false);
   const [privacyChecked, setPrivacyChecked] = useState(false);
 
@@ -60,7 +60,7 @@ const EventDetails = () => {
     fetchData();
   }, [id, navigate]);
 
-  // 🛠️ LOGIC: Handle Consent (Old UI + New Fix)
+  // Handle Consent
   const handleAgreeToTerms = async () => {
     if (!termsChecked || !privacyChecked) {
       alert("Please accept both Terms and Privacy Policy.");
@@ -71,15 +71,12 @@ const EventDetails = () => {
       setRegistering(true);
       const userRef = doc(db, "users", user.uid);
 
-      // 1. Backend Update
       await updateDoc(userRef, {
         termsAccepted: true,
         updatedAt: serverTimestamp()
       });
 
-      // 2. Local State Fix (Breaks the loop)
       setProfile(prev => ({ ...prev, termsAccepted: true }));
-      
       setShowConsentModal(false);
       alert("Consent Recorded! You can now book your ticket.");
 
@@ -103,7 +100,6 @@ const EventDetails = () => {
     return true;
   };
 
-  // Registration Handlers
   const handleIndividualRegistration = async () => {
     if (!checkRequirements()) return;
     try {
@@ -185,7 +181,7 @@ const EventDetails = () => {
         </div>
       </div>
 
-      {/* 🛡️ OLD UI CONSENT MODAL (Recreated perfectly) */}
+      {/* 🛡️ CONSENT MODAL (FIXED LINKS) */}
       {showConsentModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
@@ -197,9 +193,9 @@ const EventDetails = () => {
             </div>
 
             <div className="space-y-4 mb-8">
-              {/* Checkbox 1 */}
+              {/* Checkbox 1: Terms */}
               <label className="flex items-start cursor-pointer group">
-                <div className="relative flex items-center">
+                <div className="relative flex items-center pt-0.5">
                   <input 
                     type="checkbox" 
                     checked={termsChecked}
@@ -209,13 +205,22 @@ const EventDetails = () => {
                   <Check className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100" />
                 </div>
                 <span className="ml-3 text-sm text-gray-600 group-hover:text-gray-900 transition-colors">
-                  I agree to the <span className="font-semibold underline decoration-indigo-200 underline-offset-2">Terms & Conditions</span>
+                  I agree to the{' '}
+                  <a 
+                    href="/terms" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()} // 🛑 ROKO: Checkbox toggle mat hone do
+                    className="font-semibold text-indigo-600 underline decoration-indigo-200 underline-offset-2 hover:text-indigo-800"
+                  >
+                    Terms & Conditions
+                  </a>
                 </span>
               </label>
 
-              {/* Checkbox 2 */}
+              {/* Checkbox 2: Privacy */}
               <label className="flex items-start cursor-pointer group">
-                <div className="relative flex items-center">
+                <div className="relative flex items-center pt-0.5">
                   <input 
                     type="checkbox" 
                     checked={privacyChecked}
@@ -225,7 +230,16 @@ const EventDetails = () => {
                    <Check className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100" />
                 </div>
                 <span className="ml-3 text-sm text-gray-600 group-hover:text-gray-900 transition-colors">
-                  I agree to the <span className="font-semibold underline decoration-indigo-200 underline-offset-2">Privacy Policy</span>
+                  I agree to the{' '}
+                  <a 
+                    href="/privacy" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()} // 🛑 ROKO: Checkbox toggle mat hone do
+                    className="font-semibold text-indigo-600 underline decoration-indigo-200 underline-offset-2 hover:text-indigo-800"
+                  >
+                    Privacy Policy
+                  </a>
                 </span>
               </label>
             </div>
@@ -254,7 +268,7 @@ const EventDetails = () => {
         </div>
       )}
 
-      {/* Team Modal (Standard) */}
+      {/* Team Modal */}
       {showTeamModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full">
