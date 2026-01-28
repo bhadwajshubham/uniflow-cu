@@ -8,15 +8,17 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // 🕵️‍♂️ SPY LOGS: Check if variables exist
-  console.log("--- DEBUG START ---");
-  console.log("GMAIL_USER Status:", process.env.GMAIL_USER ? "✅ Loaded" : "❌ MISSING");
-  console.log("GMAIL_PASS Status:", process.env.GMAIL_PASS ? "✅ Loaded" : "❌ MISSING");
-  console.log("GMAIL_PASS Length:", process.env.GMAIL_PASS ? process.env.GMAIL_PASS.length : 0); // Should be 16 (or 19 with spaces)
-  console.log("--- DEBUG END ---");
+  console.log("--- CREDENTIALS CHECK ---");
+  // 1. Check keys using UPPERCASE (Matches your screenshot)
+  const user = process.env.GMAIL_USER;
+  const pass = process.env.GMAIL_PASS;
 
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
-    return res.status(500).json({ error: 'Server Misconfiguration: Credentials Missing in Vercel' });
+  console.log("User Exists?", user ? "YES" : "NO");
+  console.log("Pass Exists?", pass ? "YES" : "NO");
+
+  if (!user || !pass) {
+    console.error("❌ CRITICAL: Variables are undefined. Check Vercel Settings.");
+    return res.status(500).json({ error: 'Server Config Error: Missing Env Vars' });
   }
 
   const { to, email, subject, html } = req.body;
@@ -26,8 +28,8 @@ export default async function handler(req, res) {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_PASS.replace(/\s/g, '') // Remove spaces for safety
+        user: user, // Using the UPPERCASE variable
+        pass: pass.replace(/\s/g, '') // Clean up spaces
       }
     });
 
@@ -38,9 +40,10 @@ export default async function handler(req, res) {
       html: html || "<p>Confirmed</p>",
     });
 
+    console.log("✅ SUCCESS:", info.messageId);
     return res.status(200).json({ success: true, id: info.messageId });
   } catch (error) {
-    console.error("❌ EMAIL ERROR:", error);
+    console.error("❌ EMAIL FAILED:", error);
     return res.status(500).json({ error: 'Email Failed', details: error.message });
   }
 }
