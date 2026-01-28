@@ -2,27 +2,27 @@ import { db } from '../../../lib/firebase';
 import { doc, runTransaction, serverTimestamp, collection, query, where, getDocs, limit } from 'firebase/firestore';
 
 /**
- * 📧 EMAIL HELPER
- * Sends data in a format that satisfies BOTH old and new backend versions.
+ * 📧 INTERNAL HELPER: Trigger Vercel Backend Email
+ * Updated to point to '/api' (maps to api/index.js)
  */
 const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, details) => {
-  // 🛡️ LOCALHOST CHECK
+  // 1. LOCALHOST GUARD: Don't break on local dev
   if (window.location.hostname === 'localhost' && window.location.port === '5173') {
-    console.log("🛑 Localhost: Email skipped (Vercel API needed).");
-    console.log(`📨 [MOCK]: Sending to ${userEmail}`);
+    console.log("🛑 Localhost Detected: Email API call skipped.");
+    console.log(`📨 [MOCK EMAIL] To: ${userEmail} | Subject: Ticket for ${eventTitle}`);
     return;
   }
 
   console.log(`📨 Sending email to ${userEmail}...`);
   
   try {
-    const response = await fetch('/api/send-email', {
+    // ⚠️ IMPORTANT: We are now fetching '/api' because we renamed the file to api/index.js
+    const response = await fetch('/api', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        // 🔑 HYBRID PAYLOAD: Sends both keys to satisfy any backend version
-        to: userEmail,      // New Backend expects this
-        email: userEmail,   // Old Backend expects this
+        to: userEmail,
+        email: userEmail, // Sending both keys to be safe
         subject: `🎟️ Ticket: ${eventTitle}`,
         html: `
           <div style="font-family: sans-serif; padding: 20px; border: 1px solid #e4e4e7; border-radius: 12px;">
@@ -44,19 +44,21 @@ const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, 
       const data = await response.json();
       if (!response.ok) {
         console.warn("⚠️ API Error:", data);
-        alert("Ticket booked, but email failed: " + (data.error || data.message));
+        // Alert user but don't crash app
+        console.error("Email failed but ticket booked.");
       } else {
-        console.log("✅ Email successfully sent!");
+        console.log("✅ Email successfully sent via Vercel!");
       }
     } else {
-      console.warn(`⚠️ Email API Status: ${response.status}`);
+      console.warn(`⚠️ Email API Status: ${response.status} (Check Vercel Logs)`);
     }
 
   } catch (err) {
-    console.error("❌ Network Error:", err);
+    console.error("❌ Network Error (Email):", err);
   }
 };
 
+// Helper: Validation
 const validateRestrictions = (eventData, user, studentData) => {
   if (eventData.isUniversityOnly && !user.email.toLowerCase().endsWith('@chitkara.edu.in')) {
     throw new Error("🚫 Restricted: Official @chitkara.edu.in email required.");
@@ -82,6 +84,7 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
       if (!eventDoc.exists()) throw new Error("Event not found");
       eventDataForEmail = eventDoc.data();
 
+      // VALIDATE
       validateRestrictions(eventDataForEmail, user, profile);
 
       if ((eventDataForEmail.ticketsSold || 0) >= parseInt(eventDataForEmail.totalTickets)) {
@@ -91,6 +94,7 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
         throw new Error("ALREADY_BOOKED");
       }
 
+      // WRITE
       const newTicket = {
         eventId,
         eventTitle: eventDataForEmail.title,
@@ -125,7 +129,7 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
       user.displayName,
       eventDataForEmail.title,
       `${eventId}_${user.uid}`,
-      `<p><strong>Date:</strong> ${eventDataForEmail.date}</p>`
+      `<p><strong>Date:</strong> ${eventDataForEmail.date}</p><p><strong>Location:</strong> ${eventDataForEmail.location}</p>`
     );
 
     return { success: true };
@@ -179,7 +183,7 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
     await sendConfirmationEmail(
       user.email,
       user.displayName,
-      "Team Event", // Placeholder, you can fetch title if needed
+      "Team Event", 
       `${eventId}_${user.uid}`,
       `<p><strong>Team:</strong> ${teamName}</p><p><strong>Code:</strong> ${teamCode}</p>`
     );
