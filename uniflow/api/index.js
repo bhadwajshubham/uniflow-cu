@@ -38,7 +38,7 @@ export default async function handler(req, res) {
 
     // 3. Send Mail
     const info = await transporter.sendMail({
-      from: '"UniFlow" <noreply@uniflow.com>',
+      from: '"UniFlow Tickets" <hackathonshubham@gmail.com>',
       to: recipient,
       subject: subject || "Ticket Confirmed",
       html: html || "<p>Your ticket is confirmed.</p>",
