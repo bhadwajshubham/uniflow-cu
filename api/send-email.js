@@ -8,17 +8,22 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  console.log("--- CREDENTIALS CHECK ---");
-  // 1. Check keys using UPPERCASE (Matches your screenshot)
+  console.log("--- DEBUGGER V3 START ---"); // Look for this in logs
+
   const user = process.env.GMAIL_USER;
   const pass = process.env.GMAIL_PASS;
 
-  console.log("User Exists?", user ? "YES" : "NO");
-  console.log("Pass Exists?", pass ? "YES" : "NO");
-
+  // 1. If Creds are missing, send detailed error to Browser (Frontend)
   if (!user || !pass) {
-    console.error("❌ CRITICAL: Variables are undefined. Check Vercel Settings.");
-    return res.status(500).json({ error: 'Server Config Error: Missing Env Vars' });
+    console.error("❌ MISSING VARIABLES");
+    return res.status(500).json({ 
+      error: 'ENV_VAR_MISSING', 
+      details: {
+        user_status: user ? 'Loaded' : 'MISSING',
+        pass_status: pass ? 'Loaded' : 'MISSING',
+        instruction: 'Go to Vercel Settings -> Environment Variables and check spelling.'
+      }
+    });
   }
 
   const { to, email, subject, html } = req.body;
@@ -28,11 +33,12 @@ export default async function handler(req, res) {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: user, // Using the UPPERCASE variable
-        pass: pass.replace(/\s/g, '') // Clean up spaces
+        user: user,
+        pass: pass.replace(/\s/g, '') // Remove spaces
       }
     });
 
+    // 2. Send Email
     const info = await transporter.sendMail({
       from: '"UniFlow" <noreply@uniflow.com>',
       to: recipient,
@@ -42,8 +48,12 @@ export default async function handler(req, res) {
 
     console.log("✅ SUCCESS:", info.messageId);
     return res.status(200).json({ success: true, id: info.messageId });
+
   } catch (error) {
     console.error("❌ EMAIL FAILED:", error);
-    return res.status(500).json({ error: 'Email Failed', details: error.message });
+    return res.status(500).json({ 
+      error: 'EMAIL_SEND_FAILED', 
+      details: error.message 
+    });
   }
 }
