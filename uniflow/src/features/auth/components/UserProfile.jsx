@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react';
-// Correct Import Path
 import { useAuth } from '../../../context/AuthContext';
 import { db, storage, auth } from '../../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
-// 🟢 FIX: Added 'Users' and necessary icons to the import list below
 import {
   User,
   Users,
-  Mail,
   Phone,
   Hash,
   BookOpen,
@@ -33,7 +30,6 @@ const UserProfile = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   
-  // Form State
   const [formData, setFormData] = useState({
     displayName: '',
     phone: '',
@@ -48,7 +44,6 @@ const UserProfile = () => {
   const [preview, setPreview] = useState(null);
   const [existingPhoto, setExistingPhoto] = useState(null);
 
-  // Fetch Data
   useEffect(() => {
     if (!user) return;
     const fetchData = async () => {
@@ -77,18 +72,31 @@ const UserProfile = () => {
     fetchData();
   }, [user]);
 
-  // Handle Input Change
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    // Basic Input Sanitization
+    const { name, value } = e.target;
+    
+    if (name === 'phone') {
+        // Only allow numbers, max 10 chars
+        if (/^\d{0,10}$/.test(value)) {
+            setFormData({ ...formData, [name]: value });
+        }
+    } else if (name === 'rollNo') {
+        // Only alphanumeric, max 15 chars
+        if (/^[a-zA-Z0-9]{0,15}$/.test(value)) {
+            setFormData({ ...formData, [name]: value });
+        }
+    } else {
+        setFormData({ ...formData, [name]: value });
+    }
     setError('');
   };
 
-  // Handle File Change
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setError("File size must be less than 5MB");
+      if (file.size > 2 * 1024 * 1024) { // Limit to 2MB for speed
+        setError("File size must be less than 2MB");
         return;
       }
       setPhoto(file);
@@ -96,17 +104,24 @@ const UserProfile = () => {
     }
   };
 
-  // Save Function
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
     setError('');
     setSuccess('');
 
+    // 🛡️ STRICT VALIDATION
     if (formData.phone.length !== 10) {
-      setError("Phone number must be 10 digits.");
-      setSaving(false);
-      return;
+      setError("Phone number must be exactly 10 digits.");
+      setSaving(false); return;
+    }
+    if (formData.rollNo.length < 5) {
+      setError("Please enter a valid Roll Number.");
+      setSaving(false); return;
+    }
+    if (!formData.displayName.trim()) {
+        setError("Name cannot be empty.");
+        setSaving(false); return;
     }
 
     try {
@@ -118,39 +133,36 @@ const UserProfile = () => {
         finalPhotoURL = await getDownloadURL(storageRef);
       }
 
+      // 🔐 SECURE WRITE: We DO NOT send 'role' or 'email' here. 
+      // Firestore rules protect them, but frontend shouldn't even try.
       await setDoc(doc(db, 'users', user.uid), {
-        displayName: formData.displayName,
+        displayName: formData.displayName.trim(),
         phone: formData.phone,
-        rollNo: formData.rollNo,
+        rollNo: formData.rollNo.toUpperCase(),
         branch: formData.branch,
         semester: formData.semester,
-        group: formData.group,
+        group: formData.group.trim().toUpperCase(),
         residency: formData.residency,
         photoURL: finalPhotoURL,
-        email: user.email, 
+        // email: user.email, // Don't rewrite email, it's immutable in Rules
         isProfileComplete: true,
-        updatedAt: new Date(),
+        updatedAt: new Date(), // Firestore converts JS Date to Timestamp
       }, { merge: true });
 
       setSuccess("Profile updated successfully!");
       setExistingPhoto(finalPhotoURL);
+      // Wait a bit before clearing success message
       setTimeout(() => setSuccess(''), 3000);
 
     } catch (err) {
-      console.error(err);
-      setError("Failed to update profile. " + err.message);
+      console.error("Save failed:", err);
+      if (err.code === 'permission-denied') {
+          setError("Security Error: You do not have permission to update this profile.");
+      } else {
+          setError("Failed to update. Check your connection.");
+      }
     } finally {
       setSaving(false);
-    }
-  };
-
-  // 🔴 LOGOUT — minimal, explicit
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      navigate('/login');
-    } catch (err) {
-      console.error('Logout failed', err);
     }
   };
 
@@ -161,18 +173,18 @@ const UserProfile = () => {
       <div className="max-w-2xl mx-auto bg-white dark:bg-zinc-900 rounded-3xl p-8 border border-zinc-200 dark:border-zinc-800 shadow-xl">
         
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-black text-zinc-900 dark:text-white">Edit Profile</h1>
-          <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest mt-1">Keep your ID card details updated</p>
+          <h1 className="text-3xl font-black text-zinc-900 dark:text-white">Student ID</h1>
+          <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest mt-1">Update your official details</p>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 font-bold text-sm flex items-center gap-2">
+          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 font-bold text-sm flex items-center gap-2 rounded-r-lg">
             <AlertCircle className="w-5 h-5" /> {error}
           </div>
         )}
 
         {success && (
-          <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 font-bold text-sm flex items-center gap-2">
+          <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 font-bold text-sm flex items-center gap-2 rounded-r-lg">
             <CheckCircle className="w-5 h-5" /> {success}
           </div>
         )}
@@ -190,7 +202,7 @@ const UserProfile = () => {
                 </div>
                 <input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
              </div>
-             <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Tap to change photo</p>
+             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Tap to change photo</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -239,11 +251,9 @@ const UserProfile = () => {
                 </div>
              </div>
 
-             {/* 🟢 THIS WAS CAUSING THE CRASH */}
              <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Group (Optional)</label>
                 <div className="relative">
-                   {/* 'Users' is now correctly imported */}
                    <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                    <input name="group" value={formData.group} onChange={handleChange} className="w-full pl-12 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/50" placeholder="G1, G2..." />
                 </div>
@@ -266,14 +276,12 @@ const UserProfile = () => {
 
         </form>
 
-        {/* LOGOUT BUTTON (ADDED) */}
         <div className="mt-6">
           <button
             onClick={async () => {
               try {
                 await signOut(auth);
-                // after sign out, redirect to login
-                window.location.href = '/login';
+                navigate('/login');
               } catch (err) {
                 console.error('Logout failed', err);
               }

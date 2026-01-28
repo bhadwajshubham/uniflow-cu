@@ -1,101 +1,134 @@
 import { db } from '../../../lib/firebase';
 import { doc, runTransaction, serverTimestamp, collection, query, where, getDocs, limit } from 'firebase/firestore';
-// 👇 IMPORT ADDED
-import emailjs from '@emailjs/browser';
 
-// 📧 EMAIL CONFIGURATION (REPLACE THESE WITH YOUR KEYS)
-const EMAIL_CONFIG = {
-  SERVICE_ID: "YOUR_SERVICE_ID",   // e.g. "service_gmail"
-  TEMPLATE_ID: "YOUR_TEMPLATE_ID", // e.g. "template_ticket"
-  PUBLIC_KEY: "YOUR_PUBLIC_KEY"    // e.g. "user_12345abcde"
-};
+/**
+ * 📧 INTERNAL HELPER: Call Vercel API
+ * Uses '/api/send-email' which maps to your backend function
+ */
+const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, details) => {
+  // 🛡️ SKIP ON LOCALHOST (Vite Port 5173) to prevent Red 404 Errors
+  if (window.location.hostname === 'localhost' && window.location.port === '5173') {
+    console.log("🛑 Localhost Detected: Email API call skipped (Backend not available in Vite).");
+    console.log(`📨 [MOCK EMAIL] To: ${userEmail} | Subject: Ticket for ${eventTitle}`);
+    return;
+  }
 
-// ✅ HELPER: SEND EMAIL (Frontend Only)
-const triggerEmail = async (userEmail, userName, eventTitle, details, ticketId) => {
+  console.log(`📨 Sending email to ${userEmail} via Backend API...`);
+  
   try {
-    await emailjs.send(
-      EMAIL_CONFIG.SERVICE_ID,
-      EMAIL_CONFIG.TEMPLATE_ID,
-      {
-        to_name: userName,
-        to_email: userEmail,
-        event_name: eventTitle,
-        ticket_id: ticketId,
-        details: details // Template mein {{details}} variable banayein
-      },
-      EMAIL_CONFIG.PUBLIC_KEY
-    );
-    console.log("✅ Email Sent via EmailJS");
-  } catch (error) {
-    console.error("❌ EmailJS Failed (Check Keys):", error);
-    // Silent fail so user flow doesn't break
+    const response = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: userEmail,
+        subject: `🎟️ Ticket: ${eventTitle}`,
+        html: `
+          <div style="font-family: sans-serif; padding: 20px; border: 1px solid #e4e4e7; border-radius: 12px;">
+            <h2 style="color: #4f46e5; margin-bottom: 10px;">You're In! 🚀</h2>
+            <p>Hi <strong>${userName}</strong>,</p>
+            <p>Your ticket for <strong>${eventTitle}</strong> is confirmed.</p>
+            <div style="background: #f4f4f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <p style="margin: 5px 0;"><strong>Ticket ID:</strong> ${ticketId}</p>
+              ${details}
+            </div>
+            <p style="color: #71717a; font-size: 12px;">Please show the QR code in your app at the entrance.</p>
+          </div>
+        `
+      })
+    });
+
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.indexOf("application/json") !== -1) {
+      const data = await response.json();
+      if (!response.ok) console.warn("⚠️ API Error:", data);
+      else console.log("✅ Email successfully handed off to SMTP Server.");
+    } else {
+      console.warn(`⚠️ Email API unavailable (Status: ${response.status}). This is normal locally.`);
+    }
+
+  } catch (err) {
+    console.error("❌ Network Error (Email):", err);
   }
 };
 
-// Helper: Validation Logic
+// Helper: Validation
 const validateRestrictions = (eventData, user, studentData) => {
   if (eventData.isUniversityOnly && !user.email.toLowerCase().endsWith('@chitkara.edu.in')) {
     throw new Error("🚫 Restricted: Official @chitkara.edu.in email required.");
   }
-  if (eventData.allowedBranches === 'CSE/AI Only' && 
-      !['B.E. (C.S.E.)', 'B.E. (C.S.E. AI)'].includes(studentData.branch)) {
-    throw new Error("🚫 Restricted: CSE & AI branches only.");
-  }
 };
 
 // 1. INDIVIDUAL REGISTRATION
-export const registerForEvent = async (eventId, user, studentData) => {
+export const registerForEvent = async (eventId, user, profile, answers = {}) => {
   if (!user) throw new Error("User must be logged in");
   
   const eventRef = doc(db, 'events', eventId);
   const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
-  let eventDataForEmail = {}; // Store data for email
+  const statsRef = doc(db, "system_stats", "daily_emails");
+  
+  let eventDataForEmail = {}; 
 
   try {
     await runTransaction(db, async (transaction) => {
       const eventDoc = await transaction.get(eventRef);
       const existingReg = await transaction.get(registrationRef);
+      const statsSnap = await transaction.get(statsRef);
 
-      if (!eventDoc.exists()) throw new Error("Event does not exist");
+      if (!eventDoc.exists()) throw new Error("Event not found");
       eventDataForEmail = eventDoc.data();
-      
-      validateRestrictions(eventDataForEmail, user, studentData);
 
-      if ((eventDataForEmail.ticketsSold || 0) >= parseInt(eventDataForEmail.totalTickets)) throw new Error("Sold Out!");
-      if (existingReg.exists()) throw new Error("You are already registered.");
+      validateRestrictions(eventDataForEmail, user, profile);
 
-      transaction.set(registrationRef, {
+      if ((eventDataForEmail.ticketsSold || 0) >= parseInt(eventDataForEmail.totalTickets)) {
+        throw new Error("SOLD_OUT");
+      }
+      if (existingReg.exists()) {
+        throw new Error("ALREADY_BOOKED");
+      }
+
+      const newTicket = {
         eventId,
         eventTitle: eventDataForEmail.title,
-        organizerName: eventDataForEmail.organizerName || 'UniFlow Club',
         eventDate: eventDataForEmail.date,
         eventTime: eventDataForEmail.time || 'TBA',
         eventLocation: eventDataForEmail.location,
         userId: user.uid,
         userEmail: user.email,
         userName: user.displayName,
-        rollNo: studentData.rollNo,
-        phone: studentData.phone,
-        branch: studentData.branch,
+        userRollNo: profile?.rollNo || 'N/A',
+        userPhone: profile?.phone || 'N/A',
+        answers: answers,
         type: 'individual',
         status: 'confirmed',
         createdAt: serverTimestamp(),
-      });
+        used: false
+      };
 
+      transaction.set(registrationRef, newTicket);
       transaction.update(eventRef, { ticketsSold: (eventDataForEmail.ticketsSold || 0) + 1 });
+      
+      if (statsSnap.exists()) {
+        transaction.update(statsRef, { count: (statsSnap.data().count || 0) + 1 });
+      } else {
+        transaction.set(statsRef, { count: 1 });
+      }
     });
 
-    // 🚀 SEND EMAIL NOW
-    await triggerEmail(
+    // TRIGGER EMAIL
+    sendConfirmationEmail(
       user.email,
       user.displayName,
       eventDataForEmail.title,
-      `Date: ${eventDataForEmail.date} | Time: ${eventDataForEmail.time}`,
-      `${eventId}_${user.uid}`
+      `${eventId}_${user.uid}`,
+      `<p><strong>Date:</strong> ${eventDataForEmail.date}</p><p><strong>Location:</strong> ${eventDataForEmail.location}</p>`
     );
 
     return { success: true };
-  } catch (error) { throw error; }
+
+  } catch (error) {
+    console.error("Registration Error:", error);
+    throw error;
+  }
 };
 
 // 2. CREATE TEAM REGISTRATION
@@ -118,7 +151,7 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
 
       validateRestrictions(eventDataForEmail, user, studentData);
 
-      if ((eventDataForEmail.ticketsSold || 0) >= parseInt(eventDataForEmail.totalTickets)) throw new Error("Sold Out!");
+      if ((eventDataForEmail.ticketsSold || 0) >= parseInt(eventDataForEmail.totalTickets)) throw new Error("Sold Out");
       if (existingReg.exists()) throw new Error("Already registered.");
 
       transaction.set(registrationRef, {
@@ -139,13 +172,12 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
       transaction.update(eventRef, { ticketsSold: (eventDataForEmail.ticketsSold || 0) + 1 });
     });
 
-    // 🚀 SEND EMAIL NOW
-    await triggerEmail(
+    sendConfirmationEmail(
       user.email,
       user.displayName,
       eventDataForEmail.title,
-      `Team: ${teamName} | Code: ${teamCode}`,
-      `${eventId}_${user.uid}`
+      `${eventId}_${user.uid}`,
+      `<p><strong>Team:</strong> ${teamName}</p><p><strong>Code:</strong> ${teamCode}</p>`
     );
 
     return { success: true, teamCode };
@@ -210,13 +242,12 @@ export const joinTeam = async (eventId, user, teamCode, studentData) => {
       transaction.update(eventRef, { ticketsSold: (eventDataForEmail.ticketsSold || 0) + 1 });
     });
 
-    // 🚀 SEND EMAIL NOW
-    await triggerEmail(
+    sendConfirmationEmail(
       user.email,
       user.displayName,
       eventDataForEmail.title,
-      `Joined Team: ${teamName}`,
-      `${eventId}_${user.uid}`
+      `${eventId}_${user.uid}`,
+      `<p>Joined Team: <strong>${teamName}</strong></p>`
     );
 
     return { success: true };
