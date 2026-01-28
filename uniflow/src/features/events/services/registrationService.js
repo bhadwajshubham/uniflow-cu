@@ -15,9 +15,12 @@ const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, 
   console.log(`📨 Sending professional email to ${userEmail}...`);
   
   // 2. GENERATE ASSETS
+  // We use this API to create a QR image that works in Gmail
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${ticketId}`;
+  
+  // Dynamic Link to your App (Works on Localhost and Vercel automatically)
   const appUrl = window.location.origin; 
-  const ticketLink = `${appUrl}/tickets`;
+  const ticketLink = `${appUrl}/tickets`; // Assuming your ticket page is at /tickets
 
   try {
     const response = await fetch('/api', {
@@ -27,37 +30,45 @@ const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, 
         to: userEmail,
         email: userEmail,
         subject: `🎟️ Ticket Confirmed: ${eventTitle}`,
+        // ✨ HTML TEMPLATE STARTS HERE ✨
         html: `
           <!DOCTYPE html>
           <html>
           <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f5; padding: 20px; margin: 0;">
             <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+              
               <div style="background-color: #4f46e5; padding: 30px 20px; text-align: center;">
                 <h1 style="color: #ffffff; margin: 0; font-size: 24px;">UniFlow Events</h1>
               </div>
+
               <div style="padding: 30px 20px; text-align: center;">
                 <h2 style="color: #18181b; margin-top: 0;">You're going to ${eventTitle}! 🚀</h2>
                 <p style="color: #52525b; font-size: 16px; line-height: 1.5;">
                   Hi <strong>${userName}</strong>, your spot is confirmed. <br/>
                   Simply scan this QR code at the entrance.
                 </p>
+
                 <div style="margin: 25px 0;">
                   <img src="${qrCodeUrl}" alt="Ticket QR Code" style="width: 180px; height: 180px; border: 2px solid #e4e4e7; border-radius: 12px; padding: 10px;" />
                   <p style="color: #71717a; font-size: 14px; margin-top: 5px; font-family: monospace;">ID: ${ticketId}</p>
                 </div>
+
                 <div style="background-color: #f4f4f5; border-radius: 8px; padding: 15px; text-align: left; margin-bottom: 25px;">
                   ${details}
                 </div>
+
                 <a href="${ticketLink}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 16px;">
                   View Ticket in App
                 </a>
               </div>
+
               <div style="background-color: #fafafa; padding: 20px; text-align: center; border-top: 1px solid #e4e4e7;">
                 <p style="color: #a1a1aa; font-size: 12px; margin: 0;">
                   Need help? Contact support via the UniFlow App.<br/>
                   &copy; ${new Date().getFullYear()} UniFlow. All rights reserved.
                 </p>
               </div>
+
             </div>
           </body>
           </html>
@@ -71,19 +82,18 @@ const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, 
       if (!response.ok) console.warn("⚠️ Email API Warning:", data);
       else console.log("✅ Professional Email Sent!");
     }
+
   } catch (err) {
     console.error("❌ Email Error:", err);
   }
 };
 
-// Validation Helper
 const validateRestrictions = (eventData, user, studentData) => {
   if (eventData.isUniversityOnly && !user.email.toLowerCase().endsWith('@chitkara.edu.in')) {
     throw new Error("🚫 Restricted: Official @chitkara.edu.in email required.");
   }
 };
 
-// 1. INDIVIDUAL REGISTRATION
 export const registerForEvent = async (eventId, user, profile, answers = {}) => {
   if (!user) throw new Error("User must be logged in");
   
@@ -139,6 +149,7 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
       }
     });
 
+    // TRIGGER PROFESSIONAL EMAIL
     await sendConfirmationEmail(
       user.email,
       user.displayName,
@@ -156,7 +167,6 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
   }
 };
 
-// 2. CREATE TEAM
 export const registerTeam = async (eventId, user, teamName, studentData) => {
   if (!user) throw new Error("Login required");
   if (!teamName || teamName.length < 3) throw new Error("Invalid Team Name");
@@ -208,7 +218,6 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
   } catch (error) { throw error; }
 };
 
-// 3. JOIN TEAM
 export const joinTeam = async (eventId, user, teamCode, studentData) => {
   if (!user) throw new Error("Login required");
   if (!teamCode) throw new Error("Team Code required");
