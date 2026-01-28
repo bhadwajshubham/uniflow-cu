@@ -2,39 +2,76 @@ import { db } from '../../../lib/firebase';
 import { doc, runTransaction, serverTimestamp, collection, query, where, getDocs, limit } from 'firebase/firestore';
 
 /**
- * 📧 INTERNAL HELPER: Trigger Vercel Backend Email
- * Updated to point to '/api' (maps to api/index.js)
+ * 📧 PROFESSIONAL EMAIL SENDER
+ * Includes: QR Code Image & Deep Link Button
  */
 const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, details) => {
-  // 1. LOCALHOST GUARD: Don't break on local dev
+  // 1. LOCALHOST GUARD
   if (window.location.hostname === 'localhost' && window.location.port === '5173') {
-    console.log("🛑 Localhost Detected: Email API call skipped.");
-    console.log(`📨 [MOCK EMAIL] To: ${userEmail} | Subject: Ticket for ${eventTitle}`);
+    console.log("🛑 Localhost: Email skipped (Mock Mode).");
     return;
   }
 
-  console.log(`📨 Sending email to ${userEmail}...`);
+  console.log(`📨 Sending professional email to ${userEmail}...`);
   
+  // 2. GENERATE ASSETS
+  // We use this API to create a QR image that works in Gmail
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${ticketId}`;
+  
+  // Dynamic Link to your App (Works on Localhost and Vercel automatically)
+  const appUrl = window.location.origin; 
+  const ticketLink = `${appUrl}/tickets`; // Assuming your ticket page is at /tickets
+
   try {
-    // ⚠️ IMPORTANT: We are now fetching '/api' because we renamed the file to api/index.js
     const response = await fetch('/api', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to: userEmail,
-        email: userEmail, // Sending both keys to be safe
-        subject: `🎟️ Ticket: ${eventTitle}`,
+        email: userEmail,
+        subject: `🎟️ Ticket Confirmed: ${eventTitle}`,
+        // ✨ HTML TEMPLATE STARTS HERE ✨
         html: `
-          <div style="font-family: sans-serif; padding: 20px; border: 1px solid #e4e4e7; border-radius: 12px;">
-            <h2 style="color: #4f46e5; margin-bottom: 10px;">You're In! 🚀</h2>
-            <p>Hi <strong>${userName}</strong>,</p>
-            <p>Your ticket for <strong>${eventTitle}</strong> is confirmed.</p>
-            <div style="background: #f4f4f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
-              <p style="margin: 5px 0;"><strong>Ticket ID:</strong> ${ticketId}</p>
-              ${details}
+          <!DOCTYPE html>
+          <html>
+          <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f5; padding: 20px; margin: 0;">
+            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+              
+              <div style="background-color: #4f46e5; padding: 30px 20px; text-align: center;">
+                <h1 style="color: #ffffff; margin: 0; font-size: 24px;">UniFlow Events</h1>
+              </div>
+
+              <div style="padding: 30px 20px; text-align: center;">
+                <h2 style="color: #18181b; margin-top: 0;">You're going to ${eventTitle}! 🚀</h2>
+                <p style="color: #52525b; font-size: 16px; line-height: 1.5;">
+                  Hi <strong>${userName}</strong>, your spot is confirmed. <br/>
+                  Simply scan this QR code at the entrance.
+                </p>
+
+                <div style="margin: 25px 0;">
+                  <img src="${qrCodeUrl}" alt="Ticket QR Code" style="width: 180px; height: 180px; border: 2px solid #e4e4e7; border-radius: 12px; padding: 10px;" />
+                  <p style="color: #71717a; font-size: 14px; margin-top: 5px; font-family: monospace;">ID: ${ticketId}</p>
+                </div>
+
+                <div style="background-color: #f4f4f5; border-radius: 8px; padding: 15px; text-align: left; margin-bottom: 25px;">
+                  ${details}
+                </div>
+
+                <a href="${ticketLink}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                  View Ticket in App
+                </a>
+              </div>
+
+              <div style="background-color: #fafafa; padding: 20px; text-align: center; border-top: 1px solid #e4e4e7;">
+                <p style="color: #a1a1aa; font-size: 12px; margin: 0;">
+                  Need help? Contact support via the UniFlow App.<br/>
+                  &copy; ${new Date().getFullYear()} UniFlow. All rights reserved.
+                </p>
+              </div>
+
             </div>
-            <p style="color: #71717a; font-size: 12px;">Please show the QR code in your app at the entrance.</p>
-          </div>
+          </body>
+          </html>
         `
       })
     });
@@ -42,30 +79,23 @@ const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, 
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.indexOf("application/json") !== -1) {
       const data = await response.json();
-      if (!response.ok) {
-        console.warn("⚠️ API Error:", data);
-        // Alert user but don't crash app
-        console.error("Email failed but ticket booked.");
-      } else {
-        console.log("✅ Email successfully sent via Vercel!");
-      }
-    } else {
-      console.warn(`⚠️ Email API Status: ${response.status} (Check Vercel Logs)`);
+      if (!response.ok) console.warn("⚠️ Email API Warning:", data);
+      else console.log("✅ Professional Email Sent!");
     }
 
   } catch (err) {
-    console.error("❌ Network Error (Email):", err);
+    console.error("❌ Email Error:", err);
   }
 };
 
-// Helper: Validation
+// ... Rest of the file (validateRestrictions, registerForEvent, etc.) remains exactly the same ...
+// JUST COPY PASTE THE REST OF THE FUNCTIONS FROM PREVIOUS STEP BELOW THIS
 const validateRestrictions = (eventData, user, studentData) => {
   if (eventData.isUniversityOnly && !user.email.toLowerCase().endsWith('@chitkara.edu.in')) {
     throw new Error("🚫 Restricted: Official @chitkara.edu.in email required.");
   }
 };
 
-// 1. INDIVIDUAL REGISTRATION
 export const registerForEvent = async (eventId, user, profile, answers = {}) => {
   if (!user) throw new Error("User must be logged in");
   
@@ -84,7 +114,6 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
       if (!eventDoc.exists()) throw new Error("Event not found");
       eventDataForEmail = eventDoc.data();
 
-      // VALIDATE
       validateRestrictions(eventDataForEmail, user, profile);
 
       if ((eventDataForEmail.ticketsSold || 0) >= parseInt(eventDataForEmail.totalTickets)) {
@@ -94,7 +123,6 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
         throw new Error("ALREADY_BOOKED");
       }
 
-      // WRITE
       const newTicket = {
         eventId,
         eventTitle: eventDataForEmail.title,
@@ -123,13 +151,14 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
       }
     });
 
-    // TRIGGER EMAIL
+    // TRIGGER PROFESSIONAL EMAIL
     await sendConfirmationEmail(
       user.email,
       user.displayName,
       eventDataForEmail.title,
       `${eventId}_${user.uid}`,
-      `<p><strong>Date:</strong> ${eventDataForEmail.date}</p><p><strong>Location:</strong> ${eventDataForEmail.location}</p>`
+      `<p style="margin: 5px 0;"><strong>📅 Date:</strong> ${eventDataForEmail.date}</p>
+       <p style="margin: 5px 0;"><strong>📍 Location:</strong> ${eventDataForEmail.location}</p>`
     );
 
     return { success: true };
@@ -140,7 +169,6 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
   }
 };
 
-// 2. CREATE TEAM REGISTRATION
 export const registerTeam = async (eventId, user, teamName, studentData) => {
   if (!user) throw new Error("Login required");
   if (!teamName || teamName.length < 3) throw new Error("Invalid Team Name");
@@ -192,7 +220,6 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
   } catch (error) { throw error; }
 };
 
-// 3. JOIN TEAM REGISTRATION
 export const joinTeam = async (eventId, user, teamCode, studentData) => {
   if (!user) throw new Error("Login required");
   if (!teamCode) throw new Error("Team Code required");
