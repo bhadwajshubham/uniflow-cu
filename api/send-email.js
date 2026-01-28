@@ -1,23 +1,22 @@
 import nodemailer from 'nodemailer';
 
 export default async function handler(req, res) {
-  // 1. Allow connection from anywhere
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
+  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // 2. CHECK ENVIRONMENT VARIABLES (The #1 Cause of Failure)
+  // 🕵️‍♂️ SPY LOGS: Check if variables exist
+  console.log("--- DEBUG START ---");
+  console.log("GMAIL_USER Status:", process.env.GMAIL_USER ? "✅ Loaded" : "❌ MISSING");
+  console.log("GMAIL_PASS Status:", process.env.GMAIL_PASS ? "✅ Loaded" : "❌ MISSING");
+  console.log("GMAIL_PASS Length:", process.env.GMAIL_PASS ? process.env.GMAIL_PASS.length : 0); // Should be 16 (or 19 with spaces)
+  console.log("--- DEBUG END ---");
+
   if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
-    return res.status(500).json({ 
-      error: 'CONFIGURATION_ERROR', 
-      message: 'Vercel Env Variables are MISSING. Go to Vercel Settings -> Environment Variables.' 
-    });
+    return res.status(500).json({ error: 'Server Misconfiguration: Credentials Missing in Vercel' });
   }
 
   const { to, email, subject, html } = req.body;
@@ -28,40 +27,20 @@ export default async function handler(req, res) {
       service: 'gmail',
       auth: {
         user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_PASS.replace(/\s/g, '') // 🛡️ AUTOMATICALLY REMOVE SPACES
+        pass: process.env.GMAIL_PASS.replace(/\s/g, '') // Remove spaces for safety
       }
     });
 
-    // 3. Verify Login
-    await new Promise((resolve, reject) => {
-      transporter.verify((error, success) => {
-        if (error) {
-          console.error("Login Failed:", error);
-          reject(new Error(`LOGIN_FAILED: ${error.message}`));
-        } else {
-          resolve(success);
-        }
-      });
-    });
-
-    // 4. Send
     const info = await transporter.sendMail({
-      from: '"UniFlow Events" <noreply@uniflow.com>',
+      from: '"UniFlow" <noreply@uniflow.com>',
       to: recipient,
-      subject: subject || "Ticket Confirmed",
-      html: html || "<p>Ticket Confirmed</p>",
+      subject: subject || "Ticket",
+      html: html || "<p>Confirmed</p>",
     });
 
     return res.status(200).json({ success: true, id: info.messageId });
-
   } catch (error) {
-    console.error("❌ CRITICAL EMAIL ERROR:", error);
-    
-    // 🚨 RETURN THE EXACT ERROR TO THE FRONTEND
-    return res.status(500).json({ 
-      error: 'CRITICAL_DEBUG_ERROR', 
-      details: error.message, // This will say "Invalid Login" or "Username not accepted"
-      originalError: error.toString() 
-    });
+    console.error("❌ EMAIL ERROR:", error);
+    return res.status(500).json({ error: 'Email Failed', details: error.message });
   }
 }
