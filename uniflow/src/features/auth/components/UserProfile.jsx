@@ -8,11 +8,12 @@ import {
   User, Phone, BookOpen, Layers, MapPin, LogOut, ShieldCheck, 
   CheckCircle, Hash, Camera, Edit2, Save, X, Loader2, AlertCircle 
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const UserProfile = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation(); // ✅ FIX: Detects navigation changes
 
   // Mode: View (ID Card) vs Edit (Form)
   const [isEditing, setIsEditing] = useState(false);
@@ -37,12 +38,14 @@ const UserProfile = () => {
   const [photo, setPhoto] = useState(null);
   const [preview, setPreview] = useState(null);
 
-  // 🔄 1. FETCH FRESH DATA (Loop Fix)
+  // 🔄 1. FETCH FRESH DATA (The Fix for Stale Data)
   useEffect(() => {
     if (!user) return;
-    const fetchData = async () => {
+
+    const fetchProfileData = async () => {
       try {
-        // Hum seedha DB call kar rahe hain taaki "Consent Loop" na ho
+        setLoading(true); // Show loading to indicate fresh fetch
+        // Hum seedha DB call kar rahe hain har baar jab page load ho
         const docRef = doc(db, 'users', user.uid);
         const docSnap = await getDoc(docRef);
         
@@ -65,13 +68,14 @@ const UserProfile = () => {
           });
         }
       } catch (err) { 
-        console.error(err); 
+        console.error("Profile Fetch Error:", err); 
       } finally { 
         setLoading(false); 
       }
     };
-    fetchData();
-  }, [user]);
+
+    fetchProfileData();
+  }, [user, location.key]); // ✅ location.key ensures re-fetch whenever user navigates back here
 
   // 🛡️ 2. INPUT VALIDATION HANDLERS
   const handleChange = (e) => {
@@ -101,6 +105,8 @@ const UserProfile = () => {
   // 💾 3. SAVE WITH STRICT VALIDATION
   const handleSave = async (e) => {
     e.preventDefault();
+    if (saving) return; // Prevent Double Click
+
     setSaving(true);
     setError('');
 
