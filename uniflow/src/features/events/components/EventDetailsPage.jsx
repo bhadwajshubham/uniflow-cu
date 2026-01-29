@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, auth } from '../../../lib/firebase';
 import { doc, getDoc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { Calendar, MapPin, Clock, ArrowLeft, Share2, Shield, User, Phone, Loader2, QrCode, X } from 'lucide-react';
+import { Calendar, MapPin, Clock, ArrowLeft, Share2, Shield, User, Phone, Loader2, QrCode, X, CheckCircle } from 'lucide-react';
 
-// 👇 CORRECT IMPORT PATH (Based on your folder structure)
+// ✅ CORRECT PATH: Points to src/features/events/services/registrationService.js
 import { registerForEvent, registerTeam, joinTeam } from '../services/registrationService';
 
 const EventDetailsPage = () => {
@@ -33,7 +33,7 @@ const EventDetailsPage = () => {
      rollNo: '', 
      phone: '', 
      branch: 'B.E. (CSE)', 
-     customBranch: '',
+     customBranch: '', 
      semester: '1st' 
   });
 
@@ -71,8 +71,7 @@ const EventDetailsPage = () => {
         if (eventDoc.exists()) {
           setEvent({ id: eventDoc.id, ...eventDoc.data() });
         } else {
-          // alert("Event not found!");
-          // navigate('/dashboard');
+          // Silent fail or redirect
         }
       } catch (error) { console.error(error); } 
       finally { setLoading(false); }
@@ -119,7 +118,6 @@ const EventDetailsPage = () => {
     try {
       setRegistering(true);
       const userRef = doc(db, "users", user.uid);
-      
       const updatedData = {
         rollNo: formData.rollNo.toUpperCase(),
         phone: formData.phone,
@@ -128,14 +126,10 @@ const EventDetailsPage = () => {
         updatedAt: serverTimestamp(),
         isProfileComplete: true
       };
-
       await setDoc(userRef, updatedData, { merge: true });
-      
       setProfile(prev => ({ ...prev, ...updatedData }));
       setShowProfileModal(false);
-      
       if (!profile?.termsAccepted) { setShowConsentModal(true); }
-
     } catch (error) {
       alert("Error: " + error.message);
     } finally {
@@ -152,10 +146,8 @@ const EventDetailsPage = () => {
       await setDoc(userRef, { termsAccepted: true, updatedAt: serverTimestamp() }, { merge: true });
       setProfile(prev => ({ ...prev, termsAccepted: true }));
       setShowConsentModal(false);
-      
       if (event.maxTeamSize > 1) setShowTeamModal(true);
       else executeIndividualBooking();
-
     } catch (error) { alert("Error: " + error.message); } 
     finally { setRegistering(false); }
   };
@@ -179,7 +171,7 @@ const EventDetailsPage = () => {
       
       <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg overflow-hidden border border-zinc-200 dark:border-zinc-800">
         
-        {/* 🔥 HEADER IMAGE SECTION (No Default Image Logic) */}
+        {/* 🔥 HEADER IMAGE SECTION */}
         <div className={`relative h-56 sm:h-72 w-full ${!event.image ? 'bg-gradient-to-r from-indigo-600 to-purple-700' : ''}`}>
            {event.image && (
              <>
@@ -188,7 +180,6 @@ const EventDetailsPage = () => {
              </>
            )}
            
-           {/* Actions: QR & Share */}
            <div className="absolute top-4 right-4 flex gap-2 z-10">
               <button onClick={() => setShowQRModal(true)} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition">
                   <QrCode className="w-6 h-6" />
@@ -242,7 +233,6 @@ const EventDetailsPage = () => {
            <div className="bg-white dark:bg-zinc-900 rounded-2xl p-8 max-w-sm w-full">
              <h3 className="text-xl font-bold mb-4 flex items-center gap-2 dark:text-white"><Shield className="w-6 h-6 text-indigo-600"/> Final Consent</h3>
              <div className="space-y-3 mb-6">
-                {/* 🔥 HYPERLINKS ADDED HERE */}
                 <label className="flex gap-3 cursor-pointer dark:text-gray-300">
                     <input type="checkbox" checked={termsChecked} onChange={e => setTermsChecked(e.target.checked)}/> 
                     <span>I agree to <a href="/terms" target="_blank" className="text-indigo-600 font-bold underline" onClick={e=>e.stopPropagation()}>Terms</a></span>
@@ -257,7 +247,7 @@ const EventDetailsPage = () => {
         </div>
       )}
 
-      {/* 🚨 MODAL 3: QR CODE */}
+      {/* ... QR & Team Modals ... */}
       {showQRModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white p-6 rounded-3xl shadow-2xl text-center max-w-xs w-full relative">
@@ -270,7 +260,6 @@ const EventDetailsPage = () => {
         </div>
       )}
       
-      {/* 🚨 MODAL 4: TEAM SETUP */}
       {showTeamModal && (
          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
             <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 max-w-md w-full">
