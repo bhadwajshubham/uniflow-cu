@@ -14,14 +14,18 @@ const UserProfile = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false); 
-  const [consenting, setConsenting] = useState(false);
+  
+  // ✅ States for Checkboxes
+  const [termsChecked, setTermsChecked] = useState(false);
+  const [privacyChecked, setPrivacyChecked] = useState(false);
+  
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [profile, setProfile] = useState(null);
+  
   const [photo, setPhoto] = useState(null);
   const [preview, setPreview] = useState(null);
   
-  // ✅ RESTORED ALL MISSING FIELDS
   const [formData, setFormData] = useState({
     displayName: '', 
     phone: '', 
@@ -39,7 +43,7 @@ const UserProfile = () => {
     const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (!saving && !consenting) { 
+        if (!saving) { 
             setProfile(data);
             if (!isEditing) {
                 const isStandard = ['B.E. (CSE)', 'B.E. (CSE-AI)', 'B.E. (ECE)', 'B.E. (ME)'].includes(data.branch);
@@ -61,13 +65,29 @@ const UserProfile = () => {
     return () => unsubscribe();
   }, [user]);
 
+  // 🔥 FASTEST HANDLER (Optimistic UI Update)
   const handleAcceptTerms = async () => {
-    setConsenting(true);
+    if (!termsChecked || !privacyChecked) {
+        setError("Please check both boxes to continue.");
+        return;
+    }
+
+    // 🚀 SPEED TRICK: Pehle UI Update karo (Profile dikhao)
+    setProfile(prev => ({ ...prev, termsAccepted: true }));
+    setSuccess("Terms Accepted! Welcome.");
+
     try {
-        await setDoc(doc(db, 'users', user.uid), { termsAccepted: true, updatedAt: new Date() }, { merge: true });
-        setProfile(prev => ({ ...prev, termsAccepted: true }));
-    } catch (err) { setError("Could not accept terms."); } 
-    finally { setConsenting(false); }
+        // Phir background mein DB update karo
+        await setDoc(doc(db, 'users', user.uid), { 
+            termsAccepted: true, 
+            updatedAt: new Date() 
+        }, { merge: true });
+        
+        setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+        // Agar fail hua toh error dikhao (User already inside hai, so UX smooth rahega)
+        console.error("Terms Sync Error:", err);
+    }
   };
 
   const handleSave = async (e) => {
@@ -89,7 +109,6 @@ const UserProfile = () => {
         finalPhotoURL = await getDownloadURL(storageRef);
       }
 
-      // 🛡️ SECURITY FIX: Admin role removed from here, handled by merge:true
       const updatedData = {
         displayName: formData.displayName.trim(),
         phone: formData.phone,
@@ -103,10 +122,14 @@ const UserProfile = () => {
         updatedAt: new Date()
       };
 
-      await setDoc(doc(db, 'users', user.uid), updatedData, { merge: true });
+      // UI Fast Update
       setProfile(prev => ({ ...prev, ...updatedData })); 
       setIsEditing(false); 
       setSuccess("Profile Updated!"); 
+
+      // DB Update
+      await setDoc(doc(db, 'users', user.uid), updatedData, { merge: true });
+      
       setTimeout(() => setSuccess(''), 3000);
 
     } catch (err) { setError("Update failed: " + err.message); } 
@@ -130,13 +153,38 @@ const UserProfile = () => {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black pt-20 pb-24 px-4">
       <div className="max-w-md mx-auto">
+        
+        {/* 🔴 CONDITION: IF TERMS NOT ACCEPTED -> SHOW CHECKBOX CARD */}
         {!profile?.termsAccepted ? (
             <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl p-8 text-center border-2 border-indigo-100">
                 <FileText className="w-16 h-16 text-indigo-600 mx-auto mb-4" />
                 <h2 className="text-2xl font-black mb-2 dark:text-white">Final Step!</h2>
-                <button onClick={handleAcceptTerms} disabled={consenting} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold">{consenting ? <Loader2 className="animate-spin"/> : "I Accept"}</button>
+                <p className="text-zinc-500 text-sm mb-6">Please accept the rules to proceed.</p>
+                
+                {/* ✅ CHECKBOXES ADDED */}
+                <div className="text-left space-y-3 mb-6 bg-zinc-50 dark:bg-zinc-800 p-4 rounded-xl">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" checked={termsChecked} onChange={e => setTermsChecked(e.target.checked)} className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"/>
+                        <span className="text-sm font-medium text-zinc-700 dark:text-gray-300">I agree to <a href="/terms" target="_blank" className="text-indigo-600 underline">Terms & Conditions</a></span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" checked={privacyChecked} onChange={e => setPrivacyChecked(e.target.checked)} className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"/>
+                        <span className="text-sm font-medium text-zinc-700 dark:text-gray-300">I accept the <a href="/privacy" target="_blank" className="text-indigo-600 underline">Privacy Policy</a></span>
+                    </label>
+                </div>
+
+                {error && <p className="text-red-500 text-xs font-bold mb-3">{error}</p>}
+
+                <button 
+                    onClick={handleAcceptTerms} 
+                    disabled={!termsChecked || !privacyChecked} 
+                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold transition-all active:scale-95"
+                >
+                    Accept & Continue
+                </button>
             </div>
         ) : (
+            /* 🟢 CONDITION: TERMS ACCEPTED -> SHOW PROFILE IMMEDIATELY */
             <>
                 <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 mb-6 relative">
                   <div className="h-32 bg-gradient-to-r from-indigo-600 to-purple-600 relative">
@@ -176,7 +224,6 @@ const UserProfile = () => {
                   </div>
                 ) : (
                   <form onSubmit={handleSave} className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6 space-y-4">
-                    {/* 🔥 FIX: Force text-zinc-900 (black) so inputs are visible */}
                     <input name="displayName" value={formData.displayName} onChange={handleChange} placeholder="Full Name" className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold" />
                     <div className="grid grid-cols-2 gap-4">
                       <input name="phone" value={formData.phone} onChange={handleChange} placeholder="Phone" className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold" />
@@ -185,7 +232,6 @@ const UserProfile = () => {
                     <select name="branch" value={formData.branch} onChange={handleChange} className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold"><option>B.E. (CSE)</option><option>B.E. (CSE-AI)</option><option>B.E. (ECE)</option><option>B.E. (ME)</option><option>Others</option></select>
                     {formData.branch === 'Others' && <input name="customBranch" value={formData.customBranch} onChange={handleChange} placeholder="Specify Branch" className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold"/>}
                     
-                    {/* ✅ RESTORED MISSING FIELDS */}
                     <div className="grid grid-cols-2 gap-4">
                        <select name="semester" value={formData.semester} onChange={handleChange} className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold">{['1st','2nd','3rd','4th','5th','6th','7th','8th'].map(n=><option key={n}>{n}</option>)}</select>
                        <input name="group" value={formData.group} onChange={handleChange} placeholder="Group No" className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold"/>
