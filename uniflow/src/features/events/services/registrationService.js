@@ -1,4 +1,7 @@
-import { db } from '../lib/firebase';
+// File: src/services/registrationService.js
+
+import { db } from '../lib/firebase'; 
+// 👆 Note: '../lib/firebase' is correct because we are in 'src/services'
 import { doc, runTransaction, serverTimestamp, collection, query, where, getDocs, limit } from 'firebase/firestore';
 
 /**

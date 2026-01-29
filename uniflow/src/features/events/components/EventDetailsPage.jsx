@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, auth } from '../../../lib/firebase';
 import { doc, getDoc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { Calendar, MapPin, Clock, ArrowLeft, Share2, Shield, User, Phone, BookOpen, Loader2 } from 'lucide-react';
-// 👇 IMPORT FIX: Correct path to the file created in Step 1
-import { registerForEvent, registerTeam, joinTeam } from '../../../services/registrationService';
+import { Calendar, MapPin, Clock, ArrowLeft, Share2, Shield, User, Phone, Loader2, QrCode, X } from 'lucide-react';
+
+// 👇 CORRECTED IMPORT PATH (Yeh ab sahi file uthayega)
+import { registerForEvent, registerTeam, joinTeam } from '../services/registrationService';
 
 const EventDetailsPage = () => {
   const { id } = useParams();
@@ -54,9 +55,7 @@ const EventDetailsPage = () => {
             const userData = userDoc.data();
             setProfile(userData);
             
-            // Logic to Pre-fill Form
             const isStandard = ['B.E. (CSE)', 'B.E. (CSE-AI)', 'B.E. (ECE)', 'B.E. (ME)'].includes(userData.branch);
-            
             setFormData({
               rollNo: userData.rollNo || '',
               phone: userData.phone || '',
@@ -71,8 +70,8 @@ const EventDetailsPage = () => {
         if (eventDoc.exists()) {
           setEvent({ id: eventDoc.id, ...eventDoc.data() });
         } else {
-          alert("Event not found!");
-          navigate('/dashboard');
+          // alert("Event not found!");
+          // navigate('/dashboard');
         }
       } catch (error) { console.error(error); } 
       finally { setLoading(false); }
@@ -118,7 +117,6 @@ const EventDetailsPage = () => {
         isProfileComplete: true
       };
 
-      // MERGE TRUE IS CRITICAL HERE TO PRESERVE ADMIN ROLE
       await setDoc(userRef, updatedData, { merge: true });
       
       setProfile(prev => ({ ...prev, ...updatedData }));
@@ -161,7 +159,7 @@ const EventDetailsPage = () => {
   };
 
   if (loading) return <div className="p-10 text-center">Loading...</div>;
-  if (!event) return null;
+  if (!event) return <div className="p-10 text-center text-red-500">Event Not Found</div>;
 
   return (
     <div className="max-w-4xl mx-auto p-4 pb-32 pt-20">
@@ -182,9 +180,9 @@ const EventDetailsPage = () => {
           <p className="text-gray-600 leading-relaxed mb-8">{event.description}</p>
           <div className="flex gap-4 pt-6 border-t">
             {event.maxTeamSize > 1 ? (
-              <button onClick={() => checkRequirements() && setShowTeamModal(true)} disabled={registering} className="flex-1 bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 disabled:opacity-50">Register as Team</button>
+              <button onClick={() => checkRequirements() && setShowTeamModal(true)} disabled={registering} className="flex-1 bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 disabled:opacity-50 flex justify-center">{registering ? <Loader2 className="animate-spin"/> : "Register as Team"}</button>
             ) : (
-              <button onClick={() => checkRequirements() && executeIndividualBooking()} disabled={registering} className="flex-1 bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 disabled:opacity-50">Book Ticket</button>
+              <button onClick={() => checkRequirements() && executeIndividualBooking()} disabled={registering} className="flex-1 bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 disabled:opacity-50 flex justify-center">{registering ? <Loader2 className="animate-spin"/> : "Book Ticket"}</button>
             )}
             <button className="px-6 py-4 border-2 rounded-xl font-semibold text-gray-600 hover:bg-gray-50"><Share2 className="w-5 h-5" /></button>
           </div>
@@ -198,46 +196,14 @@ const EventDetailsPage = () => {
             <div className="text-center mb-6">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3"><User className="w-6 h-6 text-red-600" /></div>
               <h3 className="text-xl font-bold text-gray-900">Complete Profile</h3>
-              <p className="text-gray-500 text-sm mt-1">Required for entry pass generation.</p>
             </div>
-
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                 <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase">Phone</label>
-                    <div className="relative"><Phone className="absolute left-3 top-3 w-4 h-4 text-gray-400"/>
-                    <input type="text" value={formData.phone} onChange={e => { if(/^\d{0,10}$/.test(e.target.value)) setFormData({...formData, phone: e.target.value}) }} className="w-full pl-9 p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" placeholder="10 Digits" />
-                    </div>
-                 </div>
-                 <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase">Roll No</label>
-                    <div className="relative"><User className="absolute left-3 top-3 w-4 h-4 text-gray-400"/>
-                    <input type="text" value={formData.rollNo} onChange={e => { if(/^[a-zA-Z0-9]*$/.test(e.target.value)) setFormData({...formData, rollNo: e.target.value}) }} className="w-full pl-9 p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. 211099" />
-                    </div>
-                 </div>
-              </div>
-
-              <div>
-                 <label className="text-xs font-bold text-gray-500 uppercase">Branch</label>
-                 <select value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value})} className="w-full p-2.5 border rounded-lg outline-none bg-white appearance-none">
-                    <option>B.E. (CSE)</option><option>B.E. (CSE-AI)</option><option>B.E. (ECE)</option><option>B.E. (ME)</option><option>Others</option>
-                 </select>
-                 {formData.branch === 'Others' && (
-                    <input type="text" value={formData.customBranch} onChange={e => setFormData({...formData, customBranch: e.target.value})} className="w-full mt-2 p-2.5 border rounded-lg outline-none" placeholder="Specify Branch" />
-                 )}
-              </div>
-
-              <div>
-                 <label className="text-xs font-bold text-gray-500 uppercase">Semester</label>
-                 <select value={formData.semester} onChange={e => setFormData({...formData, semester: e.target.value})} className="w-full p-2.5 border rounded-lg outline-none bg-white appearance-none">
-                    {['1st','2nd','3rd','4th','5th','6th','7th','8th'].map(n => <option key={n}>{n}</option>)}
-                 </select>
-              </div>
+              <input value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="Phone" className="w-full p-3 border rounded-xl"/>
+              <input value={formData.rollNo} onChange={e => setFormData({...formData, rollNo: e.target.value})} placeholder="Roll No" className="w-full p-3 border rounded-xl"/>
+              <select value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value})} className="w-full p-3 border rounded-xl"><option>B.E. (CSE)</option><option>Others</option></select>
+              {formData.branch === 'Others' && <input value={formData.customBranch} onChange={e => setFormData({...formData, customBranch: e.target.value})} placeholder="Specify Branch" className="w-full p-3 border rounded-xl"/>}
             </div>
-
-            <button onClick={handleSaveProfile} disabled={registering} className="w-full mt-6 bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-black transition flex justify-center">
-              {registering ? <Loader2 className="animate-spin w-5 h-5"/> : "Save & Continue"}
-            </button>
+            <button onClick={handleSaveProfile} disabled={registering} className="w-full mt-6 bg-black text-white py-3 rounded-xl font-bold">Save</button>
           </div>
         </div>
       )}
@@ -248,8 +214,8 @@ const EventDetailsPage = () => {
            <div className="bg-white rounded-2xl p-8 max-w-sm w-full">
              <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><Shield className="w-6 h-6 text-indigo-600"/> Final Consent</h3>
              <div className="space-y-3 mb-6">
-                <label className="flex gap-3 cursor-pointer"><input type="checkbox" checked={termsChecked} onChange={e => setTermsChecked(e.target.checked)} className="mt-1"/> <span className="text-sm">I agree to <a href="#" className="text-indigo-600 font-bold" onClick={e=>e.stopPropagation()}>Terms</a></span></label>
-                <label className="flex gap-3 cursor-pointer"><input type="checkbox" checked={privacyChecked} onChange={e => setPrivacyChecked(e.target.checked)} className="mt-1"/> <span className="text-sm">I agree to <a href="#" className="text-indigo-600 font-bold" onClick={e=>e.stopPropagation()}>Privacy</a></span></label>
+                <label className="flex gap-3 cursor-pointer"><input type="checkbox" checked={termsChecked} onChange={e => setTermsChecked(e.target.checked)}/> I agree to Terms</label>
+                <label className="flex gap-3 cursor-pointer"><input type="checkbox" checked={privacyChecked} onChange={e => setPrivacyChecked(e.target.checked)}/> I agree to Privacy</label>
              </div>
              <button onClick={handleAgreeToTerms} disabled={!termsChecked || !privacyChecked} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold disabled:opacity-50">Agree & Book</button>
            </div>
