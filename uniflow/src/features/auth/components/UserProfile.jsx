@@ -13,9 +13,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 const UserProfile = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation(); // ✅ FIX: Detects navigation changes
+  const location = useLocation(); 
 
-  // Mode: View (ID Card) vs Edit (Form)
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -23,13 +22,13 @@ const UserProfile = () => {
   const [success, setSuccess] = useState('');
 
   // Data State
-  const [profile, setProfile] = useState(null); // Display Data
+  const [profile, setProfile] = useState(null);
   const [formData, setFormData] = useState({
     displayName: '',
     phone: '',
     rollNo: '',
     branch: 'B.E. (CSE)',
-    customBranch: '', // For "Others" logic
+    customBranch: '',
     semester: '1st',
     group: '',
     residency: 'Day Scholar'
@@ -38,14 +37,15 @@ const UserProfile = () => {
   const [photo, setPhoto] = useState(null);
   const [preview, setPreview] = useState(null);
 
-  // 🔄 1. FETCH FRESH DATA (The Fix for Stale Data)
+  // 🔄 OPTIMIZED FETCH: Sirf Page Load/Navigate pe chalega (No Focus Listener)
   useEffect(() => {
     if (!user) return;
 
     const fetchProfileData = async () => {
       try {
-        setLoading(true); // Show loading to indicate fresh fetch
-        // Hum seedha DB call kar rahe hain har baar jab page load ho
+        // Loading state hata diya taaki UI flicker na kare agar cache hai
+        // setLoading(true); <--- REMOVED for smoother UX
+        
         const docRef = doc(db, 'users', user.uid);
         const docSnap = await getDoc(docRef);
         
@@ -53,7 +53,6 @@ const UserProfile = () => {
           const data = docSnap.data();
           setProfile(data);
           
-          // Logic to handle "Others" branch
           const isStandard = ['B.E. (CSE)', 'B.E. (CSE-AI)', 'B.E. (ECE)', 'B.E. (ME)'].includes(data.branch);
           
           setFormData({
@@ -75,17 +74,16 @@ const UserProfile = () => {
     };
 
     fetchProfileData();
-  }, [user, location.key]); // ✅ location.key ensures re-fetch whenever user navigates back here
+    // ❌ REMOVED: window.addEventListener("focus") -> Faltu reads saved!
+    
+  }, [user, location.key]); // ✅ location.key ensures fetch only happens on Route Change
 
-  // 🛡️ 2. INPUT VALIDATION HANDLERS
+  // 🛡️ INPUT HANDLERS
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
     if (name === 'phone') {
-        // Only Numbers allowed, Max 10
         if (/^\d{0,10}$/.test(value)) setFormData({ ...formData, [name]: value });
     } else if (name === 'rollNo') {
-        // Alphanumeric Only
         if (/^[a-zA-Z0-9]{0,15}$/.test(value)) setFormData({ ...formData, [name]: value });
     } else {
         setFormData({ ...formData, [name]: value });
@@ -102,27 +100,24 @@ const UserProfile = () => {
     }
   };
 
-  // 💾 3. SAVE WITH STRICT VALIDATION
+  // 💾 SAVE
   const handleSave = async (e) => {
     e.preventDefault();
-    if (saving) return; // Prevent Double Click
+    if (saving) return; 
 
     setSaving(true);
     setError('');
 
-    // Validations
     if (formData.phone.length !== 10) { setError("Phone number must be exactly 10 digits."); setSaving(false); return; }
     if (formData.rollNo.length < 5) { setError("Enter a valid Roll Number."); setSaving(false); return; }
     if (!formData.displayName.trim()) { setError("Name cannot be empty."); setSaving(false); return; }
     
-    // Branch Logic
     const finalBranch = formData.branch === 'Others' ? formData.customBranch.trim() : formData.branch;
     if (!finalBranch) { setError("Please specify your Branch/Course."); setSaving(false); return; }
 
     try {
       let finalPhotoURL = profile?.photoURL || user.photoURL;
       
-      // Upload Photo if changed
       if (photo) {
         const storageRef = ref(storage, `avatars/${user.uid}_${Date.now()}`);
         await uploadBytes(storageRef, photo);
@@ -140,16 +135,15 @@ const UserProfile = () => {
         photoURL: finalPhotoURL,
         isProfileComplete: true,
         updatedAt: new Date(),
-        // TermsAccepted ko hum yahan change nahi kar rahe, wo Event Page se aata hai
         termsAccepted: profile?.termsAccepted || false 
       };
 
       await setDoc(doc(db, 'users', user.uid), updatedData, { merge: true });
 
-      setProfile(updatedData); // Update UI Instantly
+      setProfile(updatedData); 
       setSuccess("Profile Updated Successfully!");
       setTimeout(() => setSuccess(''), 3000);
-      setIsEditing(false); // Close Form
+      setIsEditing(false); 
 
     } catch (err) {
       setError("Update failed: " + err.message);
@@ -166,10 +160,9 @@ const UserProfile = () => {
     <div className="min-h-screen bg-zinc-50 dark:bg-black pt-20 pb-24 px-4">
       <div className="max-w-md mx-auto">
 
-        {/* --- HEADER: PHOTO & TOGGLE --- */}
+        {/* --- HEADER --- */}
         <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 mb-6 relative">
           <div className="h-32 bg-gradient-to-r from-indigo-600 to-purple-600 relative">
-             {/* Edit Button */}
              <button 
                 onClick={() => setIsEditing(!isEditing)}
                 className="absolute top-4 right-4 bg-white/20 backdrop-blur-md text-white p-2 rounded-full hover:bg-white/30 transition z-10"
@@ -200,7 +193,6 @@ const UserProfile = () => {
             </h2>
             <p className="text-zinc-500 text-sm mb-3">{user?.email}</p>
             
-            {/* BADGES */}
             <div className="flex justify-center gap-2 flex-wrap">
               <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-[10px] font-bold uppercase flex items-center">
                 <ShieldCheck className="w-3 h-3 mr-1" /> Verified
@@ -214,14 +206,12 @@ const UserProfile = () => {
           </div>
         </div>
 
-        {/* MESSAGES */}
         {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-xl text-sm flex items-center font-bold"><AlertCircle className="w-4 h-4 mr-2"/>{error}</div>}
         {success && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-xl text-sm flex items-center font-bold"><CheckCircle className="w-4 h-4 mr-2"/>{success}</div>}
 
-        {/* --- VIEW MODE (ID CARD) --- */}
+        {/* --- VIEW MODE --- */}
         {!isEditing ? (
           <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
-             {/* Rows */}
              <div className="flex items-center p-4">
                 <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 mr-4"><Hash className="w-5 h-5"/></div>
                 <div><p className="text-[10px] text-zinc-400 font-bold uppercase">Roll No</p><p className="font-bold text-gray-800">{profile?.rollNo || "Not Set"}</p></div>
@@ -247,7 +237,7 @@ const UserProfile = () => {
              </div>
           </div>
         ) : (
-          /* --- EDIT MODE (FORM WITH VALIDATION) --- */
+          /* --- EDIT MODE --- */
           <form onSubmit={handleSave} className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border border-zinc-200 p-6 space-y-4">
             
             <div>
@@ -266,7 +256,6 @@ const UserProfile = () => {
               </div>
             </div>
 
-            {/* BRANCH DROPDOWN + OTHERS */}
             <div>
               <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Branch / Course</label>
               <select name="branch" value={formData.branch} onChange={handleChange} className="w-full p-3 bg-zinc-50 rounded-xl font-bold outline-none mb-2 appearance-none">
@@ -315,7 +304,6 @@ const UserProfile = () => {
           </form>
         )}
 
-        {/* Logout */}
         <button onClick={handleLogout} className="w-full mt-6 bg-white border border-red-100 text-red-600 font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-red-50">
           <LogOut className="w-5 h-5" /> Sign Out
         </button>
