@@ -13,14 +13,14 @@ const UserProfile = () => {
 
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false); 
+  const [saving, setSaving] = useState(false); // 🔒 Ye humara LOCK hai
   
   // ✅ States for Checkboxes
   const [termsChecked, setTermsChecked] = useState(false);
   const [privacyChecked, setPrivacyChecked] = useState(false);
+  
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
   const [profile, setProfile] = useState(null);
   const [photo, setPhoto] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -32,10 +32,13 @@ const UserProfile = () => {
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     setLoading(true);
+    
     const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        // Sirf tab update karo jab hum save nahi kar rahe, taaki UI flicker na kare
+        
+        // 🔒 CRITICAL FIX: Agar hum save/accept kar rahe hain, toh DB update ko ignore karo
+        // Taaki UI flicker na kare aur instant feel ho.
         if (!saving) { 
             setProfile(data);
             if (!isEditing) {
@@ -56,27 +59,35 @@ const UserProfile = () => {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [user]);
+  }, [user, saving, isEditing]); // Added dependencies
 
-  // 🚀 INSTANT SPEED HANDLER
+  // 🚀 SUPERSONIC SPEED HANDLER
   const handleAcceptTerms = async () => {
     if (!termsChecked || !privacyChecked) {
         setError("Please check both boxes to continue.");
         return;
     }
 
-    // ⚡ MAGIC STEP: Update UI immediately (Don't wait for DB)
+    // 🔒 LOCK ON: Stop listening to DB for a moment
+    setSaving(true); 
+
+    // ⚡ INSTANT UI SWITCH (No Waiting)
     setProfile(prev => ({ ...prev, termsAccepted: true }));
     setSuccess("Welcome!");
 
     try {
-        // DB Update happens quietly in background
+        // Background DB Update
         await setDoc(doc(db, 'users', user.uid), { 
             termsAccepted: true, 
             updatedAt: new Date() 
         }, { merge: true });
+        
+        // 🔓 LOCK OFF: 2 second baad DB listener wapis on karo
+        setTimeout(() => setSaving(false), 2000);
+        
     } catch (err) {
         console.error("Sync Error:", err);
+        setSaving(false); // Error aaye to lock khol do
     }
   };
 
@@ -87,7 +98,6 @@ const UserProfile = () => {
 
     if (formData.phone.length !== 10) { setError("Phone must be 10 digits."); setSaving(false); return; }
     if (formData.rollNo.length < 5) { setError("Invalid Roll No."); setSaving(false); return; }
-    
     const finalBranch = formData.branch === 'Others' ? formData.customBranch.trim() : formData.branch;
     if (!finalBranch) { setError("Specify Branch."); setSaving(false); return; }
 
@@ -112,18 +122,16 @@ const UserProfile = () => {
         updatedAt: new Date()
       };
 
-      // ⚡ INSTANT UI UPDATE
+      // ⚡ INSTANT UPDATE
       setProfile(prev => ({ ...prev, ...updatedData })); 
       setIsEditing(false); 
       setSuccess("Profile Updated!"); 
 
-      // DB Update with Merge (Protects Admin Role)
       await setDoc(doc(db, 'users', user.uid), updatedData, { merge: true });
       
-      setTimeout(() => setSuccess(''), 3000);
+      setTimeout(() => { setSuccess(''); setSaving(false); }, 2000);
 
-    } catch (err) { setError("Update failed: " + err.message); } 
-    finally { setSaving(false); }
+    } catch (err) { setError("Update failed: " + err.message); setSaving(false); } 
   };
 
   const handleLogout = async () => { await signOut(auth); navigate('/login'); };
@@ -144,14 +152,13 @@ const UserProfile = () => {
     <div className="min-h-screen bg-zinc-50 dark:bg-black pt-20 pb-24 px-4">
       <div className="max-w-md mx-auto">
         
-        {/* 🔴 CASE 1: TERMS NOT ACCEPTED -> SHOW SHIELD UI (Consistent) */}
+        {/* 🔴 CONSENT UI (Faster Transition) */}
         {!profile?.termsAccepted ? (
             <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl p-8 text-center border-2 border-indigo-100 dark:border-zinc-800 animate-in fade-in zoom-in duration-300">
                 <Shield className="w-14 h-14 text-indigo-600 mx-auto mb-4" />
                 <h2 className="text-2xl font-extrabold mb-2 dark:text-white">Consent Required</h2>
                 <p className="text-zinc-500 text-sm mb-6">Please review and accept to continue.</p>
                 
-                {/* ✅ CHECKBOXES */}
                 <div className="text-left space-y-3 mb-6 bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-zinc-100 dark:border-zinc-700">
                     <label className="flex items-center gap-3 cursor-pointer">
                         <input type="checkbox" checked={termsChecked} onChange={e => setTermsChecked(e.target.checked)} className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"/>
@@ -174,7 +181,7 @@ const UserProfile = () => {
                 </button>
             </div>
         ) : (
-            /* 🟢 CASE 2: TERMS ACCEPTED -> SHOW PROFILE */
+            /* 🟢 PROFILE UI */
             <>
                 <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 mb-6 relative">
                   <div className="h-32 bg-gradient-to-r from-indigo-600 to-purple-600 relative">
@@ -184,7 +191,7 @@ const UserProfile = () => {
                   </div>
                   <div className="absolute top-16 left-1/2 -translate-x-1/2">
                      <div className="w-28 h-28 bg-white dark:bg-zinc-900 rounded-full p-1.5 shadow-2xl relative group">
-                        <img src={preview || profile?.photoURL || `https://ui-avatars.com/api/?name=${profile?.displayName}`} className="w-full h-full rounded-full object-cover border-2 border-zinc-100"/>
+                        <img src={preview || profile?.photoURL || `https://ui-avatars.com/api/?name=${profile?.displayName}`} alt="Profile" className="w-full h-full rounded-full object-cover border-2 border-zinc-100"/>
                         {isEditing && <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center cursor-pointer"><Camera className="w-8 h-8 text-white" /><input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" /></div>}
                      </div>
                   </div>
