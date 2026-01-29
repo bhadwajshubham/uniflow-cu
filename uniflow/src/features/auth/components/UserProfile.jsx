@@ -1,28 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { db, storage, auth } from '../../../lib/firebase';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore'; // ✅ Changed getDoc to onSnapshot
+import { doc, onSnapshot, setDoc } from 'firebase/firestore'; 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
 import { 
   User, Phone, BookOpen, Layers, MapPin, LogOut, ShieldCheck, 
-  CheckCircle, Hash, Camera, Edit2, Save, X, Loader2, AlertCircle 
+  CheckCircle, Hash, Camera, Edit2, Save, X, Loader2, AlertCircle, RefreshCw
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const UserProfile = () => {
-  const { user } = useAuth();
+  const { user } = useAuth(); // Auth Context se user aa raha hai
   const navigate = useNavigate();
+  const location = useLocation(); // Navigation detect karne ke liye
 
-  // Mode: View (ID Card) vs Edit (Form)
+  // Mode & Loading States
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [authChecking, setAuthChecking] = useState(true); // New Safety State
+
+  // Data & Error States
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-
-  // Data State
   const [profile, setProfile] = useState(null);
+  
+  // Form State
   const [formData, setFormData] = useState({
     displayName: '',
     phone: '',
@@ -37,25 +41,35 @@ const UserProfile = () => {
   const [photo, setPhoto] = useState(null);
   const [preview, setPreview] = useState(null);
 
-  // 🔄 REAL-TIME LISTENER (The Permanent Fix)
+  // 🛡️ SAFETY LOCK 1: Handle Auth Delay
+  // Agar Auth load hone mein time lagaye, toh Infinite Loading ko roko
   useEffect(() => {
+    if (user) {
+      setAuthChecking(false);
+    } else {
+      // Agar 2 second tak user nahi mila, toh auth check band karo
+      const timer = setTimeout(() => setAuthChecking(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [user]);
+
+  // 🔄 REAL-TIME LISTENER (The Main Logic)
+  useEffect(() => {
+    // Agar user hi nahi hai (Login nahi hai), toh kuch mat karo
     if (!user) return;
 
     setLoading(true);
     const userRef = doc(db, 'users', user.uid);
 
-    // ✅ onSnapshot: Ye DB ke saath live connected rahega.
-    // Jaise hi kahin aur (Event Page pe) data badlega, ye AUTOMATIC update hoga.
+    // Snapshot Listener attach kar rahe hain
     const unsubscribe = onSnapshot(userRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setProfile(data);
         
-        const isStandard = ['B.E. (CSE)', 'B.E. (CSE-AI)', 'B.E. (ECE)', 'B.E. (ME)'].includes(data.branch);
-        
-        // Form data ko tabhi update karo agar hum edit mode mein nahi hain
-        // Taaki user type kar raha ho toh data overwrite na ho jaye
+        // Form ko sirf tab update karo jab hum edit nahi kar rahe
         if (!isEditing) {
+            const isStandard = ['B.E. (CSE)', 'B.E. (CSE-AI)', 'B.E. (ECE)', 'B.E. (ME)'].includes(data.branch);
             setFormData({
                 displayName: data.displayName || user.displayName || '',
                 phone: data.phone || '',
@@ -68,16 +82,17 @@ const UserProfile = () => {
             });
         }
       }
-      setLoading(false);
-    }, (error) => {
-      console.error("Real-time fetch error:", error);
+      setLoading(false); // Data milte hi loading band
+    }, (err) => {
+      console.error("Fetch Error:", err);
+      setError("Failed to load profile. Please check internet.");
       setLoading(false);
     });
 
-    // Cleanup listener when leaving page
+    // Cleanup: Jab page hategs, listener bhi hatao
     return () => unsubscribe();
 
-  }, [user]); // Removed isEditing to prevent loop, logic handled inside
+  }, [user, location.key]); // ✅ location.key: Forces logic to run on navigation
 
   // 🛡️ INPUT HANDLERS
   const handleChange = (e) => {
@@ -101,7 +116,7 @@ const UserProfile = () => {
     }
   };
 
-  // 💾 SAVE
+  // 💾 SAVE HANDLER
   const handleSave = async (e) => {
     e.preventDefault();
     if (saving) return; 
@@ -109,6 +124,7 @@ const UserProfile = () => {
     setSaving(true);
     setError('');
 
+    // Validations
     if (formData.phone.length !== 10) { setError("Phone number must be exactly 10 digits."); setSaving(false); return; }
     if (formData.rollNo.length < 5) { setError("Enter a valid Roll Number."); setSaving(false); return; }
     if (!formData.displayName.trim()) { setError("Name cannot be empty."); setSaving(false); return; }
@@ -136,7 +152,6 @@ const UserProfile = () => {
         photoURL: finalPhotoURL,
         isProfileComplete: true,
         updatedAt: new Date(),
-        // TermsAccepted maintain rahega
         termsAccepted: profile?.termsAccepted || false 
       };
 
@@ -155,10 +170,36 @@ const UserProfile = () => {
 
   const handleLogout = async () => { await signOut(auth); navigate('/login'); };
 
-  if (loading) return <div className="min-h-screen flex justify-center items-center"><Loader2 className="animate-spin w-8 h-8 text-indigo-600"/></div>;
+  // --- RENDERING STATES ---
+
+  // 1. Auth Loading State (Waiting for Firebase User)
+  if (authChecking && !user) {
+    return (
+        <div className="min-h-screen flex justify-center items-center bg-zinc-50 dark:bg-black">
+            <Loader2 className="animate-spin w-8 h-8 text-indigo-600"/>
+        </div>
+    );
+  }
+
+  // 2. Not Logged In State (Safety Fallback)
+  if (!authChecking && !user) {
+      navigate('/login');
+      return null;
+  }
+
+  // 3. Profile Data Loading State
+  if (loading) {
+      return (
+        <div className="min-h-screen flex flex-col justify-center items-center bg-zinc-50 dark:bg-black gap-4">
+            <Loader2 className="animate-spin w-8 h-8 text-indigo-600"/>
+            <p className="text-zinc-400 text-xs animate-pulse">Loading Profile...</p>
+        </div>
+      );
+  }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black pt-20 pb-24 px-4">
+    // ✅ KEY PROP ADDED: Forces React to re-render if URL changes
+    <div key={location.key} className="min-h-screen bg-zinc-50 dark:bg-black pt-20 pb-24 px-4">
       <div className="max-w-md mx-auto">
 
         {/* --- HEADER --- */}
@@ -198,7 +239,7 @@ const UserProfile = () => {
               <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-[10px] font-bold uppercase flex items-center">
                 <ShieldCheck className="w-3 h-3 mr-1" /> Verified
               </span>
-              {/* ✅ CONSENT BADGE: Automatically updates via Real-time Listener */}
+              {/* ✅ REAL-TIME CONSENT CHECK */}
               {profile?.termsAccepted && (
                 <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold uppercase flex items-center">
                   <CheckCircle className="w-3 h-3 mr-1" /> Consent Given
@@ -258,6 +299,7 @@ const UserProfile = () => {
               </div>
             </div>
 
+            {/* BRANCH & OTHER INPUTS (Same as before) */}
             <div>
               <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Branch / Course</label>
               <select name="branch" value={formData.branch} onChange={handleChange} className="w-full p-3 bg-zinc-50 rounded-xl font-bold outline-none mb-2 appearance-none">
