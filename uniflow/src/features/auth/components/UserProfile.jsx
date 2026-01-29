@@ -22,10 +22,10 @@ const UserProfile = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [profile, setProfile] = useState(null);
-  
   const [photo, setPhoto] = useState(null);
   const [preview, setPreview] = useState(null);
   
+  // ✅ All Fields Restored
   const [formData, setFormData] = useState({
     displayName: '', 
     phone: '', 
@@ -65,14 +65,14 @@ const UserProfile = () => {
     return () => unsubscribe();
   }, [user]);
 
-  // 🔥 FASTEST HANDLER (Optimistic UI Update)
+  // 🔥 FASTEST HANDLER (Optimistic UI Update with Checkboxes)
   const handleAcceptTerms = async () => {
     if (!termsChecked || !privacyChecked) {
         setError("Please check both boxes to continue.");
         return;
     }
 
-    // 🚀 SPEED TRICK: Pehle UI Update karo (Profile dikhao)
+    // 🚀 SPEED TRICK: Pehle UI Update karo (Profile dikhao) - INSTANT
     setProfile(prev => ({ ...prev, termsAccepted: true }));
     setSuccess("Terms Accepted! Welcome.");
 
@@ -85,7 +85,6 @@ const UserProfile = () => {
         
         setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-        // Agar fail hua toh error dikhao (User already inside hai, so UX smooth rahega)
         console.error("Terms Sync Error:", err);
     }
   };
@@ -127,7 +126,7 @@ const UserProfile = () => {
       setIsEditing(false); 
       setSuccess("Profile Updated!"); 
 
-      // DB Update
+      // DB Update (Merge True preserves Admin Role)
       await setDoc(doc(db, 'users', user.uid), updatedData, { merge: true });
       
       setTimeout(() => setSuccess(''), 3000);
@@ -156,20 +155,20 @@ const UserProfile = () => {
         
         {/* 🔴 CONDITION: IF TERMS NOT ACCEPTED -> SHOW CHECKBOX CARD */}
         {!profile?.termsAccepted ? (
-            <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl p-8 text-center border-2 border-indigo-100">
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl p-8 text-center border-2 border-indigo-100 dark:border-zinc-800 animate-in fade-in zoom-in duration-300">
                 <FileText className="w-16 h-16 text-indigo-600 mx-auto mb-4" />
-                <h2 className="text-2xl font-black mb-2 dark:text-white">Final Step!</h2>
-                <p className="text-zinc-500 text-sm mb-6">Please accept the rules to proceed.</p>
+                <h2 className="text-2xl font-black mb-2 dark:text-white">Consent Required</h2>
+                <p className="text-zinc-500 text-sm mb-6">Please review and accept to continue</p>
                 
-                {/* ✅ CHECKBOXES ADDED */}
+                {/* ✅ CHECKBOXES UI (Image 3 Style) */}
                 <div className="text-left space-y-3 mb-6 bg-zinc-50 dark:bg-zinc-800 p-4 rounded-xl">
                     <label className="flex items-center gap-3 cursor-pointer">
                         <input type="checkbox" checked={termsChecked} onChange={e => setTermsChecked(e.target.checked)} className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"/>
-                        <span className="text-sm font-medium text-zinc-700 dark:text-gray-300">I agree to <a href="/terms" target="_blank" className="text-indigo-600 underline">Terms & Conditions</a></span>
+                        <span className="text-sm font-medium text-zinc-700 dark:text-gray-300">I agree to the <a href="/terms" target="_blank" className="text-indigo-600 underline font-bold" onClick={e=>e.stopPropagation()}>Terms & Conditions</a></span>
                     </label>
                     <label className="flex items-center gap-3 cursor-pointer">
                         <input type="checkbox" checked={privacyChecked} onChange={e => setPrivacyChecked(e.target.checked)} className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"/>
-                        <span className="text-sm font-medium text-zinc-700 dark:text-gray-300">I accept the <a href="/privacy" target="_blank" className="text-indigo-600 underline">Privacy Policy</a></span>
+                        <span className="text-sm font-medium text-zinc-700 dark:text-gray-300">I agree to the <a href="/privacy" target="_blank" className="text-indigo-600 underline font-bold" onClick={e=>e.stopPropagation()}>Privacy Policy</a></span>
                     </label>
                 </div>
 
@@ -178,24 +177,25 @@ const UserProfile = () => {
                 <button 
                     onClick={handleAcceptTerms} 
                     disabled={!termsChecked || !privacyChecked} 
-                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold transition-all active:scale-95"
+                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
-                    Accept & Continue
+                    <CheckCircle className="w-5 h-5" /> Accept & Continue
                 </button>
             </div>
         ) : (
             /* 🟢 CONDITION: TERMS ACCEPTED -> SHOW PROFILE IMMEDIATELY */
             <>
+                {/* HEADER & PHOTO */}
                 <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 mb-6 relative">
                   <div className="h-32 bg-gradient-to-r from-indigo-600 to-purple-600 relative">
-                     <button onClick={() => setIsEditing(!isEditing)} className="absolute top-4 right-4 bg-white/20 text-white p-2 rounded-full">
+                     <button onClick={() => setIsEditing(!isEditing)} className="absolute top-4 right-4 bg-white/20 backdrop-blur-md text-white p-2 rounded-full hover:bg-white/30 transition z-10">
                         {isEditing ? <X className="w-5 h-5" /> : <Edit2 className="w-5 h-5" />}
                      </button>
                   </div>
                   <div className="absolute top-16 left-1/2 -translate-x-1/2">
-                     <div className="w-28 h-28 bg-white dark:bg-zinc-900 rounded-full p-1.5 shadow-2xl relative">
-                        <img src={preview || profile?.photoURL || `https://ui-avatars.com/api/?name=${profile?.displayName}`} className="w-full h-full rounded-full object-cover"/>
-                        {isEditing && <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center"><Camera className="w-8 h-8 text-white" /><input type="file" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" /></div>}
+                     <div className="w-28 h-28 bg-white dark:bg-zinc-900 rounded-full p-1.5 shadow-2xl relative group">
+                        <img src={preview || profile?.photoURL || `https://ui-avatars.com/api/?name=${profile?.displayName}`} alt="Profile" className="w-full h-full rounded-full object-cover border-2 border-zinc-100"/>
+                        {isEditing && <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center cursor-pointer"><Camera className="w-8 h-8 text-white" /><input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" /></div>}
                      </div>
                   </div>
                   <div className="pt-16 pb-6 px-6 text-center mt-2">
@@ -211,6 +211,7 @@ const UserProfile = () => {
                 {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-xl text-sm font-bold">{error}</div>}
                 {success && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-xl text-sm font-bold">{success}</div>}
 
+                {/* VIEW MODE */}
                 {!isEditing ? (
                   <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-4">
                      <div className="flex items-center p-3 border-b dark:border-zinc-800"><Hash className="w-5 h-5 mr-3 text-blue-500"/><p className="font-bold dark:text-white">{profile?.rollNo || "Not Set"}</p></div>
@@ -223,6 +224,7 @@ const UserProfile = () => {
                      </div>
                   </div>
                 ) : (
+                  /* EDIT MODE - FIXED INVISIBLE TEXT */
                   <form onSubmit={handleSave} className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6 space-y-4">
                     <input name="displayName" value={formData.displayName} onChange={handleChange} placeholder="Full Name" className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold" />
                     <div className="grid grid-cols-2 gap-4">
