@@ -1,8 +1,10 @@
-import { db } from '../lib/firebase';
+// 👇 YE LINE FIX KI HAI (3 dots taaki src folder tak pahunche)
+import { db } from '../../../lib/firebase'; 
 import { doc, runTransaction, serverTimestamp, collection, query, where, getDocs, limit } from 'firebase/firestore';
 
 /**
  * 📧 PROFESSIONAL EMAIL SENDER
+ * Includes: QR Code Image & Deep Link Button
  */
 const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, details) => {
   // 1. LOCALHOST GUARD
@@ -30,39 +32,59 @@ const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, 
           <html>
           <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f5; padding: 20px; margin: 0;">
             <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+              
               <div style="background-color: #4f46e5; padding: 30px 20px; text-align: center;">
                 <h1 style="color: #ffffff; margin: 0; font-size: 24px;">UniFlow Events</h1>
               </div>
+
               <div style="padding: 30px 20px; text-align: center;">
                 <h2 style="color: #18181b; margin-top: 0;">You're going to ${eventTitle}! 🚀</h2>
                 <p style="color: #52525b; font-size: 16px; line-height: 1.5;">
                   Hi <strong>${userName}</strong>, your spot is confirmed. <br/>
                   Simply scan this QR code at the entrance.
                 </p>
+
                 <div style="margin: 25px 0;">
                   <img src="${qrCodeUrl}" alt="Ticket QR Code" style="width: 180px; height: 180px; border: 2px solid #e4e4e7; border-radius: 12px; padding: 10px;" />
                   <p style="color: #71717a; font-size: 14px; margin-top: 5px; font-family: monospace;">ID: ${ticketId}</p>
                 </div>
+
                 <div style="background-color: #f4f4f5; border-radius: 8px; padding: 15px; text-align: left; margin-bottom: 25px;">
                   ${details}
                 </div>
+
                 <a href="${ticketLink}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 16px;">
                   View Ticket in App
                 </a>
               </div>
+
+              <div style="background-color: #fafafa; padding: 20px; text-align: center; border-top: 1px solid #e4e4e7;">
+                <p style="color: #a1a1aa; font-size: 12px; margin: 0;">
+                  Need help? Contact support via the UniFlow App.<br/>
+                  &copy; ${new Date().getFullYear()} UniFlow. All rights reserved.
+                </p>
+              </div>
+
             </div>
           </body>
           </html>
         `
       })
     });
+
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.indexOf("application/json") !== -1) {
+      const data = await response.json();
+      if (!response.ok) console.warn("⚠️ Email API Warning:", data);
+      else console.log("✅ Professional Email Sent!");
+    }
+
   } catch (err) {
-    console.error("❌ Email Error:", err);
+    console.error("❌ Email Error (Non-blocking):", err);
   }
 };
 
 const validateRestrictions = (eventData, user, studentData) => {
-  // University Only Check
   if (eventData.isUniversityOnly && !user.email.toLowerCase().endsWith('@chitkara.edu.in')) {
     throw new Error("🚫 Restricted: Official @chitkara.edu.in email required.");
   }
@@ -127,13 +149,13 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
       }
     });
 
-    // Send Email
     sendConfirmationEmail(
       user.email,
       user.displayName,
       eventDataForEmail.title,
       `${eventId}_${user.uid}`,
-      `<p style="margin: 5px 0;"><strong>📅 Date:</strong> ${eventDataForEmail.date}</p>`
+      `<p style="margin: 5px 0;"><strong>📅 Date:</strong> ${eventDataForEmail.date}</p>
+       <p style="margin: 5px 0;"><strong>📍 Location:</strong> ${eventDataForEmail.venue || eventDataForEmail.location}</p>`
     );
 
     return { success: true };
