@@ -3,8 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { db, auth } from '../../../lib/firebase';
 import { doc, getDoc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { Calendar, MapPin, Clock, ArrowLeft, Share2, Shield, User, Phone, Loader2, QrCode, X } from 'lucide-react';
-// ✅ Import path correct hai
-import { registerForEvent, registerTeam, joinTeam } from '../../../services/registrationService';
+
+// ✅ CORRECT PATH: Sirf ek folder peeche (components -> events -> services)
+import { registerForEvent, registerTeam, joinTeam } from '../services/registrationService';
 
 const EventDetailsPage = () => {
   const { id } = useParams();
@@ -181,7 +182,6 @@ const EventDetailsPage = () => {
            <div className="bg-white dark:bg-zinc-900 rounded-2xl p-8 max-w-sm w-full">
              <h3 className="text-xl font-bold mb-4 flex items-center gap-2 dark:text-white"><Shield className="w-6 h-6 text-indigo-600"/> Final Consent</h3>
              <div className="space-y-3 mb-6">
-                {/* 🔥 HYPERLINKS ADDED HERE */}
                 <label className="flex gap-3 cursor-pointer dark:text-gray-300">
                     <input type="checkbox" checked={termsChecked} onChange={e => setTermsChecked(e.target.checked)}/> 
                     <span>I agree to <a href="/terms" target="_blank" className="text-indigo-600 font-bold underline" onClick={e=>e.stopPropagation()}>Terms</a></span>
