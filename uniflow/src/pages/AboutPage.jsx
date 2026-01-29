@@ -29,7 +29,7 @@ const AboutPage = () => {
              </p>
 
              <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-lg mx-auto mb-6 text-sm">
-               "I built UniFlow to solve the chaos of paper tickets. My goal is to make campus life seamless for every student and society at Chitkara University."
+               "I built UniFlow to solve the chaos of paper tickets. My goal is to make campus life seamless for every student."
              </p>
 
              {/* Social Links */}

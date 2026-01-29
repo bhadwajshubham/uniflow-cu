@@ -4,10 +4,7 @@ import { db, storage, auth } from '../../../lib/firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'; 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
-import { 
-  User, Phone, BookOpen, Hash, Camera, Edit2, Save, X, 
-  Loader2, AlertCircle, FileText, CheckCircle, ShieldCheck, LogOut 
-} from 'lucide-react';
+import { User, Phone, BookOpen, Hash, Camera, Edit2, Save, X, Loader2, AlertCircle, FileText, CheckCircle, ShieldCheck, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const UserProfile = () => {
@@ -18,17 +15,23 @@ const UserProfile = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false); 
   const [consenting, setConsenting] = useState(false);
-  
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [profile, setProfile] = useState(null);
-  
-  const [formData, setFormData] = useState({
-    displayName: '', phone: '', rollNo: '', branch: 'B.E. (CSE)', customBranch: '', semester: '1st', group: '', residency: 'Day Scholar'
-  });
-  
   const [photo, setPhoto] = useState(null);
   const [preview, setPreview] = useState(null);
+  
+  // ✅ RESTORED ALL MISSING FIELDS
+  const [formData, setFormData] = useState({
+    displayName: '', 
+    phone: '', 
+    rollNo: '', 
+    branch: 'B.E. (CSE)', 
+    customBranch: '', 
+    semester: '1st', 
+    group: '', 
+    residency: 'Day Scholar'
+  });
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
@@ -86,7 +89,6 @@ const UserProfile = () => {
         finalPhotoURL = await getDownloadURL(storageRef);
       }
 
-      // 🛡️ SECURITY FIX: role field removed to prevent overwriting admin rights
       const updatedData = {
         displayName: formData.displayName.trim(),
         phone: formData.phone,
@@ -101,7 +103,6 @@ const UserProfile = () => {
       };
 
       await setDoc(doc(db, 'users', user.uid), updatedData, { merge: true });
-      
       setProfile(prev => ({ ...prev, ...updatedData })); 
       setIsEditing(false); 
       setSuccess("Profile Updated!"); 
@@ -131,26 +132,25 @@ const UserProfile = () => {
         {!profile?.termsAccepted ? (
             <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl p-8 text-center border-2 border-indigo-100">
                 <FileText className="w-16 h-16 text-indigo-600 mx-auto mb-4" />
-                <h2 className="text-2xl font-black mb-2">Final Step!</h2>
-                <p className="text-zinc-500 text-sm mb-6">Accept terms to continue.</p>
+                <h2 className="text-2xl font-black mb-2 dark:text-white">Final Step!</h2>
                 <button onClick={handleAcceptTerms} disabled={consenting} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold">{consenting ? <Loader2 className="animate-spin"/> : "I Accept"}</button>
             </div>
         ) : (
             <>
-                <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl overflow-hidden border mb-6 relative">
+                <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 mb-6 relative">
                   <div className="h-32 bg-gradient-to-r from-indigo-600 to-purple-600 relative">
                      <button onClick={() => setIsEditing(!isEditing)} className="absolute top-4 right-4 bg-white/20 text-white p-2 rounded-full">
                         {isEditing ? <X className="w-5 h-5" /> : <Edit2 className="w-5 h-5" />}
                      </button>
                   </div>
                   <div className="absolute top-16 left-1/2 -translate-x-1/2">
-                     <div className="w-28 h-28 bg-white rounded-full p-1.5 shadow-2xl relative">
+                     <div className="w-28 h-28 bg-white dark:bg-zinc-900 rounded-full p-1.5 shadow-2xl relative">
                         <img src={preview || profile?.photoURL || `https://ui-avatars.com/api/?name=${profile?.displayName}`} className="w-full h-full rounded-full object-cover"/>
                         {isEditing && <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center"><Camera className="w-8 h-8 text-white" /><input type="file" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" /></div>}
                      </div>
                   </div>
                   <div className="pt-16 pb-6 px-6 text-center mt-2">
-                    <h2 className="text-2xl font-black">{profile?.displayName || "Student Name"}</h2>
+                    <h2 className="text-2xl font-black dark:text-white">{profile?.displayName || "Student Name"}</h2>
                     <div className="flex justify-center gap-2 mt-1">
                         {profile?.role === 'admin' && <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 rounded-full">ADMIN</span>}
                         {profile?.role === 'superadmin' && <span className="bg-purple-100 text-purple-700 text-[10px] font-bold px-2 rounded-full">SUPER ADMIN</span>}
@@ -163,20 +163,34 @@ const UserProfile = () => {
                 {success && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-xl text-sm font-bold">{success}</div>}
 
                 {!isEditing ? (
-                  <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border p-4">
-                     <div className="flex items-center p-3 border-b"><Hash className="w-5 h-5 mr-3 text-blue-500"/><p className="font-bold">{profile?.rollNo || "Not Set"}</p></div>
-                     <div className="flex items-center p-3 border-b"><BookOpen className="w-5 h-5 mr-3 text-purple-500"/><p className="font-bold">{profile?.branch || "Not Set"}</p></div>
-                     <div className="flex items-center p-3"><Phone className="w-5 h-5 mr-3 text-green-500"/><p className="font-bold">{profile?.phone || "Not Set"}</p></div>
+                  <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-4">
+                     <div className="flex items-center p-3 border-b dark:border-zinc-800"><Hash className="w-5 h-5 mr-3 text-blue-500"/><p className="font-bold dark:text-white">{profile?.rollNo || "Not Set"}</p></div>
+                     <div className="flex items-center p-3 border-b dark:border-zinc-800"><BookOpen className="w-5 h-5 mr-3 text-purple-500"/><p className="font-bold dark:text-white">{profile?.branch || "Not Set"}</p></div>
+                     <div className="flex items-center p-3"><Phone className="w-5 h-5 mr-3 text-green-500"/><p className="font-bold dark:text-white">{profile?.phone || "Not Set"}</p></div>
+                     <div className="grid grid-cols-3 border-t dark:border-zinc-800 pt-3 mt-2">
+                        <div className="text-center"><p className="text-xs text-gray-400">SEM</p><p className="font-bold dark:text-white">{profile?.semester}</p></div>
+                        <div className="text-center border-l dark:border-zinc-800"><p className="text-xs text-gray-400">GROUP</p><p className="font-bold dark:text-white">{profile?.group || "-"}</p></div>
+                        <div className="text-center border-l dark:border-zinc-800"><p className="text-xs text-gray-400">STAY</p><p className="font-bold dark:text-white">{profile?.residency}</p></div>
+                     </div>
                   </div>
                 ) : (
-                  <form onSubmit={handleSave} className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border p-6 space-y-4">
-                    <input name="displayName" value={formData.displayName} onChange={handleChange} placeholder="Full Name" className="w-full p-3 bg-zinc-50 rounded-xl font-bold" />
+                  <form onSubmit={handleSave} className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6 space-y-4">
+                    {/* 🔥 FIX: Force text color to black/zinc-900 for inputs so they are visible on white background */}
+                    <input name="displayName" value={formData.displayName} onChange={handleChange} placeholder="Full Name" className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold" />
                     <div className="grid grid-cols-2 gap-4">
-                      <input name="phone" value={formData.phone} onChange={handleChange} placeholder="Phone" className="w-full p-3 bg-zinc-50 rounded-xl font-bold" />
-                      <input name="rollNo" value={formData.rollNo} onChange={handleChange} placeholder="Roll No" className="w-full p-3 bg-zinc-50 rounded-xl font-bold" />
+                      <input name="phone" value={formData.phone} onChange={handleChange} placeholder="Phone" className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold" />
+                      <input name="rollNo" value={formData.rollNo} onChange={handleChange} placeholder="Roll No" className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold" />
                     </div>
-                    <select name="branch" value={formData.branch} onChange={handleChange} className="w-full p-3 bg-zinc-50 rounded-xl font-bold"><option>B.E. (CSE)</option><option>B.E. (CSE-AI)</option><option>B.E. (ECE)</option><option>B.E. (ME)</option><option>Others</option></select>
-                    {formData.branch === 'Others' && <input name="customBranch" value={formData.customBranch} onChange={handleChange} placeholder="Specify Branch" className="w-full p-3 bg-zinc-50 rounded-xl font-bold"/>}
+                    <select name="branch" value={formData.branch} onChange={handleChange} className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold"><option>B.E. (CSE)</option><option>B.E. (CSE-AI)</option><option>B.E. (ECE)</option><option>B.E. (ME)</option><option>Others</option></select>
+                    {formData.branch === 'Others' && <input name="customBranch" value={formData.customBranch} onChange={handleChange} placeholder="Specify Branch" className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold"/>}
+                    
+                    {/* ✅ RESTORED MISSING FIELDS */}
+                    <div className="grid grid-cols-2 gap-4">
+                       <select name="semester" value={formData.semester} onChange={handleChange} className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold">{['1st','2nd','3rd','4th','5th','6th','7th','8th'].map(n=><option key={n}>{n}</option>)}</select>
+                       <input name="group" value={formData.group} onChange={handleChange} placeholder="Group No" className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold"/>
+                    </div>
+                    <select name="residency" value={formData.residency} onChange={handleChange} className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold"><option>Day Scholar</option><option>Hosteller (Boys)</option><option>Hosteller (Girls)</option></select>
+
                     <button type="submit" disabled={saving} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black uppercase flex justify-center items-center gap-2">{saving ? <Loader2 className="animate-spin"/> : "Save Details"}</button>
                   </form>
                 )}
