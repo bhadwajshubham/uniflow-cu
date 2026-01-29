@@ -1,98 +1,43 @@
-import { db } from '../../../lib/firebase';
+import { db } from '../lib/firebase';
 import { doc, runTransaction, serverTimestamp, collection, query, where, getDocs, limit } from 'firebase/firestore';
 
 /**
- * 📧 PROFESSIONAL EMAIL SENDER
- * Includes: QR Code Image & Deep Link Button
+ * 📧 EMAIL LOGIC (Backend API call)
  */
 const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, details) => {
-  // 1. LOCALHOST GUARD
-  if (window.location.hostname === 'localhost' && window.location.port === '5173') {
-    console.log("🛑 Localhost: Email skipped (Mock Mode).");
-    return;
-  }
+  if (window.location.hostname === 'localhost' && window.location.port === '5173') return;
 
-  console.log(`📨 Sending professional email to ${userEmail}...`);
-  
-  // 2. GENERATE ASSETS
-  // We use this API to create a QR image that works in Gmail
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${ticketId}`;
-  
-  // Dynamic Link to your App (Works on Localhost and Vercel automatically)
   const appUrl = window.location.origin; 
-  const ticketLink = `${appUrl}/tickets`; // Assuming your ticket page is at /tickets
+  const ticketLink = `${appUrl}/my-tickets`; 
 
   try {
-    const response = await fetch('/api', {
+    await fetch('/api/email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to: userEmail,
         email: userEmail,
         subject: `🎟️ Ticket Confirmed: ${eventTitle}`,
-        // ✨ HTML TEMPLATE STARTS HERE ✨
         html: `
-          <!DOCTYPE html>
-          <html>
-          <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f5; padding: 20px; margin: 0;">
-            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-              
-              <div style="background-color: #4f46e5; padding: 30px 20px; text-align: center;">
-                <h1 style="color: #ffffff; margin: 0; font-size: 24px;">UniFlow Events</h1>
-              </div>
-
-              <div style="padding: 30px 20px; text-align: center;">
-                <h2 style="color: #18181b; margin-top: 0;">You're going to ${eventTitle}! 🚀</h2>
-                <p style="color: #52525b; font-size: 16px; line-height: 1.5;">
-                  Hi <strong>${userName}</strong>, your spot is confirmed. <br/>
-                  Simply scan this QR code at the entrance.
-                </p>
-
-                <div style="margin: 25px 0;">
-                  <img src="${qrCodeUrl}" alt="Ticket QR Code" style="width: 180px; height: 180px; border: 2px solid #e4e4e7; border-radius: 12px; padding: 10px;" />
-                  <p style="color: #71717a; font-size: 14px; margin-top: 5px; font-family: monospace;">ID: ${ticketId}</p>
-                </div>
-
-                <div style="background-color: #f4f4f5; border-radius: 8px; padding: 15px; text-align: left; margin-bottom: 25px;">
-                  ${details}
-                </div>
-
-                <a href="${ticketLink}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 16px;">
-                  View Ticket in App
-                </a>
-              </div>
-
-              <div style="background-color: #fafafa; padding: 20px; text-align: center; border-top: 1px solid #e4e4e7;">
-                <p style="color: #a1a1aa; font-size: 12px; margin: 0;">
-                  Need help? Contact support via the UniFlow App.<br/>
-                  &copy; ${new Date().getFullYear()} UniFlow. All rights reserved.
-                </p>
-              </div>
-
-            </div>
-          </body>
-          </html>
+          <h1>UniFlow Events</h1>
+          <p>Hi ${userName}, your spot for <strong>${eventTitle}</strong> is confirmed!</p>
+          <img src="${qrCodeUrl}" alt="QR Code" style="width:150px;"/>
+          <br/>
+          <a href="${ticketLink}">View Ticket in App</a>
         `
       })
     });
-
-    const contentType = response.headers.get("content-type");
-    if (contentType && contentType.indexOf("application/json") !== -1) {
-      const data = await response.json();
-      if (!response.ok) console.warn("⚠️ Email API Warning:", data);
-      else console.log("✅ Professional Email Sent!");
-    }
-
-  } catch (err) {
-    console.error("❌ Email Error:", err);
-  }
+  } catch (err) { console.error("Email Error:", err); }
 };
 
-const validateRestrictions = (eventData, user, studentData) => {
+const validateRestrictions = (eventData, user) => {
   if (eventData.isUniversityOnly && !user.email.toLowerCase().endsWith('@chitkara.edu.in')) {
     throw new Error("🚫 Restricted: Official @chitkara.edu.in email required.");
   }
 };
+
+// --- EXPORTED FUNCTIONS ---
 
 export const registerForEvent = async (eventId, user, profile, answers = {}) => {
   if (!user) throw new Error("User must be logged in");
@@ -100,8 +45,7 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
   const eventRef = doc(db, 'events', eventId);
   const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
   const statsRef = doc(db, "system_stats", "daily_emails");
-  
-  let eventDataForEmail = {}; 
+  let eventData = {}; 
 
   try {
     await runTransaction(db, async (transaction) => {
@@ -110,67 +54,46 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
       const statsSnap = await transaction.get(statsRef);
 
       if (!eventDoc.exists()) throw new Error("Event not found");
-      eventDataForEmail = eventDoc.data();
+      eventData = eventDoc.data();
 
-      validateRestrictions(eventDataForEmail, user, profile);
+      validateRestrictions(eventData, user);
 
-      if ((eventDataForEmail.ticketsSold || 0) >= parseInt(eventDataForEmail.totalTickets)) {
-        throw new Error("SOLD_OUT");
-      }
-      if (existingReg.exists()) {
-        throw new Error("ALREADY_BOOKED");
-      }
+      if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) throw new Error("SOLD_OUT");
+      if (existingReg.exists()) throw new Error("ALREADY_BOOKED");
 
-      const newTicket = {
+      transaction.set(registrationRef, {
         eventId,
-        eventTitle: eventDataForEmail.title,
-        eventDate: eventDataForEmail.date,
-        eventTime: eventDataForEmail.time || 'TBA',
-        eventLocation: eventDataForEmail.location,
+        eventTitle: eventData.title,
+        eventDate: eventData.date,
+        eventTime: eventData.time || 'TBA',
+        eventLocation: eventData.venue || eventData.location || 'Campus',
+        eventImage: eventData.image || '',
         userId: user.uid,
         userEmail: user.email,
-        userName: user.displayName,
+        userName: profile?.displayName || user.displayName,
         userRollNo: profile?.rollNo || 'N/A',
         userPhone: profile?.phone || 'N/A',
         answers: answers,
         type: 'individual',
         status: 'confirmed',
         createdAt: serverTimestamp(),
-        used: false
-      };
+        used: false,
+        qrCode: `TICKET-${eventId}-${user.uid}`
+      });
 
-      transaction.set(registrationRef, newTicket);
-      transaction.update(eventRef, { ticketsSold: (eventDataForEmail.ticketsSold || 0) + 1 });
+      transaction.update(eventRef, { ticketsSold: (eventData.ticketsSold || 0) + 1 });
       
-      if (statsSnap.exists()) {
-        transaction.update(statsRef, { count: (statsSnap.data().count || 0) + 1 });
-      } else {
-        transaction.set(statsRef, { count: 1 });
-      }
+      if (statsSnap.exists()) transaction.update(statsRef, { count: (statsSnap.data().count || 0) + 1 });
+      else transaction.set(statsRef, { count: 1 });
     });
 
-    // TRIGGER PROFESSIONAL EMAIL
-    await sendConfirmationEmail(
-      user.email,
-      user.displayName,
-      eventDataForEmail.title,
-      `${eventId}_${user.uid}`,
-      `<p style="margin: 5px 0;"><strong>📅 Date:</strong> ${eventDataForEmail.date}</p>
-       <p style="margin: 5px 0;"><strong>📍 Location:</strong> ${eventDataForEmail.location}</p>`
-    );
-
+    sendConfirmationEmail(user.email, user.displayName, eventData.title, `${eventId}_${user.uid}`, "");
     return { success: true };
-
-  } catch (error) {
-    console.error("Registration Error:", error);
-    throw error;
-  }
+  } catch (error) { throw error; }
 };
 
 export const registerTeam = async (eventId, user, teamName, studentData) => {
   if (!user) throw new Error("Login required");
-  if (!teamName || teamName.length < 3) throw new Error("Invalid Team Name");
-
   const eventRef = doc(db, 'events', eventId);
   const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
   const teamCode = Math.random().toString(36).substring(2, 8).toUpperCase(); 
@@ -179,12 +102,10 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
     await runTransaction(db, async (transaction) => {
       const eventDoc = await transaction.get(eventRef);
       const existingReg = await transaction.get(registrationRef);
-
       if (!eventDoc.exists()) throw new Error("Event not found");
       const eventData = eventDoc.data();
-
-      validateRestrictions(eventData, user, studentData);
-
+      
+      validateRestrictions(eventData, user);
       if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) throw new Error("Sold Out");
       if (existingReg.exists()) throw new Error("Already registered");
 
@@ -202,56 +123,34 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
         status: 'confirmed',
         createdAt: serverTimestamp(),
       });
-
       transaction.update(eventRef, { ticketsSold: (eventData.ticketsSold || 0) + 1 });
     });
-
-    await sendConfirmationEmail(
-      user.email,
-      user.displayName,
-      "Team Event", 
-      `${eventId}_${user.uid}`,
-      `<p><strong>Team:</strong> ${teamName}</p><p><strong>Code:</strong> ${teamCode}</p>`
-    );
-
     return { success: true, teamCode };
   } catch (error) { throw error; }
 };
 
 export const joinTeam = async (eventId, user, teamCode, studentData) => {
   if (!user) throw new Error("Login required");
-  if (!teamCode) throw new Error("Team Code required");
-
   const eventRef = doc(db, 'events', eventId);
   const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
-  const q = query(
-    collection(db, 'registrations'), 
-    where('eventId', '==', eventId),
-    where('teamCode', '==', teamCode.trim().toUpperCase()),
-    where('type', '==', 'team_leader'),
-    limit(1)
-  );
+  const q = query(collection(db, 'registrations'), where('eventId', '==', eventId), where('teamCode', '==', teamCode.trim().toUpperCase()), where('type', '==', 'team_leader'), limit(1));
 
   try {
     const leaderSnap = await getDocs(q);
     if (leaderSnap.empty) throw new Error("Invalid Team Code");
     const leaderRef = leaderSnap.docs[0].ref;
-    let teamName = "";
 
     await runTransaction(db, async (transaction) => {
-      const eventDoc = await transaction.get(eventRef);
-      const existingReg = await transaction.get(registrationRef);
       const leaderDoc = await transaction.get(leaderRef);
-
       if (!leaderDoc.exists()) throw new Error("Team Disbanded");
       const leaderData = leaderDoc.data();
-      teamName = leaderData.teamName;
       if (leaderData.teamSize >= leaderData.maxTeamSize) throw new Error("Team Full");
 
+      const eventDoc = await transaction.get(eventRef);
       const eventData = eventDoc.data();
-      validateRestrictions(eventData, user, studentData);
-
-      if ((eventData.ticketsSold || 0) >= parseInt(eventData.totalTickets)) throw new Error("Sold Out");
+      const existingReg = await transaction.get(registrationRef);
+      
+      validateRestrictions(eventData, user);
       if (existingReg.exists()) throw new Error("Already registered");
 
       transaction.set(registrationRef, {
@@ -266,19 +165,9 @@ export const joinTeam = async (eventId, user, teamCode, studentData) => {
         status: 'confirmed',
         createdAt: serverTimestamp(),
       });
-
       transaction.update(leaderRef, { teamSize: leaderData.teamSize + 1 });
       transaction.update(eventRef, { ticketsSold: (eventData.ticketsSold || 0) + 1 });
     });
-
-    await sendConfirmationEmail(
-      user.email,
-      user.displayName,
-      "Team Event",
-      `${eventId}_${user.uid}`,
-      `<p>Joined Team: <strong>${teamName}</strong></p>`
-    );
-
     return { success: true };
   } catch (error) { throw error; }
 };

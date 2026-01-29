@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, auth } from '../../../lib/firebase';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { Calendar, MapPin, Clock, ArrowLeft, Share2, Shield, User, Phone, BookOpen, Loader2 } from 'lucide-react';
-import { registerForEvent, registerTeam, joinTeam } from '../services/registrationService';
+// 👇 IMPORT FIX: Correct path to the file created in Step 1
+import { registerForEvent, registerTeam, joinTeam } from '../../../services/registrationService';
 
-const EventDetails = () => {
+const EventDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   
@@ -25,7 +26,7 @@ const EventDetails = () => {
   const [termsChecked, setTermsChecked] = useState(false);
   const [privacyChecked, setPrivacyChecked] = useState(false);
 
-  // 📝 Profile Form State (Updated with Branch Logic)
+  // 📝 Profile Form State
   const [formData, setFormData] = useState({ 
      rollNo: '', 
      phone: '', 
@@ -53,7 +54,7 @@ const EventDetails = () => {
             const userData = userDoc.data();
             setProfile(userData);
             
-            // Logic to Pre-fill Form (Handle 'Others')
+            // Logic to Pre-fill Form
             const isStandard = ['B.E. (CSE)', 'B.E. (CSE-AI)', 'B.E. (ECE)', 'B.E. (ME)'].includes(userData.branch);
             
             setFormData({
@@ -96,13 +97,11 @@ const EventDetails = () => {
     return true;
   };
 
-  // 💾 SAVE PROFILE (With Validation & Dropdowns)
+  // 💾 SAVE PROFILE
   const handleSaveProfile = async () => {
-    // 1. Validation
     if (formData.phone.length !== 10) { alert("Phone number must be exactly 10 digits."); return; }
     if (formData.rollNo.length < 5) { alert("Enter a valid Roll Number."); return; }
     
-    // 2. Branch Logic
     const finalBranch = formData.branch === 'Others' ? formData.customBranch.trim() : formData.branch;
     if (!finalBranch) { alert("Please specify your Branch/Course."); return; }
 
@@ -119,13 +118,12 @@ const EventDetails = () => {
         isProfileComplete: true
       };
 
-      await updateDoc(userRef, updatedData);
+      // MERGE TRUE IS CRITICAL HERE TO PRESERVE ADMIN ROLE
+      await setDoc(userRef, updatedData, { merge: true });
       
-      // Update Local State & Close Modal
       setProfile(prev => ({ ...prev, ...updatedData }));
       setShowProfileModal(false);
       
-      // Auto-trigger next step
       if (!profile?.termsAccepted) { setShowConsentModal(true); }
 
     } catch (error) {
@@ -135,13 +133,13 @@ const EventDetails = () => {
     }
   };
 
-  // 📝 HANDLE CONSENT + AUTO BOOKING
+  // 📝 HANDLE CONSENT
   const handleAgreeToTerms = async () => {
     if (!termsChecked || !privacyChecked) { alert("Please accept both checkboxes."); return; }
     try {
       setRegistering(true);
       const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, { termsAccepted: true, updatedAt: serverTimestamp() });
+      await setDoc(userRef, { termsAccepted: true, updatedAt: serverTimestamp() }, { merge: true });
       setProfile(prev => ({ ...prev, termsAccepted: true }));
       setShowConsentModal(false);
       
@@ -157,7 +155,7 @@ const EventDetails = () => {
       setRegistering(true);
       await registerForEvent(event.id, user, profile);
       alert("🎉 Ticket Booked! Check Email.");
-      navigate('/tickets');
+      navigate('/my-tickets');
     } catch (error) { alert("Failed: " + error.message); }
     finally { setRegistering(false); }
   };
@@ -166,16 +164,18 @@ const EventDetails = () => {
   if (!event) return null;
 
   return (
-    <div className="max-w-4xl mx-auto p-4 pb-32">
+    <div className="max-w-4xl mx-auto p-4 pb-32 pt-20">
       <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 mb-4"><ArrowLeft className="w-5 h-5 mr-2" /> Back</button>
       
       <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-gray-100">
         <div className="h-56 sm:h-72 bg-gradient-to-r from-indigo-600 to-purple-700 relative">
            <div className="absolute inset-0 bg-black/20" />
+           <img src={event.image || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80'} alt={event.title} className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-50"/>
+           
            <div className="absolute bottom-0 left-0 right-0 p-6 text-white bg-gradient-to-t from-black/80 to-transparent">
              <span className="bg-white/20 backdrop-blur-md text-xs font-bold px-3 py-1 rounded-full border border-white/30 uppercase">{event.category}</span>
              <h1 className="text-3xl font-extrabold mt-3">{event.title}</h1>
-             <div className="flex gap-4 mt-3 opacity-90 text-sm"><span className="flex items-center"><Calendar className="w-4 h-4 mr-1"/>{event.date}</span><span className="flex items-center"><MapPin className="w-4 h-4 mr-1"/>{event.location}</span></div>
+             <div className="flex gap-4 mt-3 opacity-90 text-sm"><span className="flex items-center"><Calendar className="w-4 h-4 mr-1"/>{new Date(event.date).toLocaleDateString()}</span><span className="flex items-center"><MapPin className="w-4 h-4 mr-1"/>{event.venue || event.location}</span></div>
            </div>
         </div>
         <div className="p-6">
@@ -191,7 +191,7 @@ const EventDetails = () => {
         </div>
       </div>
 
-      {/* 🚨 MODAL 1: COMPLETE PROFILE (Fixed with Dropdowns & Validation) */}
+      {/* 🚨 MODAL 1: COMPLETE PROFILE */}
       {showProfileModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-in fade-in zoom-in-95">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
@@ -246,12 +246,12 @@ const EventDetails = () => {
       {showConsentModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
            <div className="bg-white rounded-2xl p-8 max-w-sm w-full">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><Shield className="w-6 h-6 text-indigo-600"/> Final Consent</h3>
-              <div className="space-y-3 mb-6">
-                 <label className="flex gap-3 cursor-pointer"><input type="checkbox" checked={termsChecked} onChange={e => setTermsChecked(e.target.checked)} className="mt-1"/> <span className="text-sm">I agree to <a href="#" className="text-indigo-600 font-bold" onClick={e=>e.stopPropagation()}>Terms</a></span></label>
-                 <label className="flex gap-3 cursor-pointer"><input type="checkbox" checked={privacyChecked} onChange={e => setPrivacyChecked(e.target.checked)} className="mt-1"/> <span className="text-sm">I agree to <a href="#" className="text-indigo-600 font-bold" onClick={e=>e.stopPropagation()}>Privacy</a></span></label>
-              </div>
-              <button onClick={handleAgreeToTerms} disabled={!termsChecked || !privacyChecked} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold disabled:opacity-50">Agree & Book</button>
+             <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><Shield className="w-6 h-6 text-indigo-600"/> Final Consent</h3>
+             <div className="space-y-3 mb-6">
+                <label className="flex gap-3 cursor-pointer"><input type="checkbox" checked={termsChecked} onChange={e => setTermsChecked(e.target.checked)} className="mt-1"/> <span className="text-sm">I agree to <a href="#" className="text-indigo-600 font-bold" onClick={e=>e.stopPropagation()}>Terms</a></span></label>
+                <label className="flex gap-3 cursor-pointer"><input type="checkbox" checked={privacyChecked} onChange={e => setPrivacyChecked(e.target.checked)} className="mt-1"/> <span className="text-sm">I agree to <a href="#" className="text-indigo-600 font-bold" onClick={e=>e.stopPropagation()}>Privacy</a></span></label>
+             </div>
+             <button onClick={handleAgreeToTerms} disabled={!termsChecked || !privacyChecked} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold disabled:opacity-50">Agree & Book</button>
            </div>
         </div>
       )}
@@ -262,7 +262,7 @@ const EventDetails = () => {
                <h3 className="text-xl font-bold mb-4">Team Setup</h3>
                <div className="flex bg-gray-100 p-1 rounded-lg mb-4"><button onClick={()=>setTeamMode('create')} className={`flex-1 py-2 rounded ${teamMode==='create'?'bg-white shadow':''}`}>Create</button><button onClick={()=>setTeamMode('join')} className={`flex-1 py-2 rounded ${teamMode==='join'?'bg-white shadow':''}`}>Join</button></div>
                {teamMode==='create' ? <input value={teamName} onChange={e=>setTeamName(e.target.value)} placeholder="Team Name" className="w-full border p-3 rounded-lg mb-4"/> : <input value={teamCode} onChange={e=>setTeamCode(e.target.value)} placeholder="Team Code" className="w-full border p-3 rounded-lg mb-4 uppercase"/>}
-               <button onClick={async()=>{ setRegistering(true); try { if(teamMode==='create') await registerTeam(event.id,user,teamName,profile); else await joinTeam(event.id,user,teamCode,profile); navigate('/tickets'); } catch(e){alert(e.message)} finally{setRegistering(false)} }} disabled={registering} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold">Confirm</button>
+               <button onClick={async()=>{ setRegistering(true); try { if(teamMode==='create') await registerTeam(event.id,user,teamName,profile); else await joinTeam(event.id,user,teamCode,profile); navigate('/my-tickets'); } catch(e){alert(e.message)} finally{setRegistering(false)} }} disabled={registering} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold">Confirm</button>
                <button onClick={()=>setShowTeamModal(false)} className="w-full mt-2 text-gray-500">Cancel</button>
             </div>
          </div>
@@ -271,4 +271,4 @@ const EventDetails = () => {
   );
 };
 
-export default EventDetails;
+export default EventDetailsPage;
