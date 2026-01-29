@@ -1,11 +1,8 @@
-// File: src/services/registrationService.js
-
-import { db } from '../../../lib/firebase'; 
-// 👆 Note: '../lib/firebase' is correct because we are in 'src/services'
+import { db } from '../lib/firebase';
 import { doc, runTransaction, serverTimestamp, collection, query, where, getDocs, limit } from 'firebase/firestore';
 
 /**
- * 📧 EMAIL LOGIC (Backend API call)
+ * 📧 EMAIL LOGIC
  */
 const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, details) => {
   if (window.location.hostname === 'localhost' && window.location.port === '5173') return;
