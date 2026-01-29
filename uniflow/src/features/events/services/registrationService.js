@@ -1,5 +1,4 @@
-// 👇 YE LINE FIX KI HAI (3 dots taaki src folder tak pahunche)
-import { db } from '../../../lib/firebase'; 
+import { db } from '../../../lib/firebase';
 import { doc, runTransaction, serverTimestamp, collection, query, where, getDocs, limit } from 'firebase/firestore';
 
 /**
@@ -15,18 +14,23 @@ const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, 
 
   console.log(`📨 Sending professional email to ${userEmail}...`);
   
+  // 2. GENERATE ASSETS
+  // We use this API to create a QR image that works in Gmail
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${ticketId}`;
+  
+  // Dynamic Link to your App (Works on Localhost and Vercel automatically)
   const appUrl = window.location.origin; 
-  const ticketLink = `${appUrl}/my-tickets`; 
+  const ticketLink = `${appUrl}/tickets`; // Assuming your ticket page is at /tickets
 
   try {
-    const response = await fetch('/api/email', {
+    const response = await fetch('/api', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to: userEmail,
         email: userEmail,
         subject: `🎟️ Ticket Confirmed: ${eventTitle}`,
+        // ✨ HTML TEMPLATE STARTS HERE ✨
         html: `
           <!DOCTYPE html>
           <html>
@@ -80,7 +84,7 @@ const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, 
     }
 
   } catch (err) {
-    console.error("❌ Email Error (Non-blocking):", err);
+    console.error("❌ Email Error:", err);
   }
 };
 
@@ -89,8 +93,6 @@ const validateRestrictions = (eventData, user, studentData) => {
     throw new Error("🚫 Restricted: Official @chitkara.edu.in email required.");
   }
 };
-
-// --- MAIN FUNCTIONS ---
 
 export const registerForEvent = async (eventId, user, profile, answers = {}) => {
   if (!user) throw new Error("User must be logged in");
@@ -124,19 +126,17 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
         eventTitle: eventDataForEmail.title,
         eventDate: eventDataForEmail.date,
         eventTime: eventDataForEmail.time || 'TBA',
-        eventLocation: eventDataForEmail.venue || eventDataForEmail.location || 'Campus',
-        eventImage: eventDataForEmail.image || '',
+        eventLocation: eventDataForEmail.location,
         userId: user.uid,
         userEmail: user.email,
-        userName: profile?.displayName || user.displayName,
+        userName: user.displayName,
         userRollNo: profile?.rollNo || 'N/A',
         userPhone: profile?.phone || 'N/A',
         answers: answers,
         type: 'individual',
         status: 'confirmed',
         createdAt: serverTimestamp(),
-        used: false,
-        qrCode: `TICKET-${eventId}-${user.uid}`
+        used: false
       };
 
       transaction.set(registrationRef, newTicket);
@@ -149,13 +149,14 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
       }
     });
 
-    sendConfirmationEmail(
+    // TRIGGER PROFESSIONAL EMAIL
+    await sendConfirmationEmail(
       user.email,
       user.displayName,
       eventDataForEmail.title,
       `${eventId}_${user.uid}`,
       `<p style="margin: 5px 0;"><strong>📅 Date:</strong> ${eventDataForEmail.date}</p>
-       <p style="margin: 5px 0;"><strong>📍 Location:</strong> ${eventDataForEmail.venue || eventDataForEmail.location}</p>`
+       <p style="margin: 5px 0;"><strong>📍 Location:</strong> ${eventDataForEmail.location}</p>`
     );
 
     return { success: true };
@@ -208,9 +209,9 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
     await sendConfirmationEmail(
       user.email,
       user.displayName,
-      "Team Event: " + teamName, 
+      "Team Event", 
       `${eventId}_${user.uid}`,
-      `<p><strong>Team Created:</strong> ${teamName}</p><p><strong>Code:</strong> ${teamCode}</p>`
+      `<p><strong>Team:</strong> ${teamName}</p><p><strong>Code:</strong> ${teamCode}</p>`
     );
 
     return { success: true, teamCode };
@@ -223,7 +224,13 @@ export const joinTeam = async (eventId, user, teamCode, studentData) => {
 
   const eventRef = doc(db, 'events', eventId);
   const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
-  const q = query(collection(db, 'registrations'), where('eventId', '==', eventId), where('teamCode', '==', teamCode.trim().toUpperCase()), where('type', '==', 'team_leader'), limit(1));
+  const q = query(
+    collection(db, 'registrations'), 
+    where('eventId', '==', eventId),
+    where('teamCode', '==', teamCode.trim().toUpperCase()),
+    where('type', '==', 'team_leader'),
+    limit(1)
+  );
 
   try {
     const leaderSnap = await getDocs(q);
@@ -267,7 +274,7 @@ export const joinTeam = async (eventId, user, teamCode, studentData) => {
     await sendConfirmationEmail(
       user.email,
       user.displayName,
-      "Team Event: " + teamName,
+      "Team Event",
       `${eventId}_${user.uid}`,
       `<p>Joined Team: <strong>${teamName}</strong></p>`
     );

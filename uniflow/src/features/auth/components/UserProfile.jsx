@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { db, storage, auth } from '../../../lib/firebase';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore'; 
+import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore'; 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
 import { 
   User, Phone, BookOpen, Hash, Camera, Edit2, Save, X, 
   Loader2, AlertCircle, FileText, CheckCircle, ShieldCheck, LogOut 
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const UserProfile = () => {
   const { user } = useAuth();
@@ -39,7 +39,7 @@ const UserProfile = () => {
   const [photo, setPhoto] = useState(null);
   const [preview, setPreview] = useState(null);
 
-  // 🔄 REAL-TIME SYNC (No Redirects Here!)
+  // 🔄 REAL-TIME SYNC
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
 
@@ -81,11 +81,18 @@ const UserProfile = () => {
   const handleAcceptTerms = async () => {
     setConsenting(true);
     try {
-        const updatedProfile = { ...profile, termsAccepted: true };
-        setProfile(updatedProfile); // Optimistic Update
+        // 🛡️ SECURITY FIX: Only update specific fields
+        const consentData = { 
+            termsAccepted: true,
+            updatedAt: new Date()
+        };
+
+        // Optimistic Update
+        setProfile(prev => ({ ...prev, ...consentData }));
         setSuccess("Terms Accepted! Welcome.");
 
-        await setDoc(doc(db, 'users', user.uid), { termsAccepted: true }, { merge: true });
+        // DB Update (Merge preserves 'role: admin')
+        await setDoc(doc(db, 'users', user.uid), consentData, { merge: true });
 
         setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -95,7 +102,7 @@ const UserProfile = () => {
     }
   };
 
-  // 💾 SAVE HANDLER
+  // 💾 SAVE HANDLER (THE MAIN FIX 🛠️)
   const handleSave = async (e) => {
     e.preventDefault();
     if (saving) return; 
@@ -116,6 +123,8 @@ const UserProfile = () => {
         finalPhotoURL = await getDownloadURL(storageRef);
       }
 
+      // 🛡️ SECURITY FIX: Do NOT include 'role' here.
+      // Hum role ko yahan se set nahi karenge. Jo DB mein hai wahi rahega.
       const updatedData = {
         displayName: formData.displayName.trim(),
         phone: formData.phone,
@@ -127,13 +136,17 @@ const UserProfile = () => {
         photoURL: finalPhotoURL,
         isProfileComplete: true,
         updatedAt: new Date(),
-        termsAccepted: true 
+        // Note: termsAccepted and role are NOT touched here.
       };
 
-      setProfile(updatedData); 
+      // Optimistic UI Update
+      setProfile(prev => ({ ...prev, ...updatedData })); 
       setIsEditing(false); 
       setSuccess("Profile Updated Successfully!"); 
+
+      // 🔥 MERGE TRUE IS KEY: This updates ONLY the fields above, leaving 'role' intact.
       await setDoc(doc(db, 'users', user.uid), updatedData, { merge: true });
+      
       setTimeout(() => setSuccess(''), 3000);
 
     } catch (err) {
@@ -219,7 +232,14 @@ const UserProfile = () => {
                   </div>
                   <div className="pt-16 pb-6 px-6 text-center mt-2">
                     <h2 className="text-2xl font-black text-zinc-900 dark:text-white">{profile?.displayName || "Student Name"}</h2>
-                    <p className="text-zinc-500 text-sm mb-3">{user?.email}</p>
+                    
+                    {/* 👇 Role Badge Added for Verification */}
+                    <div className="flex justify-center items-center gap-2 mb-2">
+                        <p className="text-zinc-500 text-sm">{user?.email}</p>
+                        {profile?.role === 'admin' && <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full">ADMIN</span>}
+                        {profile?.role === 'superadmin' && <span className="bg-purple-100 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded-full">SUPER ADMIN</span>}
+                    </div>
+
                     <div className="flex justify-center gap-2 flex-wrap">
                       <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-[10px] font-bold uppercase flex items-center"><ShieldCheck className="w-3 h-3 mr-1" /> Verified</span>
                       <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold uppercase flex items-center"><CheckCircle className="w-3 h-3 mr-1" /> Consent Given</span>
