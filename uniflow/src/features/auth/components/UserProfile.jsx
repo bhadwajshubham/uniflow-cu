@@ -6,24 +6,24 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
 import { 
   User, Phone, BookOpen, Layers, MapPin, LogOut, ShieldCheck, 
-  CheckCircle, Hash, Camera, Edit2, Save, X, Loader2, AlertCircle, RefreshCw
+  CheckCircle, Hash, Camera, Edit2, Save, X, Loader2, AlertCircle 
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const UserProfile = () => {
-  const { user } = useAuth(); // Auth Context se user aa raha hai
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation(); // Navigation detect karne ke liye
+  const location = useLocation(); 
 
-  // Mode & Loading States
+  // --- STATES ---
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [authChecking, setAuthChecking] = useState(true); // New Safety State
+  const [authChecking, setAuthChecking] = useState(true);
 
-  // Data & Error States
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  
   const [profile, setProfile] = useState(null);
   
   // Form State
@@ -41,58 +41,56 @@ const UserProfile = () => {
   const [photo, setPhoto] = useState(null);
   const [preview, setPreview] = useState(null);
 
-  // 🛡️ SAFETY LOCK 1: Handle Auth Delay
-  // Agar Auth load hone mein time lagaye, toh Infinite Loading ko roko
+  // 🛡️ SAFETY 1: Auth Timeout (Infinite Loading Fix)
   useEffect(() => {
     if (user) {
       setAuthChecking(false);
     } else {
-      // Agar 2 second tak user nahi mila, toh auth check band karo
-      const timer = setTimeout(() => setAuthChecking(false), 2000);
+      const timer = setTimeout(() => setAuthChecking(false), 2000); // 2 sec fallback
       return () => clearTimeout(timer);
     }
   }, [user]);
 
-  // 🔄 REAL-TIME LISTENER (The Main Logic)
+  // 🔄 REAL-TIME SYNC (Listener)
   useEffect(() => {
-    // Agar user hi nahi hai (Login nahi hai), toh kuch mat karo
     if (!user) return;
-
     setLoading(true);
     const userRef = doc(db, 'users', user.uid);
 
-    // Snapshot Listener attach kar rahe hain
+    // Snapshot Listener: Auto-updates UI when DB changes
     const unsubscribe = onSnapshot(userRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setProfile(data);
         
-        // Form ko sirf tab update karo jab hum edit nahi kar rahe
-        if (!isEditing) {
-            const isStandard = ['B.E. (CSE)', 'B.E. (CSE-AI)', 'B.E. (ECE)', 'B.E. (ME)'].includes(data.branch);
-            setFormData({
-                displayName: data.displayName || user.displayName || '',
-                phone: data.phone || '',
-                rollNo: data.rollNo || '',
-                branch: isStandard ? data.branch : 'Others',
-                customBranch: isStandard ? '' : data.branch,
-                semester: data.semester || '1st',
-                group: data.group || '',
-                residency: data.residency || 'Day Scholar'
-            });
+        // Agar hum abhi "Save" kar rahe hain (Optimistic Mode), toh listener ka data ignore karo
+        // Taaki UI flicker na kare aur user ka local change overwrite na ho
+        if (!saving) { 
+            setProfile(data);
+            
+            // Sync Form Data only if not editing
+            if (!isEditing) {
+                const isStandard = ['B.E. (CSE)', 'B.E. (CSE-AI)', 'B.E. (ECE)', 'B.E. (ME)'].includes(data.branch);
+                setFormData({
+                    displayName: data.displayName || user.displayName || '',
+                    phone: data.phone || '',
+                    rollNo: data.rollNo || '',
+                    branch: isStandard ? data.branch : 'Others',
+                    customBranch: isStandard ? '' : data.branch,
+                    semester: data.semester || '1st',
+                    group: data.group || '',
+                    residency: data.residency || 'Day Scholar'
+                });
+            }
         }
       }
-      setLoading(false); // Data milte hi loading band
+      setLoading(false);
     }, (err) => {
-      console.error("Fetch Error:", err);
-      setError("Failed to load profile. Please check internet.");
+      console.error("Sync Error:", err);
       setLoading(false);
     });
 
-    // Cleanup: Jab page hategs, listener bhi hatao
-    return () => unsubscribe();
-
-  }, [user, location.key]); // ✅ location.key: Forces logic to run on navigation
+    return () => unsubscribe(); // Cleanup listener on unmount
+  }, [user, location.key]); // location.key ensures fresh sync on navigation
 
   // 🛡️ INPUT HANDLERS
   const handleChange = (e) => {
@@ -116,7 +114,7 @@ const UserProfile = () => {
     }
   };
 
-  // 💾 SAVE HANDLER
+  // 🚀 OPTIMISTIC SAVE HANDLER
   const handleSave = async (e) => {
     e.preventDefault();
     if (saving) return; 
@@ -133,8 +131,9 @@ const UserProfile = () => {
     if (!finalBranch) { setError("Please specify your Branch/Course."); setSaving(false); return; }
 
     try {
-      let finalPhotoURL = profile?.photoURL || user.photoURL;
+      let finalPhotoURL = preview || profile?.photoURL || user.photoURL;
       
+      // Upload Photo
       if (photo) {
         const storageRef = ref(storage, `avatars/${user.uid}_${Date.now()}`);
         await uploadBytes(storageRef, photo);
@@ -155,14 +154,19 @@ const UserProfile = () => {
         termsAccepted: profile?.termsAccepted || false 
       };
 
+      // 🔥 OPTIMISTIC UPDATE: UI pehle update karo
+      setProfile(updatedData); 
+      setIsEditing(false); 
+      setSuccess("Profile Updated Successfully!"); 
+
+      // 🔥 Background DB Update
       await setDoc(doc(db, 'users', user.uid), updatedData, { merge: true });
 
-      setSuccess("Profile Updated Successfully!");
       setTimeout(() => setSuccess(''), 3000);
-      setIsEditing(false); 
 
     } catch (err) {
       setError("Update failed: " + err.message);
+      // Agar fail hua, toh hum revert kar sakte hain, but MVP ke liye alert kafi hai
     } finally {
       setSaving(false);
     }
@@ -170,45 +174,22 @@ const UserProfile = () => {
 
   const handleLogout = async () => { await signOut(auth); navigate('/login'); };
 
-  // --- RENDERING STATES ---
-
-  // 1. Auth Loading State (Waiting for Firebase User)
-  if (authChecking && !user) {
-    return (
-        <div className="min-h-screen flex justify-center items-center bg-zinc-50 dark:bg-black">
-            <Loader2 className="animate-spin w-8 h-8 text-indigo-600"/>
-        </div>
-    );
-  }
-
-  // 2. Not Logged In State (Safety Fallback)
-  if (!authChecking && !user) {
-      navigate('/login');
-      return null;
-  }
-
-  // 3. Profile Data Loading State
-  if (loading) {
-      return (
-        <div className="min-h-screen flex flex-col justify-center items-center bg-zinc-50 dark:bg-black gap-4">
-            <Loader2 className="animate-spin w-8 h-8 text-indigo-600"/>
-            <p className="text-zinc-400 text-xs animate-pulse">Loading Profile...</p>
-        </div>
-      );
-  }
+  // --- RENDER LOGIC ---
+  if (authChecking && !user) return <div className="min-h-screen flex justify-center items-center"><Loader2 className="animate-spin w-8 h-8 text-indigo-600"/></div>;
+  if (!authChecking && !user) { navigate('/login'); return null; }
+  
+  // Show loading only if we have NO profile data yet. 
+  // If we have data (cached/optimistic), show that instead of spinner.
+  if (loading && !profile) return <div className="min-h-screen flex justify-center items-center"><Loader2 className="animate-spin w-8 h-8 text-indigo-600"/></div>;
 
   return (
-    // ✅ KEY PROP ADDED: Forces React to re-render if URL changes
     <div key={location.key} className="min-h-screen bg-zinc-50 dark:bg-black pt-20 pb-24 px-4">
       <div className="max-w-md mx-auto">
 
-        {/* --- HEADER --- */}
+        {/* HEADER SECTION */}
         <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 mb-6 relative">
           <div className="h-32 bg-gradient-to-r from-indigo-600 to-purple-600 relative">
-             <button 
-                onClick={() => setIsEditing(!isEditing)}
-                className="absolute top-4 right-4 bg-white/20 backdrop-blur-md text-white p-2 rounded-full hover:bg-white/30 transition z-10"
-             >
+             <button onClick={() => setIsEditing(!isEditing)} className="absolute top-4 right-4 bg-white/20 backdrop-blur-md text-white p-2 rounded-full hover:bg-white/30 transition z-10">
                 {isEditing ? <X className="w-5 h-5" /> : <Edit2 className="w-5 h-5" />}
              </button>
           </div>
@@ -239,7 +220,6 @@ const UserProfile = () => {
               <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-[10px] font-bold uppercase flex items-center">
                 <ShieldCheck className="w-3 h-3 mr-1" /> Verified
               </span>
-              {/* ✅ REAL-TIME CONSENT CHECK */}
               {profile?.termsAccepted && (
                 <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold uppercase flex items-center">
                   <CheckCircle className="w-3 h-3 mr-1" /> Consent Given
@@ -249,10 +229,11 @@ const UserProfile = () => {
           </div>
         </div>
 
+        {/* ALERTS */}
         {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-xl text-sm flex items-center font-bold"><AlertCircle className="w-4 h-4 mr-2"/>{error}</div>}
         {success && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-xl text-sm flex items-center font-bold"><CheckCircle className="w-4 h-4 mr-2"/>{success}</div>}
 
-        {/* --- VIEW MODE --- */}
+        {/* --- VIEW MODE (ID CARD) --- */}
         {!isEditing ? (
           <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
              <div className="flex items-center p-4">
@@ -280,7 +261,7 @@ const UserProfile = () => {
              </div>
           </div>
         ) : (
-          /* --- EDIT MODE --- */
+          /* --- EDIT MODE (FORM) --- */
           <form onSubmit={handleSave} className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border border-zinc-200 p-6 space-y-4">
             
             <div>
@@ -299,7 +280,6 @@ const UserProfile = () => {
               </div>
             </div>
 
-            {/* BRANCH & OTHER INPUTS (Same as before) */}
             <div>
               <label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Branch / Course</label>
               <select name="branch" value={formData.branch} onChange={handleChange} className="w-full p-3 bg-zinc-50 rounded-xl font-bold outline-none mb-2 appearance-none">
@@ -348,6 +328,7 @@ const UserProfile = () => {
           </form>
         )}
 
+        {/* LOGOUT BUTTON */}
         <button onClick={handleLogout} className="w-full mt-6 bg-white border border-red-100 text-red-600 font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-red-50">
           <LogOut className="w-5 h-5" /> Sign Out
         </button>
