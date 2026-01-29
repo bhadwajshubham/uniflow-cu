@@ -4,23 +4,28 @@ import { db, storage, auth } from '../../../lib/firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'; 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
-import { User, Phone, BookOpen, Hash, Camera, Edit2, Save, X, Loader2, Shield, CheckCircle, LogOut } from 'lucide-react';
+import { Phone, BookOpen, Hash, Camera, Edit2, X, Loader2, Shield, CheckCircle, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const UserProfile = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  // UI States
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false); // 🔒 Ye humara LOCK hai
+  const [saving, setSaving] = useState(false);
   
-  // ✅ States for Checkboxes
+  // 🛡️ INDUSTRY GRADE FLAG: Local state overrides DB latency
+  const [hasAcceptedLocally, setHasAcceptedLocally] = useState(false);
+
+  // Consent Form States
   const [termsChecked, setTermsChecked] = useState(false);
   const [privacyChecked, setPrivacyChecked] = useState(false);
-  
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // Data States
   const [profile, setProfile] = useState(null);
   const [photo, setPhoto] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -29,18 +34,26 @@ const UserProfile = () => {
     displayName: '', phone: '', rollNo: '', branch: 'B.E. (CSE)', customBranch: '', semester: '1st', group: '', residency: 'Day Scholar'
   });
 
+  // 1. DATA SYNC
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
-    setLoading(true);
     
+    // 🧹 Force Clear Legacy Service Workers (To fix "Old UI" issue)
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+            registrations.forEach(registration => registration.unregister());
+        });
+    }
+
+    setLoading(true);
     const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         
-        // 🔒 CRITICAL FIX: Agar hum save/accept kar rahe hain, toh DB update ko ignore karo
-        // Taaki UI flicker na kare aur instant feel ho.
+        // Only update if not currently saving (Prevents Jitter)
         if (!saving) { 
             setProfile(data);
+            // Sync form data only if not editing
             if (!isEditing) {
                 const isStandard = ['B.E. (CSE)', 'B.E. (CSE-AI)', 'B.E. (ECE)', 'B.E. (ME)'].includes(data.branch);
                 setFormData({
@@ -59,35 +72,27 @@ const UserProfile = () => {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [user, saving, isEditing]); // Added dependencies
+  }, [user, saving, isEditing]);
 
-  // 🚀 SUPERSONIC SPEED HANDLER
+  // 2. HANDLERS
   const handleAcceptTerms = async () => {
     if (!termsChecked || !privacyChecked) {
         setError("Please check both boxes to continue.");
         return;
     }
 
-    // 🔒 LOCK ON: Stop listening to DB for a moment
-    setSaving(true); 
-
-    // ⚡ INSTANT UI SWITCH (No Waiting)
-    setProfile(prev => ({ ...prev, termsAccepted: true }));
+    // 🚀 ATOMIC UPDATE: UI immediately assumes success
+    setHasAcceptedLocally(true); 
     setSuccess("Welcome!");
 
     try {
-        // Background DB Update
         await setDoc(doc(db, 'users', user.uid), { 
             termsAccepted: true, 
             updatedAt: new Date() 
         }, { merge: true });
-        
-        // 🔓 LOCK OFF: 2 second baad DB listener wapis on karo
-        setTimeout(() => setSaving(false), 2000);
-        
     } catch (err) {
         console.error("Sync Error:", err);
-        setSaving(false); // Error aaye to lock khol do
+        // Note: Even if DB fails, we keep user in Profile View for good UX
     }
   };
 
@@ -96,6 +101,7 @@ const UserProfile = () => {
     if (saving) return; 
     setSaving(true); setError('');
 
+    // Validation
     if (formData.phone.length !== 10) { setError("Phone must be 10 digits."); setSaving(false); return; }
     if (formData.rollNo.length < 5) { setError("Invalid Roll No."); setSaving(false); return; }
     const finalBranch = formData.branch === 'Others' ? formData.customBranch.trim() : formData.branch;
@@ -122,13 +128,12 @@ const UserProfile = () => {
         updatedAt: new Date()
       };
 
-      // ⚡ INSTANT UPDATE
+      // Optimistic Update
       setProfile(prev => ({ ...prev, ...updatedData })); 
       setIsEditing(false); 
       setSuccess("Profile Updated!"); 
 
       await setDoc(doc(db, 'users', user.uid), updatedData, { merge: true });
-      
       setTimeout(() => { setSuccess(''); setSaving(false); }, 2000);
 
     } catch (err) { setError("Update failed: " + err.message); setSaving(false); } 
@@ -138,7 +143,6 @@ const UserProfile = () => {
   
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === 'phone' && !/^\d{0,10}$/.test(value)) return;
     setFormData({ ...formData, [name]: value }); setError('');
   };
   const handleFileChange = (e) => {
@@ -146,14 +150,18 @@ const UserProfile = () => {
     if (file) { setPhoto(file); setPreview(URL.createObjectURL(file)); }
   };
   
+  // 3. RENDER LOGIC
   if (loading && !profile) return <div className="min-h-screen flex justify-center items-center"><Loader2 className="animate-spin w-8 h-8 text-indigo-600"/></div>;
+
+  // 🔥 DECISION ENGINE: Show Consent IF (Not accepted in DB AND Not accepted locally)
+  const showConsentScreen = !profile?.termsAccepted && !hasAcceptedLocally;
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black pt-20 pb-24 px-4">
       <div className="max-w-md mx-auto">
         
-        {/* 🔴 CONSENT UI (Faster Transition) */}
-        {!profile?.termsAccepted ? (
+        {/* ———————— CONSENT SCREEN ———————— */}
+        {showConsentScreen ? (
             <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl p-8 text-center border-2 border-indigo-100 dark:border-zinc-800 animate-in fade-in zoom-in duration-300">
                 <Shield className="w-14 h-14 text-indigo-600 mx-auto mb-4" />
                 <h2 className="text-2xl font-extrabold mb-2 dark:text-white">Consent Required</h2>
@@ -181,7 +189,7 @@ const UserProfile = () => {
                 </button>
             </div>
         ) : (
-            /* 🟢 PROFILE UI */
+            /* ———————— PROFILE SCREEN ———————— */
             <>
                 <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 mb-6 relative">
                   <div className="h-32 bg-gradient-to-r from-indigo-600 to-purple-600 relative">
