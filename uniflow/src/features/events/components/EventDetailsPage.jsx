@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { doc, getDoc, updateDoc, increment, setDoc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
-// 👇 YE LINE FIX KI HAI (Ab ye sahi file uthayega)
-import { registerForEvent } from '../services/registrationService'; 
+// 👇 SIRF YE LINE FIX KI HAI (Taaki build pass ho jaye)
+import { registerForEvent } from '../services/registrationService';
 import { 
   Calendar, MapPin, Clock, Users, Share2, ArrowLeft, 
-  CheckCircle, AlertCircle, Loader2, QrCode, X 
+  Ticket, CheckCircle, AlertCircle, Loader2, QrCode, X, Copy 
 } from 'lucide-react';
 
 const EventDetailsPage = () => {
@@ -24,7 +24,7 @@ const EventDetailsPage = () => {
 
   // UI States
   const [showModal, setShowModal] = useState(false);
-  const [showQRModal, setShowQRModal] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false); // 🆕 QR Modal
   const [termsChecked, setTermsChecked] = useState(false);
   const [privacyChecked, setPrivacyChecked] = useState(false);
 
@@ -48,7 +48,7 @@ const EventDetailsPage = () => {
     fetchEvent();
   }, [id]);
 
-  // 2. Share Function
+  // 2. 🆕 SHARE FUNCTION (With Copy Fallback)
   const handleShare = async () => {
     const url = window.location.href;
     const shareData = {
@@ -61,11 +61,13 @@ const EventDetailsPage = () => {
       if (navigator.share) {
         await navigator.share(shareData);
       } else {
+        // Fallback for Desktop/Non-supported browsers
         await navigator.clipboard.writeText(url);
         alert('Link copied to clipboard!'); 
       }
     } catch (err) {
       console.error('Share failed:', err);
+      // Fallback if user cancels share or error occurs
       try {
         await navigator.clipboard.writeText(url);
         alert('Link copied to clipboard!');
@@ -94,7 +96,8 @@ const EventDetailsPage = () => {
     setError(null);
 
     try {
-      // 🔄 Sync Consent
+      // 🔄 SYNC CONSENT: Booking karte time hi DB mein Terms True kar do
+      // Taaki Profile Page pe wapis puchne ki zarurat na pade
       await setDoc(doc(db, "users", user.uid), { 
         termsAccepted: true, 
         updatedAt: new Date() 
@@ -112,7 +115,7 @@ const EventDetailsPage = () => {
       setSuccessMsg('Ticket Booked Successfully!');
       setShowModal(false);
       
-      // Redirect
+      // Redirect to Ticket after 2 seconds
       setTimeout(() => navigate('/my-tickets'), 2000);
 
     } catch (err) {
@@ -144,7 +147,7 @@ const EventDetailsPage = () => {
           <ArrowLeft className="w-6 h-6" />
         </button>
 
-        {/* TOP ACTIONS */}
+        {/* 🆕 TOP ACTIONS (Share + QR) */}
         <div className="absolute top-4 right-4 flex gap-2">
             <button onClick={() => setShowQRModal(true)} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition">
                 <QrCode className="w-6 h-6" />
@@ -170,6 +173,7 @@ const EventDetailsPage = () => {
             {event.title}
           </h1>
 
+          {/* Info Grid */}
           <div className="space-y-4 mb-8">
             <div className="flex items-center gap-3 text-zinc-600 dark:text-zinc-400">
               <Calendar className="w-5 h-5 text-indigo-500" />
@@ -191,6 +195,7 @@ const EventDetailsPage = () => {
             </div>
           </div>
 
+          {/* Description */}
           <div className="mb-8">
             <h3 className="font-bold text-lg text-zinc-900 dark:text-white mb-2">About Event</h3>
             <p className="text-zinc-500 dark:text-zinc-400 text-sm leading-relaxed whitespace-pre-line">
@@ -198,6 +203,7 @@ const EventDetailsPage = () => {
             </p>
           </div>
 
+          {/* Seats Progress */}
           <div className="mb-4">
              <div className="flex justify-between text-xs font-bold mb-1">
                 <span className="text-zinc-500">Seats Filled</span>
@@ -213,7 +219,7 @@ const EventDetailsPage = () => {
         </div>
       </div>
 
-      {/* FOOTER */}
+      {/* FOOTER ACTION */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800 z-40">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
           <div>
@@ -232,7 +238,7 @@ const EventDetailsPage = () => {
         </div>
       </div>
 
-      {/* MODAL */}
+      {/* CONSENT MODAL */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white dark:bg-zinc-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom-10">
@@ -244,23 +250,32 @@ const EventDetailsPage = () => {
             </div>
 
             <div className="space-y-3 mb-6">
+              {/* CHECKBOX 1 */}
               <label className="flex items-start gap-3 p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl cursor-pointer">
                 <div className={`mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-colors ${termsChecked ? 'bg-indigo-600 border-indigo-600' : 'border-zinc-400 bg-white'}`}>
                   {termsChecked && <CheckCircle className="w-3.5 h-3.5 text-white" />}
                 </div>
                 <input type="checkbox" checked={termsChecked} onChange={(e) => setTermsChecked(e.target.checked)} className="hidden" />
                 <span className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed select-none">
-                  I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-indigo-600 font-bold hover:underline" onClick={(e) => e.stopPropagation()}>Terms & Conditions</a>.
+                  I agree to the{' '}
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-indigo-600 font-bold hover:underline" onClick={(e) => e.stopPropagation()}>
+                    Terms & Conditions
+                  </a>
+                  {' '}and share my details.
                 </span>
               </label>
 
+              {/* CHECKBOX 2 */}
               <label className="flex items-start gap-3 p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl cursor-pointer">
                 <div className={`mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-colors ${privacyChecked ? 'bg-indigo-600 border-indigo-600' : 'border-zinc-400 bg-white'}`}>
                   {privacyChecked && <CheckCircle className="w-3.5 h-3.5 text-white" />}
                 </div>
                 <input type="checkbox" checked={privacyChecked} onChange={(e) => setPrivacyChecked(e.target.checked)} className="hidden" />
                 <span className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed select-none">
-                  I accept the <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-indigo-600 font-bold hover:underline" onClick={(e) => e.stopPropagation()}>Privacy Policy</a>.
+                  I accept the{' '}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-indigo-600 font-bold hover:underline" onClick={(e) => e.stopPropagation()}>
+                    Privacy Policy
+                  </a>.
                 </span>
               </label>
             </div>
@@ -276,7 +291,7 @@ const EventDetailsPage = () => {
         </div>
       )}
 
-      {/* QR MODAL */}
+      {/* 🆕 QR CODE MODAL (Pop-up) */}
       {showQRModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white p-6 rounded-3xl shadow-2xl text-center max-w-xs w-full relative">
@@ -288,18 +303,20 @@ const EventDetailsPage = () => {
              <p className="text-xs text-zinc-500 mb-4">{event.title}</p>
              
              <div className="bg-white p-2 rounded-xl border-2 border-dashed border-indigo-200 inline-block">
+                {/* Generating QR using a reliable public API to avoid extra packages */}
                 <img 
                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${window.location.href}&color=4f46e5`}
                    alt="Event QR"
                    className="w-48 h-48 object-contain"
                 />
              </div>
+             
              <p className="text-[10px] text-zinc-400 mt-4">Share this QR with friends to invite them.</p>
           </div>
         </div>
       )}
 
-      {/* TOASTS */}
+      {/* Success/Error Toasts */}
       {error && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-full shadow-xl text-sm font-bold flex items-center gap-2 z-50 animate-in slide-in-from-bottom-5"><AlertCircle className="w-4 h-4"/>{error}</div>}
       {successMsg && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-full shadow-xl text-sm font-bold flex items-center gap-2 z-50 animate-in slide-in-from-bottom-5"><CheckCircle className="w-4 h-4"/>{successMsg}</div>}
 
