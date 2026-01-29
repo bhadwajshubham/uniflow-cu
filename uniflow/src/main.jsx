@@ -4,28 +4,39 @@ import App from './App.jsx'
 import './index.css'
 import { BrowserRouter } from 'react-router-dom'
 
-// 🧹 START: CACHE CLEANUP (Safety Net for 500 Users)
-// Ye code ensure karega ki user ke paas hamesha LATEST version hi load ho.
+// 🟡 OPTION 2: ONE-TIME CLEANUP (Smart & Safe)
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    for (let registration of registrations) {
-      console.log('♻️ Cleaning up old version...');
-      registration.unregister();
-    }
-  });
-  
-  // Optional: Agar purana cache bahut ziddi hai
-  if (window.caches) {
-    caches.keys().then((names) => {
-      names.forEach((name) => caches.delete(name));
+  // Check agar humne pehle safayi nahi ki hai
+  const hasCleaned = localStorage.getItem('sw_cleaned_v1');
+
+  if (!hasCleaned) {
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      // Agar koi purana Service Worker mila, toh usko uda do
+      if (registrations.length > 0) {
+        registrations.forEach((r) => {
+          console.log('♻️ Removing Stale Service Worker:', r);
+          r.unregister();
+        });
+        
+        // Cache bhi saaf kar do taaki purani files na dikhein
+        if (window.caches) {
+          caches.keys().then((names) => {
+            names.forEach((name) => caches.delete(name));
+          });
+        }
+        
+        // Reload taaki naya version load ho jaye
+        window.location.reload();
+      }
     });
+
+    // Mark kar do ki safayi ho gayi hai
+    localStorage.setItem('sw_cleaned_v1', 'true');
   }
 }
-// 🧹 END: CACHE CLEANUP
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {/* ✅ This is the ONLY place BrowserRouter should exist */}
     <BrowserRouter>
       <App />
     </BrowserRouter>
