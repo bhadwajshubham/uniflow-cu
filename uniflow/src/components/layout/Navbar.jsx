@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Home, Calendar, Ticket, User, Moon, Sun, Shield, QrCode } from 'lucide-react';
+// ✅ ADDED 'Info' Icon here
+import { Home, Calendar, Ticket, User, Moon, Sun, Shield, QrCode, Info } from 'lucide-react';
 
 const Navbar = () => {
   const { user, profile } = useAuth();
@@ -29,7 +30,7 @@ const Navbar = () => {
       ───────────────────────────────────────────────────────────── */}
       <nav className="sticky top-0 z-40 w-full bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-zinc-100 dark:border-zinc-800 px-4 py-3 flex justify-between items-center transition-all">
         
-        {/* LEFT: Logo (Using your PWA Icon) */}
+        {/* LEFT: Logo */}
         <Link to="/" className="flex items-center gap-3 group">
           <img 
             src="/pwa-192x192.png" 
@@ -46,6 +47,10 @@ const Navbar = () => {
             <Link to="/" className={`text-sm font-bold transition-colors ${isActive('/') ? 'text-indigo-600' : 'text-zinc-500 hover:text-black dark:text-zinc-400 dark:hover:text-white'}`}>Home</Link>
             <Link to="/events" className={`text-sm font-bold transition-colors ${isActive('/events') ? 'text-indigo-600' : 'text-zinc-500 hover:text-black dark:text-zinc-400 dark:hover:text-white'}`}>Events</Link>
             <Link to="/my-tickets" className={`text-sm font-bold transition-colors ${isActive('/my-tickets') ? 'text-indigo-600' : 'text-zinc-500 hover:text-black dark:text-zinc-400 dark:hover:text-white'}`}>My Tickets</Link>
+            
+            {/* ✅ ADDED ABOUT LINK (Desktop) */}
+            <Link to="/about" className={`text-sm font-bold transition-colors ${isActive('/about') ? 'text-indigo-600' : 'text-zinc-500 hover:text-black dark:text-zinc-400 dark:hover:text-white'}`}>About</Link>
+            
             {isAdmin && <Link to="/admin" className="text-sm font-bold text-indigo-600">Admin Console</Link>}
             {isAdmin && <Link to="/scan" className="text-sm font-bold text-indigo-600">Scanner</Link>}
         </div>
@@ -80,13 +85,13 @@ const Navbar = () => {
       {/* ─────────────────────────────────────────────────────────────
           2. BOTTOM NAVIGATION BAR (Mobile Only)
       ───────────────────────────────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-xl border-t border-zinc-200 dark:border-zinc-800 pb-safe pt-2 px-6 md:hidden">
-        <div className={`flex items-center pb-2 ${isAdmin ? 'justify-between' : 'justify-around'}`}>
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-xl border-t border-zinc-200 dark:border-zinc-800 pb-safe pt-2 px-4 md:hidden">
+        <div className={`flex items-center pb-2 ${isAdmin ? 'justify-between' : 'justify-between gap-1'}`}>
           
           <NavLink to="/" icon={Home} label="Home" />
           <NavLink to="/events" icon={Calendar} label="Events" />
 
-          {/* 🟢 SCANNER BUTTON (Center - Prominent for Admins) */}
+          {/* 🟢 SCANNER BUTTON (Center for Admins) vs MY TIX (Students) */}
           {isAdmin ? (
              <Link to="/scan" className="relative -top-5">
                <div className="w-14 h-14 bg-indigo-600 rounded-full shadow-xl shadow-indigo-500/40 flex items-center justify-center text-white border-4 border-zinc-50 dark:border-zinc-950 transform hover:scale-105 active:scale-95 transition-all">
@@ -94,17 +99,22 @@ const Navbar = () => {
                </div>
              </Link>
           ) : (
-            // If Student, Show My Tickets in center/flow
             <NavLink to="/my-tickets" icon={Ticket} label="My Tix" />
           )}
 
-          {/* Right Side Links */}
-          {isAdmin && <NavLink to="/my-tickets" icon={Ticket} label="My Tix" />}
-          
+          {/* RIGHT SIDE LOGIC */}
           {isAdmin ? (
+            // Admin: My Tix + Admin Panel
+            <>
+             <NavLink to="/my-tickets" icon={Ticket} label="My Tix" />
              <NavLink to="/admin" icon={Shield} label="Admin" />
+            </>
           ) : (
-             <NavLink to="/profile" icon={User} label="Profile" />
+             // ✅ Student: About + Profile (ADDED ABOUT HERE)
+             <>
+               <NavLink to="/about" icon={Info} label="About" />
+               <NavLink to="/profile" icon={User} label="Profile" />
+             </>
           )}
 
         </div>
