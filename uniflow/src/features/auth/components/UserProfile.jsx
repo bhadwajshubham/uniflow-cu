@@ -89,6 +89,7 @@ const UserProfile = () => {
         finalPhotoURL = await getDownloadURL(storageRef);
       }
 
+      // 🛡️ SECURITY FIX: Admin role removed from here, handled by merge:true
       const updatedData = {
         displayName: formData.displayName.trim(),
         phone: formData.phone,
@@ -175,7 +176,7 @@ const UserProfile = () => {
                   </div>
                 ) : (
                   <form onSubmit={handleSave} className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6 space-y-4">
-                    {/* 🔥 FIX: Force text color to black/zinc-900 for inputs so they are visible on white background */}
+                    {/* 🔥 FIX: Force text-zinc-900 (black) so inputs are visible */}
                     <input name="displayName" value={formData.displayName} onChange={handleChange} placeholder="Full Name" className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold" />
                     <div className="grid grid-cols-2 gap-4">
                       <input name="phone" value={formData.phone} onChange={handleChange} placeholder="Phone" className="w-full p-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold" />
