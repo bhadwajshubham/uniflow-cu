@@ -1,36 +1,38 @@
-import { db } from '../../../lib/firebase';
+import { db } from '../lib/firebase';
 import { doc, runTransaction, serverTimestamp, collection, query, where, getDocs, limit } from 'firebase/firestore';
 
 /**
  * 📧 PROFESSIONAL EMAIL SENDER
  * Includes: QR Code Image & Deep Link Button
+ * Note: Requires a backend API route at /api/email or similar to actually send the mail.
  */
 const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, details) => {
-  // 1. LOCALHOST GUARD
+  // 1. LOCALHOST GUARD (Development Mode)
   if (window.location.hostname === 'localhost' && window.location.port === '5173') {
-    console.log("🛑 Localhost: Email skipped (Mock Mode).");
+    console.log("🛑 Localhost: Email skipped (Mock Mode). Check Console for logic.");
     return;
   }
 
   console.log(`📨 Sending professional email to ${userEmail}...`);
   
   // 2. GENERATE ASSETS
-  // We use this API to create a QR image that works in Gmail
+  // Public API to create a QR image that works in Gmail
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${ticketId}`;
   
-  // Dynamic Link to your App (Works on Localhost and Vercel automatically)
+  // Dynamic Link to your App
   const appUrl = window.location.origin; 
-  const ticketLink = `${appUrl}/tickets`; // Assuming your ticket page is at /tickets
+  const ticketLink = `${appUrl}/my-tickets`; 
 
   try {
-    const response = await fetch('/api', {
+    // Note: Ensure you have an API route handling this POST request
+    const response = await fetch('/api/email', { // Updated to a common API path pattern
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to: userEmail,
-        email: userEmail,
+        email: userEmail, // Fallback
         subject: `🎟️ Ticket Confirmed: ${eventTitle}`,
-        // ✨ HTML TEMPLATE STARTS HERE ✨
+        // ✨ HTML TEMPLATE ✨
         html: `
           <!DOCTYPE html>
           <html>
@@ -84,7 +86,8 @@ const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, 
     }
 
   } catch (err) {
-    console.error("❌ Email Error:", err);
+    // Email fail hone par bhi ticket book ho jayegi, bas log kar do
+    console.error("❌ Email Service Error (Non-blocking):", err);
   }
 };
 
@@ -94,10 +97,16 @@ const validateRestrictions = (eventData, user, studentData) => {
   }
 };
 
+// --- MAIN FUNCTIONS ---
+
+/**
+ * 🎫 Individual Event Registration
+ */
 export const registerForEvent = async (eventId, user, profile, answers = {}) => {
   if (!user) throw new Error("User must be logged in");
   
   const eventRef = doc(db, 'events', eventId);
+  // Composite Key: ensures one ticket per user per event
   const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
   const statsRef = doc(db, "system_stats", "daily_emails");
   
@@ -112,36 +121,46 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
       if (!eventDoc.exists()) throw new Error("Event not found");
       eventDataForEmail = eventDoc.data();
 
+      // Check Rules
       validateRestrictions(eventDataForEmail, user, profile);
 
+      // Check Housefull
       if ((eventDataForEmail.ticketsSold || 0) >= parseInt(eventDataForEmail.totalTickets)) {
         throw new Error("SOLD_OUT");
       }
+      // Check Duplicate
       if (existingReg.exists()) {
         throw new Error("ALREADY_BOOKED");
       }
 
+      // Prepare Ticket Data
       const newTicket = {
         eventId,
         eventTitle: eventDataForEmail.title,
         eventDate: eventDataForEmail.date,
         eventTime: eventDataForEmail.time || 'TBA',
-        eventLocation: eventDataForEmail.location,
+        eventLocation: eventDataForEmail.venue || eventDataForEmail.location || 'Campus',
+        eventImage: eventDataForEmail.image || '',
+        
         userId: user.uid,
         userEmail: user.email,
-        userName: user.displayName,
+        userName: profile?.displayName || user.displayName,
         userRollNo: profile?.rollNo || 'N/A',
         userPhone: profile?.phone || 'N/A',
+        
         answers: answers,
         type: 'individual',
         status: 'confirmed',
         createdAt: serverTimestamp(),
-        used: false
+        used: false,
+        qrCode: `TICKET-${eventId}-${user.uid}` // Simple string for local display if image fails
       };
 
+      // Atomic Writes
       transaction.set(registrationRef, newTicket);
       transaction.update(eventRef, { ticketsSold: (eventDataForEmail.ticketsSold || 0) + 1 });
       
+      // Update System Stats
       if (statsSnap.exists()) {
         transaction.update(statsRef, { count: (statsSnap.data().count || 0) + 1 });
       } else {
@@ -149,14 +168,14 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
       }
     });
 
-    // TRIGGER PROFESSIONAL EMAIL
-    await sendConfirmationEmail(
+    // TRIGGER PROFESSIONAL EMAIL (Async - don't await blocking UI)
+    sendConfirmationEmail(
       user.email,
       user.displayName,
       eventDataForEmail.title,
       `${eventId}_${user.uid}`,
       `<p style="margin: 5px 0;"><strong>📅 Date:</strong> ${eventDataForEmail.date}</p>
-       <p style="margin: 5px 0;"><strong>📍 Location:</strong> ${eventDataForEmail.location}</p>`
+       <p style="margin: 5px 0;"><strong>📍 Location:</strong> ${eventDataForEmail.venue || eventDataForEmail.location}</p>`
     );
 
     return { success: true };
@@ -167,6 +186,9 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
   }
 };
 
+/**
+ * 👥 Register as Team Leader
+ */
 export const registerTeam = async (eventId, user, teamName, studentData) => {
   if (!user) throw new Error("Login required");
   if (!teamName || teamName.length < 3) throw new Error("Invalid Team Name");
@@ -209,15 +231,18 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
     await sendConfirmationEmail(
       user.email,
       user.displayName,
-      "Team Event", 
+      "Team Event: " + teamName, 
       `${eventId}_${user.uid}`,
-      `<p><strong>Team:</strong> ${teamName}</p><p><strong>Code:</strong> ${teamCode}</p>`
+      `<p><strong>Team Created:</strong> ${teamName}</p><p style="font-size:18px"><strong>Team Code:</strong> ${teamCode}</p>`
     );
 
     return { success: true, teamCode };
   } catch (error) { throw error; }
 };
 
+/**
+ * 🤝 Join Existing Team
+ */
 export const joinTeam = async (eventId, user, teamCode, studentData) => {
   if (!user) throw new Error("Login required");
   if (!teamCode) throw new Error("Team Code required");
@@ -274,7 +299,7 @@ export const joinTeam = async (eventId, user, teamCode, studentData) => {
     await sendConfirmationEmail(
       user.email,
       user.displayName,
-      "Team Event",
+      "Team Event: " + teamName,
       `${eventId}_${user.uid}`,
       `<p>Joined Team: <strong>${teamName}</strong></p>`
     );
