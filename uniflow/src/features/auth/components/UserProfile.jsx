@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { db, storage, auth } from '../../../lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore'; // ✅ Changed getDoc to onSnapshot
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
 import { 
   User, Phone, BookOpen, Layers, MapPin, LogOut, ShieldCheck, 
   CheckCircle, Hash, Camera, Edit2, Save, X, Loader2, AlertCircle 
 } from 'lucide-react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 const UserProfile = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation(); 
 
+  // Mode: View (ID Card) vs Edit (Form)
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -37,46 +37,47 @@ const UserProfile = () => {
   const [photo, setPhoto] = useState(null);
   const [preview, setPreview] = useState(null);
 
-  // 🔄 OPTIMIZED FETCH: Sirf Page Load/Navigate pe chalega (No Focus Listener)
+  // 🔄 REAL-TIME LISTENER (The Permanent Fix)
   useEffect(() => {
     if (!user) return;
 
-    const fetchProfileData = async () => {
-      try {
-        // Loading state hata diya taaki UI flicker na kare agar cache hai
-        // setLoading(true); <--- REMOVED for smoother UX
-        
-        const docRef = doc(db, 'users', user.uid);
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setProfile(data);
-          
-          const isStandard = ['B.E. (CSE)', 'B.E. (CSE-AI)', 'B.E. (ECE)', 'B.E. (ME)'].includes(data.branch);
-          
-          setFormData({
-            displayName: data.displayName || user.displayName || '',
-            phone: data.phone || '',
-            rollNo: data.rollNo || '',
-            branch: isStandard ? data.branch : 'Others',
-            customBranch: isStandard ? '' : data.branch,
-            semester: data.semester || '1st',
-            group: data.group || '',
-            residency: data.residency || 'Day Scholar'
-          });
-        }
-      } catch (err) { 
-        console.error("Profile Fetch Error:", err); 
-      } finally { 
-        setLoading(false); 
-      }
-    };
+    setLoading(true);
+    const userRef = doc(db, 'users', user.uid);
 
-    fetchProfileData();
-    // ❌ REMOVED: window.addEventListener("focus") -> Faltu reads saved!
-    
-  }, [user, location.key]); // ✅ location.key ensures fetch only happens on Route Change
+    // ✅ onSnapshot: Ye DB ke saath live connected rahega.
+    // Jaise hi kahin aur (Event Page pe) data badlega, ye AUTOMATIC update hoga.
+    const unsubscribe = onSnapshot(userRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setProfile(data);
+        
+        const isStandard = ['B.E. (CSE)', 'B.E. (CSE-AI)', 'B.E. (ECE)', 'B.E. (ME)'].includes(data.branch);
+        
+        // Form data ko tabhi update karo agar hum edit mode mein nahi hain
+        // Taaki user type kar raha ho toh data overwrite na ho jaye
+        if (!isEditing) {
+            setFormData({
+                displayName: data.displayName || user.displayName || '',
+                phone: data.phone || '',
+                rollNo: data.rollNo || '',
+                branch: isStandard ? data.branch : 'Others',
+                customBranch: isStandard ? '' : data.branch,
+                semester: data.semester || '1st',
+                group: data.group || '',
+                residency: data.residency || 'Day Scholar'
+            });
+        }
+      }
+      setLoading(false);
+    }, (error) => {
+      console.error("Real-time fetch error:", error);
+      setLoading(false);
+    });
+
+    // Cleanup listener when leaving page
+    return () => unsubscribe();
+
+  }, [user]); // Removed isEditing to prevent loop, logic handled inside
 
   // 🛡️ INPUT HANDLERS
   const handleChange = (e) => {
@@ -135,12 +136,12 @@ const UserProfile = () => {
         photoURL: finalPhotoURL,
         isProfileComplete: true,
         updatedAt: new Date(),
+        // TermsAccepted maintain rahega
         termsAccepted: profile?.termsAccepted || false 
       };
 
       await setDoc(doc(db, 'users', user.uid), updatedData, { merge: true });
 
-      setProfile(updatedData); 
       setSuccess("Profile Updated Successfully!");
       setTimeout(() => setSuccess(''), 3000);
       setIsEditing(false); 
@@ -197,6 +198,7 @@ const UserProfile = () => {
               <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-[10px] font-bold uppercase flex items-center">
                 <ShieldCheck className="w-3 h-3 mr-1" /> Verified
               </span>
+              {/* ✅ CONSENT BADGE: Automatically updates via Real-time Listener */}
               {profile?.termsAccepted && (
                 <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold uppercase flex items-center">
                   <CheckCircle className="w-3 h-3 mr-1" /> Consent Given
