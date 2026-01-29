@@ -3,95 +3,66 @@ import { doc, runTransaction, serverTimestamp, collection, query, where, getDocs
 
 /**
  * 📧 PROFESSIONAL EMAIL SENDER
- * Includes: QR Code Image & Deep Link Button
- * Note: Requires a backend API route at /api/email or similar to actually send the mail.
  */
 const sendConfirmationEmail = async (userEmail, userName, eventTitle, ticketId, details) => {
-  // 1. LOCALHOST GUARD (Development Mode)
+  // 1. LOCALHOST GUARD
   if (window.location.hostname === 'localhost' && window.location.port === '5173') {
-    console.log("🛑 Localhost: Email skipped (Mock Mode). Check Console for logic.");
+    console.log("🛑 Localhost: Email skipped (Mock Mode).");
     return;
   }
 
   console.log(`📨 Sending professional email to ${userEmail}...`);
   
-  // 2. GENERATE ASSETS
-  // Public API to create a QR image that works in Gmail
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${ticketId}`;
-  
-  // Dynamic Link to your App
   const appUrl = window.location.origin; 
   const ticketLink = `${appUrl}/my-tickets`; 
 
   try {
-    // Note: Ensure you have an API route handling this POST request
-    const response = await fetch('/api/email', { // Updated to a common API path pattern
+    const response = await fetch('/api/email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to: userEmail,
-        email: userEmail, // Fallback
+        email: userEmail,
         subject: `🎟️ Ticket Confirmed: ${eventTitle}`,
-        // ✨ HTML TEMPLATE ✨
         html: `
           <!DOCTYPE html>
           <html>
           <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f5; padding: 20px; margin: 0;">
             <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-              
               <div style="background-color: #4f46e5; padding: 30px 20px; text-align: center;">
                 <h1 style="color: #ffffff; margin: 0; font-size: 24px;">UniFlow Events</h1>
               </div>
-
               <div style="padding: 30px 20px; text-align: center;">
                 <h2 style="color: #18181b; margin-top: 0;">You're going to ${eventTitle}! 🚀</h2>
                 <p style="color: #52525b; font-size: 16px; line-height: 1.5;">
                   Hi <strong>${userName}</strong>, your spot is confirmed. <br/>
                   Simply scan this QR code at the entrance.
                 </p>
-
                 <div style="margin: 25px 0;">
                   <img src="${qrCodeUrl}" alt="Ticket QR Code" style="width: 180px; height: 180px; border: 2px solid #e4e4e7; border-radius: 12px; padding: 10px;" />
                   <p style="color: #71717a; font-size: 14px; margin-top: 5px; font-family: monospace;">ID: ${ticketId}</p>
                 </div>
-
                 <div style="background-color: #f4f4f5; border-radius: 8px; padding: 15px; text-align: left; margin-bottom: 25px;">
                   ${details}
                 </div>
-
                 <a href="${ticketLink}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 16px;">
                   View Ticket in App
                 </a>
               </div>
-
-              <div style="background-color: #fafafa; padding: 20px; text-align: center; border-top: 1px solid #e4e4e7;">
-                <p style="color: #a1a1aa; font-size: 12px; margin: 0;">
-                  Need help? Contact support via the UniFlow App.<br/>
-                  &copy; ${new Date().getFullYear()} UniFlow. All rights reserved.
-                </p>
-              </div>
-
             </div>
           </body>
           </html>
         `
       })
     });
-
-    const contentType = response.headers.get("content-type");
-    if (contentType && contentType.indexOf("application/json") !== -1) {
-      const data = await response.json();
-      if (!response.ok) console.warn("⚠️ Email API Warning:", data);
-      else console.log("✅ Professional Email Sent!");
-    }
-
   } catch (err) {
-    // Email fail hone par bhi ticket book ho jayegi, bas log kar do
-    console.error("❌ Email Service Error (Non-blocking):", err);
+    console.error("❌ Email Error:", err);
   }
 };
 
 const validateRestrictions = (eventData, user, studentData) => {
+  // University Only Check
   if (eventData.isUniversityOnly && !user.email.toLowerCase().endsWith('@chitkara.edu.in')) {
     throw new Error("🚫 Restricted: Official @chitkara.edu.in email required.");
   }
@@ -99,14 +70,10 @@ const validateRestrictions = (eventData, user, studentData) => {
 
 // --- MAIN FUNCTIONS ---
 
-/**
- * 🎫 Individual Event Registration
- */
 export const registerForEvent = async (eventId, user, profile, answers = {}) => {
   if (!user) throw new Error("User must be logged in");
   
   const eventRef = doc(db, 'events', eventId);
-  // Composite Key: ensures one ticket per user per event
   const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
   const statsRef = doc(db, "system_stats", "daily_emails");
   
@@ -121,19 +88,15 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
       if (!eventDoc.exists()) throw new Error("Event not found");
       eventDataForEmail = eventDoc.data();
 
-      // Check Rules
       validateRestrictions(eventDataForEmail, user, profile);
 
-      // Check Housefull
       if ((eventDataForEmail.ticketsSold || 0) >= parseInt(eventDataForEmail.totalTickets)) {
         throw new Error("SOLD_OUT");
       }
-      // Check Duplicate
       if (existingReg.exists()) {
         throw new Error("ALREADY_BOOKED");
       }
 
-      // Prepare Ticket Data
       const newTicket = {
         eventId,
         eventTitle: eventDataForEmail.title,
@@ -141,26 +104,22 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
         eventTime: eventDataForEmail.time || 'TBA',
         eventLocation: eventDataForEmail.venue || eventDataForEmail.location || 'Campus',
         eventImage: eventDataForEmail.image || '',
-        
         userId: user.uid,
         userEmail: user.email,
         userName: profile?.displayName || user.displayName,
         userRollNo: profile?.rollNo || 'N/A',
         userPhone: profile?.phone || 'N/A',
-        
         answers: answers,
         type: 'individual',
         status: 'confirmed',
         createdAt: serverTimestamp(),
         used: false,
-        qrCode: `TICKET-${eventId}-${user.uid}` // Simple string for local display if image fails
+        qrCode: `TICKET-${eventId}-${user.uid}`
       };
 
-      // Atomic Writes
       transaction.set(registrationRef, newTicket);
       transaction.update(eventRef, { ticketsSold: (eventDataForEmail.ticketsSold || 0) + 1 });
       
-      // Update System Stats
       if (statsSnap.exists()) {
         transaction.update(statsRef, { count: (statsSnap.data().count || 0) + 1 });
       } else {
@@ -168,14 +127,13 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
       }
     });
 
-    // TRIGGER PROFESSIONAL EMAIL (Async - don't await blocking UI)
+    // Send Email
     sendConfirmationEmail(
       user.email,
       user.displayName,
       eventDataForEmail.title,
       `${eventId}_${user.uid}`,
-      `<p style="margin: 5px 0;"><strong>📅 Date:</strong> ${eventDataForEmail.date}</p>
-       <p style="margin: 5px 0;"><strong>📍 Location:</strong> ${eventDataForEmail.venue || eventDataForEmail.location}</p>`
+      `<p style="margin: 5px 0;"><strong>📅 Date:</strong> ${eventDataForEmail.date}</p>`
     );
 
     return { success: true };
@@ -186,9 +144,6 @@ export const registerForEvent = async (eventId, user, profile, answers = {}) => 
   }
 };
 
-/**
- * 👥 Register as Team Leader
- */
 export const registerTeam = async (eventId, user, teamName, studentData) => {
   if (!user) throw new Error("Login required");
   if (!teamName || teamName.length < 3) throw new Error("Invalid Team Name");
@@ -233,29 +188,20 @@ export const registerTeam = async (eventId, user, teamName, studentData) => {
       user.displayName,
       "Team Event: " + teamName, 
       `${eventId}_${user.uid}`,
-      `<p><strong>Team Created:</strong> ${teamName}</p><p style="font-size:18px"><strong>Team Code:</strong> ${teamCode}</p>`
+      `<p><strong>Team Created:</strong> ${teamName}</p><p><strong>Code:</strong> ${teamCode}</p>`
     );
 
     return { success: true, teamCode };
   } catch (error) { throw error; }
 };
 
-/**
- * 🤝 Join Existing Team
- */
 export const joinTeam = async (eventId, user, teamCode, studentData) => {
   if (!user) throw new Error("Login required");
   if (!teamCode) throw new Error("Team Code required");
 
   const eventRef = doc(db, 'events', eventId);
   const registrationRef = doc(db, 'registrations', `${eventId}_${user.uid}`);
-  const q = query(
-    collection(db, 'registrations'), 
-    where('eventId', '==', eventId),
-    where('teamCode', '==', teamCode.trim().toUpperCase()),
-    where('type', '==', 'team_leader'),
-    limit(1)
-  );
+  const q = query(collection(db, 'registrations'), where('eventId', '==', eventId), where('teamCode', '==', teamCode.trim().toUpperCase()), where('type', '==', 'team_leader'), limit(1));
 
   try {
     const leaderSnap = await getDocs(q);
