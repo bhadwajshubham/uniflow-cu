@@ -8,12 +8,11 @@ import {
   User, Phone, BookOpen, Hash, Camera, Edit2, Save, X, 
   Loader2, AlertCircle, FileText, CheckCircle, ShieldCheck, LogOut 
 } from 'lucide-react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 const UserProfile = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
 
   // --- STATES ---
   const [isEditing, setIsEditing] = useState(false);
@@ -76,7 +75,7 @@ const UserProfile = () => {
     });
 
     return () => unsubscribe();
-  }, [user]); // Removed location.key to rely purely on snapshot stream
+  }, [user]);
 
   // ✅ INSTANT CONSENT HANDLER
   const handleAcceptTerms = async () => {
@@ -244,7 +243,7 @@ const UserProfile = () => {
                      </div>
                   </div>
                 ) : (
-                  /* EDIT FORM (FULL UNABBREVIATED) */
+                  /* EDIT FORM */
                   <form onSubmit={handleSave} className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border border-zinc-200 p-6 space-y-4">
                     <div><label className="text-[10px] font-black uppercase text-zinc-400 ml-1">Full Name</label><input name="displayName" value={formData.displayName} onChange={handleChange} className="w-full p-3 bg-zinc-50 rounded-xl font-bold border-none outline-none focus:ring-2 focus:ring-indigo-500/50" /></div>
                     <div className="grid grid-cols-2 gap-4">
