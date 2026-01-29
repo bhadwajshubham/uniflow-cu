@@ -4,21 +4,19 @@ import { db, auth } from '../../../lib/firebase';
 import { doc, getDoc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { Calendar, MapPin, Clock, ArrowLeft, Share2, Shield, User, Phone, Loader2, QrCode, X, CheckCircle } from 'lucide-react';
 
-// ✅ CORRECT PATH: Points to src/features/events/services/registrationService.js
+// ✅ CORRECT IMPORT PATH
 import { registerForEvent, registerTeam, joinTeam } from '../services/registrationService';
 
 const EventDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   
-  // Data State
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   
-  // Modals State
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false); 
   const [showTeamModal, setShowTeamModal] = useState(false);
@@ -28,7 +26,6 @@ const EventDetailsPage = () => {
   const [termsChecked, setTermsChecked] = useState(false);
   const [privacyChecked, setPrivacyChecked] = useState(false);
 
-  // 📝 Profile Form State
   const [formData, setFormData] = useState({ 
      rollNo: '', 
      phone: '', 
@@ -37,12 +34,10 @@ const EventDetailsPage = () => {
      semester: '1st' 
   });
 
-  // Team State
   const [teamMode, setTeamMode] = useState('create');
   const [teamName, setTeamName] = useState('');
   const [teamCode, setTeamCode] = useState('');
 
-  // 1. Fetch Data
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -68,18 +63,13 @@ const EventDetailsPage = () => {
         }
 
         const eventDoc = await getDoc(doc(db, "events", id));
-        if (eventDoc.exists()) {
-          setEvent({ id: eventDoc.id, ...eventDoc.data() });
-        } else {
-          // Silent fail or redirect
-        }
+        if (eventDoc.exists()) setEvent({ id: eventDoc.id, ...eventDoc.data() });
       } catch (error) { console.error(error); } 
       finally { setLoading(false); }
     };
     fetchData();
   }, [id, navigate]);
 
-  // Share Function
   const handleShare = async () => {
     const url = window.location.href;
     if (navigator.share) {
@@ -90,24 +80,13 @@ const EventDetailsPage = () => {
     }
   };
 
-  // 🛠️ CHECK REQUIREMENTS
   const checkRequirements = () => {
     if (!user) { navigate('/login'); return false; }
-    
-    // Check if critical fields exist
-    if (!profile?.rollNo || !profile?.phone || !profile?.branch) {
-      setShowProfileModal(true);
-      return false;
-    }
-
-    if (!profile.termsAccepted) {
-      setShowConsentModal(true);
-      return false;
-    }
+    if (!profile?.rollNo || !profile?.phone || !profile?.branch) { setShowProfileModal(true); return false; }
+    if (!profile.termsAccepted) { setShowConsentModal(true); return false; }
     return true;
   };
 
-  // 💾 SAVE PROFILE
   const handleSaveProfile = async () => {
     if (formData.phone.length !== 10) { alert("Phone number must be exactly 10 digits."); return; }
     if (formData.rollNo.length < 5) { alert("Enter a valid Roll Number."); return; }
@@ -130,14 +109,10 @@ const EventDetailsPage = () => {
       setProfile(prev => ({ ...prev, ...updatedData }));
       setShowProfileModal(false);
       if (!profile?.termsAccepted) { setShowConsentModal(true); }
-    } catch (error) {
-      alert("Error: " + error.message);
-    } finally {
-      setRegistering(false);
-    }
+    } catch (error) { alert("Error: " + error.message); } finally { setRegistering(false); }
   };
 
-  // 📝 HANDLE CONSENT
+  // ✅ HANDLER UPDATED TO MATCH UI
   const handleAgreeToTerms = async () => {
     if (!termsChecked || !privacyChecked) { alert("Please accept both checkboxes."); return; }
     try {
@@ -146,8 +121,10 @@ const EventDetailsPage = () => {
       await setDoc(userRef, { termsAccepted: true, updatedAt: serverTimestamp() }, { merge: true });
       setProfile(prev => ({ ...prev, termsAccepted: true }));
       setShowConsentModal(false);
+      
       if (event.maxTeamSize > 1) setShowTeamModal(true);
       else executeIndividualBooking();
+
     } catch (error) { alert("Error: " + error.message); } 
     finally { setRegistering(false); }
   };
@@ -170,8 +147,6 @@ const EventDetailsPage = () => {
       <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 mb-4"><ArrowLeft className="w-5 h-5 mr-2" /> Back</button>
       
       <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg overflow-hidden border border-zinc-200 dark:border-zinc-800">
-        
-        {/* 🔥 HEADER IMAGE SECTION */}
         <div className={`relative h-56 sm:h-72 w-full ${!event.image ? 'bg-gradient-to-r from-indigo-600 to-purple-700' : ''}`}>
            {event.image && (
              <>
@@ -179,16 +154,10 @@ const EventDetailsPage = () => {
                <div className="absolute inset-0 bg-black/40"></div>
              </>
            )}
-           
            <div className="absolute top-4 right-4 flex gap-2 z-10">
-              <button onClick={() => setShowQRModal(true)} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition">
-                  <QrCode className="w-6 h-6" />
-              </button>
-              <button onClick={handleShare} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition">
-                  <Share2 className="w-6 h-6" />
-              </button>
+              <button onClick={() => setShowQRModal(true)} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition"><QrCode className="w-6 h-6" /></button>
+              <button onClick={handleShare} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition"><Share2 className="w-6 h-6" /></button>
            </div>
-
            <div className="absolute bottom-0 left-0 right-0 p-6 text-white bg-gradient-to-t from-black/80 to-transparent">
              <span className="bg-white/20 backdrop-blur-md text-xs font-bold px-3 py-1 rounded-full border border-white/30 uppercase">{event.category}</span>
              <h1 className="text-3xl font-extrabold mt-3">{event.title}</h1>
@@ -211,7 +180,6 @@ const EventDetailsPage = () => {
         </div>
       </div>
 
-      {/* 🚨 MODAL 1: COMPLETE PROFILE */}
       {showProfileModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-in fade-in zoom-in-95">
           <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 max-w-md w-full shadow-2xl">
@@ -227,27 +195,39 @@ const EventDetailsPage = () => {
         </div>
       )}
 
-      {/* 🚨 MODAL 2: CONSENT (With Links) */}
+      {/* 🚀 FIXED CONSENT MODAL - SAME AS USER PROFILE */}
       {showConsentModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-           <div className="bg-white dark:bg-zinc-900 rounded-2xl p-8 max-w-sm w-full">
-             <h3 className="text-xl font-bold mb-4 flex items-center gap-2 dark:text-white"><Shield className="w-6 h-6 text-indigo-600"/> Final Consent</h3>
-             <div className="space-y-3 mb-6">
-                <label className="flex gap-3 cursor-pointer dark:text-gray-300">
-                    <input type="checkbox" checked={termsChecked} onChange={e => setTermsChecked(e.target.checked)}/> 
-                    <span>I agree to <a href="/terms" target="_blank" className="text-indigo-600 font-bold underline" onClick={e=>e.stopPropagation()}>Terms</a></span>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-in fade-in zoom-in-95">
+           <div className="bg-white dark:bg-zinc-900 rounded-3xl p-8 max-w-sm w-full border border-zinc-200 dark:border-zinc-800 text-center shadow-2xl">
+             
+             {/* Centered Shield Icon (Matches Screenshots) */}
+             <Shield className="w-14 h-14 text-indigo-600 mx-auto mb-4" />
+             
+             <h3 className="text-2xl font-extrabold mb-2 dark:text-white">Consent Required</h3>
+             <p className="text-zinc-500 text-sm mb-6">Please review and accept to continue</p>
+             
+             <div className="text-left space-y-3 mb-6 bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-zinc-100 dark:border-zinc-700">
+                <label className="flex gap-3 cursor-pointer dark:text-gray-300 items-center">
+                    <input type="checkbox" checked={termsChecked} onChange={e => setTermsChecked(e.target.checked)} className="w-5 h-5 text-indigo-600 rounded"/> 
+                    <span className="text-sm font-medium">I agree to <a href="/terms" target="_blank" className="text-indigo-600 font-bold underline" onClick={e=>e.stopPropagation()}>Terms & Conditions</a></span>
                 </label>
-                <label className="flex gap-3 cursor-pointer dark:text-gray-300">
-                    <input type="checkbox" checked={privacyChecked} onChange={e => setPrivacyChecked(e.target.checked)}/> 
-                    <span>I agree to <a href="/privacy" target="_blank" className="text-indigo-600 font-bold underline" onClick={e=>e.stopPropagation()}>Privacy</a></span>
+                <label className="flex gap-3 cursor-pointer dark:text-gray-300 items-center">
+                    <input type="checkbox" checked={privacyChecked} onChange={e => setPrivacyChecked(e.target.checked)} className="w-5 h-5 text-indigo-600 rounded"/> 
+                    <span className="text-sm font-medium">I agree to <a href="/privacy" target="_blank" className="text-indigo-600 font-bold underline" onClick={e=>e.stopPropagation()}>Privacy Policy</a></span>
                 </label>
              </div>
-             <button onClick={handleAgreeToTerms} disabled={!termsChecked || !privacyChecked} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold disabled:opacity-50">Agree & Book</button>
+             
+             <button 
+                onClick={handleAgreeToTerms} 
+                disabled={!termsChecked || !privacyChecked} 
+                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/30"
+             >
+                <CheckCircle className="w-5 h-5" /> Accept & Continue
+             </button>
            </div>
         </div>
       )}
 
-      {/* ... QR & Team Modals ... */}
       {showQRModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white p-6 rounded-3xl shadow-2xl text-center max-w-xs w-full relative">

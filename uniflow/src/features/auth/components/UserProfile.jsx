@@ -4,7 +4,7 @@ import { db, storage, auth } from '../../../lib/firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'; 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
-import { User, Phone, BookOpen, Hash, Camera, Edit2, Save, X, Loader2, AlertCircle, CheckCircle, Shield, LogOut } from 'lucide-react';
+import { User, Phone, BookOpen, Hash, Camera, Edit2, Save, X, Loader2, Shield, CheckCircle, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const UserProfile = () => {
@@ -14,14 +14,13 @@ const UserProfile = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false); 
-  const [consenting, setConsenting] = useState(false);
   
   // ✅ States for Checkboxes
   const [termsChecked, setTermsChecked] = useState(false);
   const [privacyChecked, setPrivacyChecked] = useState(false);
-  
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  
   const [profile, setProfile] = useState(null);
   const [photo, setPhoto] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -36,7 +35,8 @@ const UserProfile = () => {
     const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (!saving && !consenting) { 
+        // Sirf tab update karo jab hum save nahi kar rahe, taaki UI flicker na kare
+        if (!saving) { 
             setProfile(data);
             if (!isEditing) {
                 const isStandard = ['B.E. (CSE)', 'B.E. (CSE-AI)', 'B.E. (ECE)', 'B.E. (ME)'].includes(data.branch);
@@ -58,26 +58,26 @@ const UserProfile = () => {
     return () => unsubscribe();
   }, [user]);
 
-  // 🔥 UNIFIED CONSENT HANDLER (Same as Event Details)
+  // 🚀 INSTANT SPEED HANDLER
   const handleAcceptTerms = async () => {
     if (!termsChecked || !privacyChecked) {
-        setError("Please accept both checkboxes.");
+        setError("Please check both boxes to continue.");
         return;
     }
-    
-    // UI Update (Instant)
-    setConsenting(true);
+
+    // ⚡ MAGIC STEP: Update UI immediately (Don't wait for DB)
     setProfile(prev => ({ ...prev, termsAccepted: true }));
-    setSuccess("Terms Accepted!");
+    setSuccess("Welcome!");
 
     try {
+        // DB Update happens quietly in background
         await setDoc(doc(db, 'users', user.uid), { 
             termsAccepted: true, 
             updatedAt: new Date() 
         }, { merge: true });
-        
-        setTimeout(() => { setSuccess(''); setConsenting(false); }, 2000);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+        console.error("Sync Error:", err);
+    }
   };
 
   const handleSave = async (e) => {
@@ -87,6 +87,7 @@ const UserProfile = () => {
 
     if (formData.phone.length !== 10) { setError("Phone must be 10 digits."); setSaving(false); return; }
     if (formData.rollNo.length < 5) { setError("Invalid Roll No."); setSaving(false); return; }
+    
     const finalBranch = formData.branch === 'Others' ? formData.customBranch.trim() : formData.branch;
     if (!finalBranch) { setError("Specify Branch."); setSaving(false); return; }
 
@@ -111,10 +112,14 @@ const UserProfile = () => {
         updatedAt: new Date()
       };
 
-      await setDoc(doc(db, 'users', user.uid), updatedData, { merge: true });
+      // ⚡ INSTANT UI UPDATE
       setProfile(prev => ({ ...prev, ...updatedData })); 
       setIsEditing(false); 
       setSuccess("Profile Updated!"); 
+
+      // DB Update with Merge (Protects Admin Role)
+      await setDoc(doc(db, 'users', user.uid), updatedData, { merge: true });
+      
       setTimeout(() => setSuccess(''), 3000);
 
     } catch (err) { setError("Update failed: " + err.message); } 
@@ -139,13 +144,14 @@ const UserProfile = () => {
     <div className="min-h-screen bg-zinc-50 dark:bg-black pt-20 pb-24 px-4">
       <div className="max-w-md mx-auto">
         
-        {/* 🚀 UNIFIED CONSENT UI (Matches Event Details Logic) */}
+        {/* 🔴 CASE 1: TERMS NOT ACCEPTED -> SHOW SHIELD UI (Consistent) */}
         {!profile?.termsAccepted ? (
-            <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl p-8 text-center border border-zinc-200 dark:border-zinc-800 animate-in fade-in zoom-in duration-300">
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl p-8 text-center border-2 border-indigo-100 dark:border-zinc-800 animate-in fade-in zoom-in duration-300">
                 <Shield className="w-14 h-14 text-indigo-600 mx-auto mb-4" />
                 <h2 className="text-2xl font-extrabold mb-2 dark:text-white">Consent Required</h2>
-                <p className="text-zinc-500 text-sm mb-6">Please review and accept to continue</p>
+                <p className="text-zinc-500 text-sm mb-6">Please review and accept to continue.</p>
                 
+                {/* ✅ CHECKBOXES */}
                 <div className="text-left space-y-3 mb-6 bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-zinc-100 dark:border-zinc-700">
                     <label className="flex items-center gap-3 cursor-pointer">
                         <input type="checkbox" checked={termsChecked} onChange={e => setTermsChecked(e.target.checked)} className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"/>
@@ -168,7 +174,7 @@ const UserProfile = () => {
                 </button>
             </div>
         ) : (
-            /* 🟢 PROFILE VIEW (Same as before) */
+            /* 🟢 CASE 2: TERMS ACCEPTED -> SHOW PROFILE */
             <>
                 <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 mb-6 relative">
                   <div className="h-32 bg-gradient-to-r from-indigo-600 to-purple-600 relative">
@@ -178,7 +184,7 @@ const UserProfile = () => {
                   </div>
                   <div className="absolute top-16 left-1/2 -translate-x-1/2">
                      <div className="w-28 h-28 bg-white dark:bg-zinc-900 rounded-full p-1.5 shadow-2xl relative group">
-                        <img src={preview || profile?.photoURL || `https://ui-avatars.com/api/?name=${profile?.displayName}`} alt="Profile" className="w-full h-full rounded-full object-cover border-2 border-zinc-100"/>
+                        <img src={preview || profile?.photoURL || `https://ui-avatars.com/api/?name=${profile?.displayName}`} className="w-full h-full rounded-full object-cover border-2 border-zinc-100"/>
                         {isEditing && <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center cursor-pointer"><Camera className="w-8 h-8 text-white" /><input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" /></div>}
                      </div>
                   </div>
