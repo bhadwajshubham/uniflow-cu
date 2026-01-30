@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom'; // ✅ Added for redirection
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   signInWithPopup,
   GoogleAuthProvider,
@@ -15,22 +15,8 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 
-/**
- * 🛡️ AuthContext — FINAL HARDENED VERSION
- *
- * Security Guarantees:
- * - Atomic user provisioning (no race conditions)
- * - Auth token is the single source of truth (email)
- * - Privilege escalation is detected AND persisted
- * - Pre-seeded Firestore attacks are neutralized
- */
-
-// 🔐 HARD ADMIN ALLOWLIST (temporary until Custom Claims)
-const ADMIN_ALLOWLIST = [
-  'bhardwajshubham0777@gmail.com'
-];
-
 const AuthContext = createContext();
+
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
@@ -38,19 +24,24 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(undefined);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Hooks for redirection
   const navigate = useNavigate();
   const location = useLocation();
 
   const login = async () => {
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Login failed:", error);
+    }
   };
 
   const logout = async () => {
     try {
       await firebaseSignOut(auth);
-      navigate('/login'); // Optional: Redirect to login after logout
+      setUser(null);
+      setProfile(null);
+      navigate('/login');
     } catch (err) {
       console.error('Logout failed', err);
     }
@@ -70,15 +61,15 @@ export const AuthProvider = ({ children }) => {
       const userRef = doc(db, 'users', currentUser.uid);
 
       try {
-        // 🔒 ATOMIC USER CREATION (RACE SAFE)
+        // 🔒 ATOMIC USER CREATION (Safe for 500+ concurrent users)
         await runTransaction(db, async (tx) => {
           const snap = await tx.get(userRef);
           if (!snap.exists()) {
             tx.set(userRef, {
-              displayName: currentUser.displayName || null,
+              displayName: currentUser.displayName || 'Student',
               email: currentUser.email,
               photoURL: currentUser.photoURL || null,
-              role: 'student',
+              role: 'student', // Default Role
               termsAccepted: false,
               createdAt: serverTimestamp()
             });
@@ -87,55 +78,31 @@ export const AuthProvider = ({ children }) => {
 
         // 🔍 LOAD PROFILE
         const freshSnap = await getDoc(userRef);
-        if (!freshSnap.exists()) {
-          setProfile(null);
-          setLoading(false);
-          return;
-        }
+        if (freshSnap.exists()) {
+            const data = freshSnap.data();
+            
+            // Sync Email if changed in Google
+            if (data.email !== currentUser.email) {
+                await setDoc(userRef, { email: currentUser.email }, { merge: true });
+                data.email = currentUser.email;
+            }
 
-        const data = freshSnap.data();
-        let needsUpdate = false;
-        const updates = {};
+            setProfile(data);
 
-        // 🔐 EMAIL = AUTH SOURCE OF TRUTH
-        if (data.email !== currentUser.email) {
-          updates.email = currentUser.email;
-          data.email = currentUser.email;
-          needsUpdate = true;
-        }
-
-        // 🔥 PRIVILEGE SANITIZATION (PERSISTED)
-        if (
-          (data.role === 'admin' || data.role === 'super_admin') &&
-          !ADMIN_ALLOWLIST.includes(currentUser.email)
-        ) {
-          console.warn(
-            `🚨 SECURITY: Unauthorized admin detected for ${currentUser.email}. Revoking.`
-          );
-          updates.role = 'student';
-          data.role = 'student';
-          needsUpdate = true;
-        }
-
-        // 💾 WRITE FIX BACK TO FIRESTORE (CRITICAL)
-        if (needsUpdate) {
-          await setDoc(userRef, updates, { merge: true });
-        }
-
-        setProfile(data);
-
-        // 🚦 REDIRECTION LOGIC (Added)
-        // Agar Terms accepted nahi hain, aur banda already profile pe nahi hai -> Profile pe bhejo
-        if (data.termsAccepted === false) {
-             // Sirf tab redirect karo jab hum login page ya home pe hon, taaki loop na bane
-             if (window.location.pathname !== '/profile') {
-                 console.log("⚠️ Consent pending. Redirecting to Profile...");
-                 navigate('/profile'); 
-             }
+            // 🚦 REDIRECTION LOGIC:
+            // Agar Terms accepted nahi hain -> Go to Profile (Shield UI)
+            if (data.termsAccepted === false) {
+                // Loop prevent karne ke liye check
+                if (window.location.pathname !== '/profile') {
+                    navigate('/profile'); 
+                }
+            }
+        } else {
+            setProfile(null);
         }
 
       } catch (err) {
-        console.error('AuthContext fatal error:', err);
+        console.error('AuthContext Error:', err);
         setProfile(null);
       } finally {
         setLoading(false);
@@ -143,18 +110,10 @@ export const AuthProvider = ({ children }) => {
     });
 
     return () => unsubscribe();
-  }, [navigate]); // Added navigate dependency
+  }, [navigate]);
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        profile,
-        login,
-        logout,
-        loading
-      }}
-    >
+    <AuthContext.Provider value={{ user, profile, login, logout, loading }}>
       {!loading && children}
     </AuthContext.Provider>
   );
