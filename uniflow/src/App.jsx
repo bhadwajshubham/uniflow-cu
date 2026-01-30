@@ -2,7 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
-import Consent from "./pages/Consent";
+
 
 // ✅ Navbar
 import Navbar from './components/layout/Navbar';
