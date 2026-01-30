@@ -17,6 +17,7 @@ const EventDetailsPage = () => {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   
+  // Modals
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false); 
   const [showTeamModal, setShowTeamModal] = useState(false);
@@ -26,18 +27,13 @@ const EventDetailsPage = () => {
   const [termsChecked, setTermsChecked] = useState(false);
   const [privacyChecked, setPrivacyChecked] = useState(false);
 
-  const [formData, setFormData] = useState({ 
-     rollNo: '', 
-     phone: '', 
-     branch: 'B.E. (CSE)', 
-     customBranch: '', 
-     semester: '1st' 
-  });
-
+  // Forms
+  const [formData, setFormData] = useState({ rollNo: '', phone: '', branch: 'B.E. (CSE)', customBranch: '', semester: '1st' });
   const [teamMode, setTeamMode] = useState('create');
   const [teamName, setTeamName] = useState('');
   const [teamCode, setTeamCode] = useState('');
 
+  // 1. Fetch Data
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -50,7 +46,6 @@ const EventDetailsPage = () => {
           if (userDoc.exists()) {
             const userData = userDoc.data();
             setProfile(userData);
-            
             const isStandard = ['B.E. (CSE)', 'B.E. (CSE-AI)', 'B.E. (ECE)', 'B.E. (ME)'].includes(userData.branch);
             setFormData({
               rollNo: userData.rollNo || '',
@@ -63,7 +58,11 @@ const EventDetailsPage = () => {
         }
 
         const eventDoc = await getDoc(doc(db, "events", id));
-        if (eventDoc.exists()) setEvent({ id: eventDoc.id, ...eventDoc.data() });
+        if (eventDoc.exists()) {
+            // 🔥 DEBUG: Console log to check if image field exists
+            console.log("Event Data:", eventDoc.data()); 
+            setEvent({ id: eventDoc.id, ...eventDoc.data() });
+        }
       } catch (error) { console.error(error); } 
       finally { setLoading(false); }
     };
@@ -88,12 +87,9 @@ const EventDetailsPage = () => {
   };
 
   const handleSaveProfile = async () => {
-    if (formData.phone.length !== 10) { alert("Phone number must be exactly 10 digits."); return; }
-    if (formData.rollNo.length < 5) { alert("Enter a valid Roll Number."); return; }
-    
+    if (formData.phone.length !== 10) { alert("Invalid Phone"); return; }
+    if (formData.rollNo.length < 5) { alert("Invalid Roll No"); return; }
     const finalBranch = formData.branch === 'Others' ? formData.customBranch.trim() : formData.branch;
-    if (!finalBranch) { alert("Please specify your Branch/Course."); return; }
-
     try {
       setRegistering(true);
       const userRef = doc(db, "users", user.uid);
@@ -112,7 +108,6 @@ const EventDetailsPage = () => {
     } catch (error) { alert("Error: " + error.message); } finally { setRegistering(false); }
   };
 
-  // ✅ HANDLER UPDATED TO MATCH UI
   const handleAgreeToTerms = async () => {
     if (!termsChecked || !privacyChecked) { alert("Please accept both checkboxes."); return; }
     try {
@@ -121,19 +116,16 @@ const EventDetailsPage = () => {
       await setDoc(userRef, { termsAccepted: true, updatedAt: serverTimestamp() }, { merge: true });
       setProfile(prev => ({ ...prev, termsAccepted: true }));
       setShowConsentModal(false);
-      
       if (event.maxTeamSize > 1) setShowTeamModal(true);
       else executeIndividualBooking();
-
-    } catch (error) { alert("Error: " + error.message); } 
-    finally { setRegistering(false); }
+    } catch (error) { alert("Error: " + error.message); } finally { setRegistering(false); }
   };
 
   const executeIndividualBooking = async () => {
     try {
       setRegistering(true);
       await registerForEvent(event.id, user, profile);
-      alert("🎉 Ticket Booked! Check Email.");
+      alert("🎉 Ticket Booked!");
       navigate('/my-tickets');
     } catch (error) { alert("Failed: " + error.message); }
     finally { setRegistering(false); }
@@ -142,26 +134,46 @@ const EventDetailsPage = () => {
   if (loading) return <div className="p-10 text-center">Loading...</div>;
   if (!event) return <div className="p-10 text-center text-red-500">Event Not Found</div>;
 
+  // 🔥 FIXED IMAGE LOGIC
+  const eventImage = event.image || event.imageUrl || event.poster || null;
+
   return (
     <div className="max-w-4xl mx-auto p-4 pb-32 pt-20">
       <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 mb-4"><ArrowLeft className="w-5 h-5 mr-2" /> Back</button>
       
       <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg overflow-hidden border border-zinc-200 dark:border-zinc-800">
-        <div className={`relative h-56 sm:h-72 w-full ${!event.image ? 'bg-gradient-to-r from-indigo-600 to-purple-700' : ''}`}>
-           {event.image && (
+        
+        {/* 🔥 HEADER IMAGE SECTION */}
+        {/* Logic: Agar Image hai toh Image dikhao, nahi toh Gradient */}
+        <div className={`relative h-56 sm:h-80 w-full ${!eventImage ? 'bg-gradient-to-r from-indigo-600 to-purple-700' : 'bg-black'}`}>
+           
+           {eventImage ? (
              <>
-               <img src={event.image} alt={event.title} className="w-full h-full object-cover"/>
-               <div className="absolute inset-0 bg-black/40"></div>
+               {/* Actual Image */}
+               <img 
+                 src={eventImage} 
+                 alt={event.title} 
+                 className="w-full h-full object-cover opacity-90"
+               />
+               {/* Subtle Overlay for Text Readability */}
+               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
              </>
+           ) : (
+             // No Image Fallback Pattern
+             <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
            )}
+           
+           {/* Actions */}
            <div className="absolute top-4 right-4 flex gap-2 z-10">
               <button onClick={() => setShowQRModal(true)} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition"><QrCode className="w-6 h-6" /></button>
               <button onClick={handleShare} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition"><Share2 className="w-6 h-6" /></button>
            </div>
-           <div className="absolute bottom-0 left-0 right-0 p-6 text-white bg-gradient-to-t from-black/80 to-transparent">
-             <span className="bg-white/20 backdrop-blur-md text-xs font-bold px-3 py-1 rounded-full border border-white/30 uppercase">{event.category}</span>
-             <h1 className="text-3xl font-extrabold mt-3">{event.title}</h1>
-             <div className="flex gap-4 mt-3 opacity-90 text-sm">
+
+           {/* Event Title & Details Overlay */}
+           <div className="absolute bottom-0 left-0 right-0 p-6 text-white z-20">
+             <span className="bg-white/20 backdrop-blur-md text-xs font-bold px-3 py-1 rounded-full border border-white/30 uppercase">{event.category || 'Event'}</span>
+             <h1 className="text-3xl sm:text-4xl font-extrabold mt-3 shadow-sm">{event.title}</h1>
+             <div className="flex gap-4 mt-3 opacity-90 text-sm font-medium">
                 <span className="flex items-center"><Calendar className="w-4 h-4 mr-1"/>{new Date(event.date).toLocaleDateString()}</span>
                 <span className="flex items-center"><MapPin className="w-4 h-4 mr-1"/>{event.venue || event.location}</span>
              </div>
@@ -169,7 +181,8 @@ const EventDetailsPage = () => {
         </div>
 
         <div className="p-6">
-          <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-8">{event.description}</p>
+          <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-8 whitespace-pre-wrap">{event.description}</p>
+          
           <div className="flex gap-4 pt-6 border-t border-zinc-200 dark:border-zinc-800">
             {event.maxTeamSize > 1 ? (
               <button onClick={() => checkRequirements() && setShowTeamModal(true)} disabled={registering} className="flex-1 bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 disabled:opacity-50 flex justify-center">{registering ? <Loader2 className="animate-spin"/> : "Register as Team"}</button>
@@ -180,12 +193,13 @@ const EventDetailsPage = () => {
         </div>
       </div>
 
+      {/* MODALS */}
       {showProfileModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <h3 className="text-xl font-bold text-center mb-4 dark:text-white">Complete Profile</h3>
             <div className="space-y-3">
-                 <input value={formData.phone} onChange={e=>setFormData({...formData, phone:e.target.value})} placeholder="Phone (10 digits)" className="w-full p-3 border rounded-xl bg-zinc-50 text-zinc-900"/>
+                 <input value={formData.phone} onChange={e=>setFormData({...formData, phone:e.target.value})} placeholder="Phone" className="w-full p-3 border rounded-xl bg-zinc-50 text-zinc-900"/>
                  <input value={formData.rollNo} onChange={e=>setFormData({...formData, rollNo:e.target.value})} placeholder="Roll No" className="w-full p-3 border rounded-xl bg-zinc-50 text-zinc-900"/>
                  <select value={formData.branch} onChange={e=>setFormData({...formData, branch:e.target.value})} className="w-full p-3 border rounded-xl bg-zinc-50 text-zinc-900"><option>B.E. (CSE)</option><option>Others</option></select>
                  {formData.branch==='Others' && <input value={formData.customBranch} onChange={e=>setFormData({...formData, customBranch:e.target.value})} placeholder="Specify Branch" className="w-full p-3 border rounded-xl bg-zinc-50 text-zinc-900"/>}
@@ -195,33 +209,24 @@ const EventDetailsPage = () => {
         </div>
       )}
 
-      {/* 🚀 FIXED CONSENT MODAL - SAME AS USER PROFILE */}
       {showConsentModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-in fade-in">
            <div className="bg-white dark:bg-zinc-900 rounded-3xl p-8 max-w-sm w-full border border-zinc-200 dark:border-zinc-800 text-center shadow-2xl">
-             
-             {/* Centered Shield Icon (Matches Screenshots) */}
              <Shield className="w-14 h-14 text-indigo-600 mx-auto mb-4" />
-             
              <h3 className="text-2xl font-extrabold mb-2 dark:text-white">Consent Required</h3>
              <p className="text-zinc-500 text-sm mb-6">Please review and accept to continue</p>
              
              <div className="text-left space-y-3 mb-6 bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-zinc-100 dark:border-zinc-700">
                 <label className="flex gap-3 cursor-pointer dark:text-gray-300 items-center">
                     <input type="checkbox" checked={termsChecked} onChange={e => setTermsChecked(e.target.checked)} className="w-5 h-5 text-indigo-600 rounded"/> 
-                    <span className="text-sm font-medium">I agree to <a href="/terms" target="_blank" className="text-indigo-600 font-bold underline" onClick={e=>e.stopPropagation()}>Terms & Conditions</a></span>
+                    <span className="text-sm font-medium">I agree to <a href="/terms" target="_blank" className="text-indigo-600 font-bold underline" onClick={e=>e.stopPropagation()}>Terms</a></span>
                 </label>
                 <label className="flex gap-3 cursor-pointer dark:text-gray-300 items-center">
                     <input type="checkbox" checked={privacyChecked} onChange={e => setPrivacyChecked(e.target.checked)} className="w-5 h-5 text-indigo-600 rounded"/> 
-                    <span className="text-sm font-medium">I agree to <a href="/privacy" target="_blank" className="text-indigo-600 font-bold underline" onClick={e=>e.stopPropagation()}>Privacy Policy</a></span>
+                    <span className="text-sm font-medium">I agree to <a href="/privacy" target="_blank" className="text-indigo-600 font-bold underline" onClick={e=>e.stopPropagation()}>Privacy</a></span>
                 </label>
              </div>
-             
-             <button 
-                onClick={handleAgreeToTerms} 
-                disabled={!termsChecked || !privacyChecked} 
-                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/30"
-             >
+             <button onClick={handleAgreeToTerms} disabled={!termsChecked || !privacyChecked} className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold flex items-center justify-center gap-2">
                 <CheckCircle className="w-5 h-5" /> Accept & Continue
              </button>
            </div>
@@ -241,7 +246,7 @@ const EventDetailsPage = () => {
       )}
       
       {showTeamModal && (
-         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 max-w-md w-full">
                <h3 className="text-xl font-bold mb-4 dark:text-white">Team Setup</h3>
                <div className="flex bg-gray-100 dark:bg-zinc-800 p-1 rounded-lg mb-4"><button onClick={()=>setTeamMode('create')} className={`flex-1 py-2 rounded ${teamMode==='create'?'bg-white shadow text-black':'text-gray-500'}`}>Create</button><button onClick={()=>setTeamMode('join')} className={`flex-1 py-2 rounded ${teamMode==='join'?'bg-white shadow text-black':'text-gray-500'}`}>Join</button></div>
