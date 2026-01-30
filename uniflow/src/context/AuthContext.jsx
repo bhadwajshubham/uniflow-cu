@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom'; // ✅ Added for redirection
 import {
   signInWithPopup,
   GoogleAuthProvider,
@@ -37,6 +38,10 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(undefined);
   const [loading, setLoading] = useState(true);
 
+  // ✅ Hooks for redirection
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const login = async () => {
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
@@ -45,6 +50,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       await firebaseSignOut(auth);
+      navigate('/login'); // Optional: Redirect to login after logout
     } catch (err) {
       console.error('Logout failed', err);
     }
@@ -117,6 +123,17 @@ export const AuthProvider = ({ children }) => {
         }
 
         setProfile(data);
+
+        // 🚦 REDIRECTION LOGIC (Added)
+        // Agar Terms accepted nahi hain, aur banda already profile pe nahi hai -> Profile pe bhejo
+        if (data.termsAccepted === false) {
+             // Sirf tab redirect karo jab hum login page ya home pe hon, taaki loop na bane
+             if (window.location.pathname !== '/profile') {
+                 console.log("⚠️ Consent pending. Redirecting to Profile...");
+                 navigate('/profile'); 
+             }
+        }
+
       } catch (err) {
         console.error('AuthContext fatal error:', err);
         setProfile(null);
@@ -126,7 +143,7 @@ export const AuthProvider = ({ children }) => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [navigate]); // Added navigate dependency
 
   return (
     <AuthContext.Provider

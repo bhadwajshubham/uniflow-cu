@@ -91,7 +91,7 @@ function App() {
             <Route path="/about" element={<AboutPage />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/privacy" element={<Privacy />} />
-            <Route path="/consent" element={<Consent />} />
+            
 
             {/* 👤 User */}
             <Route
