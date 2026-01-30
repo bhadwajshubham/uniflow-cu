@@ -15,9 +15,12 @@ import {
 } from 'firebase/firestore';
 
 // ==========================================
-// 🎨 1. PROFESSIONAL EMAIL TEMPLATE
+// 🎨 1. PROFESSIONAL EMAIL TEMPLATE (FIXED QR & LAYOUT)
 // ==========================================
 const getTicketEmailTemplate = (userName, eventName, eventDate, venue, ticketId) => {
+  // QR Code Generation using Google Charts API (Reliable for Emails)
+  const qrUrl = `https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=${ticketId}&choe=UTF-8`;
+
   return `
     <!DOCTYPE html>
     <html>
@@ -25,41 +28,73 @@ const getTicketEmailTemplate = (userName, eventName, eventDate, venue, ticketId)
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f5; margin: 0; padding: 0; }
-        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; margin-top: 20px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border: 1px solid #e4e4e7; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e4e4e7; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
         .header { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 30px 20px; text-align: center; color: white; }
-        .header h1 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+        .header h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+        .header p { margin: 5px 0 0 0; opacity: 0.9; font-size: 14px; }
         .content { padding: 30px; color: #333; }
         .greeting { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: #18181b; }
         .card { background-color: #f8fafc; border: 2px dashed #e2e8f0; border-radius: 12px; padding: 25px; margin: 20px 0; }
-        .row { margin-bottom: 15px; display: flex; justify-content: space-between; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; }
+        .row { margin-bottom: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; }
         .row:last-child { border-bottom: none; margin-bottom: 0; }
-        .label { font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: 700; }
-        .value { font-size: 16px; font-weight: 600; color: #0f172a; text-align: right; }
-        .btn { display: inline-block; background-color: #4f46e5; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; margin-top: 10px; }
-        .footer { background-color: #f1f5f9; padding: 20px; text-align: center; font-size: 12px; color: #64748b; }
+        .label { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; display: block; margin-bottom: 4px; }
+        .value { font-size: 15px; font-weight: 600; color: #0f172a; display: block; }
+        
+        /* 🔥 FIX: Ticket ID Overflow */
+        .ticket-id { font-family: monospace; color: #4f46e5; word-break: break-all; overflow-wrap: break-word; font-size: 14px; }
+
+        .btn { display: inline-block; background-color: #4f46e5; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; margin-top: 20px; }
+        .footer { background-color: #f1f5f9; padding: 20px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; }
+        
+        .qr-container { text-align: center; margin-top: 20px; padding: 10px; background: white; border-radius: 8px; display: inline-block; border: 1px solid #eee; }
+        .qr-img { width: 150px; height: 150px; display: block; }
       </style>
     </head>
     <body>
       <div class="container">
         <div class="header">
           <h1>UniFlow Ticket</h1>
-          <p>Your Gate Pass is Ready!</p>
+          <p>You're confirmed! 🎟️</p>
         </div>
         <div class="content">
           <p class="greeting">Hi ${userName},</p>
-          <p>Your registration for <strong>${eventName}</strong> is confirmed!</p>
+          <p>Your registration for <strong>${eventName}</strong> is confirmed. See you there!</p>
+          
           <div class="card">
-            <div class="row"><span class="label">Event</span><span class="value">${eventName}</span></div>
-            <div class="row"><span class="label">Date</span><span class="value">${new Date(eventDate).toLocaleDateString()}</span></div>
-            <div class="row"><span class="label">Venue</span><span class="value">${venue || 'TBA'}</span></div>
-            <div class="row"><span class="label">Ticket ID</span><span class="value" style="font-family: monospace; color: #4f46e5;">${ticketId}</span></div>
+            <div class="row">
+              <span class="label">Event</span>
+              <span class="value">${eventName}</span>
+            </div>
+            <div class="row">
+              <span class="label">Date</span>
+              <span class="value">${new Date(eventDate).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</span>
+            </div>
+            <div class="row">
+              <span class="label">Venue</span>
+              <span class="value">${venue || 'Campus Venue'}</span>
+            </div>
+            <div class="row" style="border-bottom: none;">
+              <span class="label">Ticket ID</span>
+              <span class="value ticket-id">${ticketId}</span>
+            </div>
           </div>
+
+          <div style="text-align: center;">
+            <div class="qr-container">
+              <img src="${qrUrl}" alt="Ticket QR Code" class="qr-img" />
+            </div>
+            <p style="font-size: 12px; color: #888; margin-top: 5px;">Scan this at entry</p>
+          </div>
+
           <div style="text-align: center;">
             <a href="https://uniflow-cu.vercel.app/my-tickets" class="btn">View Digital Ticket</a>
           </div>
         </div>
-        <div class="footer"><p>© 2026 UniFlow Event Management</p></div>
+        <div class="footer">
+          <p>© 2026 UniFlow Event Management</p>
+          <p>This is an automated message. Please do not reply.</p>
+        </div>
       </div>
     </body>
     </html>
