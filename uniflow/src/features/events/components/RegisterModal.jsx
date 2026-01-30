@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   X, User, Loader2, ArrowRight, ShieldCheck, 
-  Hash, Smartphone, Ticket, CheckCircle
+  Hash, Smartphone, Ticket, CheckCircle, AlertTriangle
 } from 'lucide-react';
-import { doc, getDoc } from 'firebase/firestore'; // Import for checking registration
+import { doc, getDoc } from 'firebase/firestore'; 
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { registerForEvent, registerTeam, joinTeam } from '../services/registrationService';
@@ -17,27 +17,27 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [loading, setLoading] = useState(false);
   
-  // 🆕 STATE: To track registration status
+  // Status States
   const [isAlreadyRegistered, setIsAlreadyRegistered] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false); // For confetti/success screen
+  const [isSuccess, setIsSuccess] = useState(false);
 
   // Form States
   const [teamName, setTeamName] = useState('');
   const [teamCode, setTeamCode] = useState('');
   const [step, setStep] = useState('form'); 
   const [mode, setMode] = useState('solo');
-  const [studentData, setStudentData] = useState({
-    rollNo: '', phone: '', residency: '', group: '', branch: '', showPublicly: true
-  });
+  
+  // Custom Answers for Dynamic Questions
+  const [customAnswers, setCustomAnswers] = useState({});
 
-  const isTeamEvent = event?.type === 'team' || event?.participationType === 'team';
+  const isTeamEvent = event?.type === 'team' || event?.teamSize > 1;
 
-  // 1. CHECK REGISTRATION ON OPEN
+  // 1. CHECK REGISTRATION STATUS
   useEffect(() => {
     const checkRegistration = async () => {
       if (user && event && isOpen) {
         try {
-          const regRef = doc(db, 'registrations', `${event.id}_${user.uid}`);
+          const regRef = doc(db, 'tickets', `${event.id}_${user.uid}`);
           const regSnap = await getDoc(regRef);
           if (regSnap.exists()) {
             setIsAlreadyRegistered(true);
@@ -50,41 +50,48 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
     checkRegistration();
   }, [user, event, isOpen]);
 
-  // Reset/Init
+  // Reset Logic
   useEffect(() => {
-    if (isTeamEvent) { setStep('choice'); setMode(null); } 
-    else { setStep('form'); setMode('solo'); }
-  }, [isTeamEvent, isOpen]); 
-
-  // Auto-fill Profile
-  useEffect(() => {
-    if (profile) {
-      setStudentData(prev => ({
-        ...prev,
-        rollNo: profile.rollNo || '',
-        phone: profile.phone || '',
-        branch: profile.branch || '',
-        group: profile.group || '',
-        residency: profile.residency || ''
-      }));
+    if (isOpen) {
+        if (isTeamEvent) { setStep('choice'); setMode(null); } 
+        else { setStep('form'); setMode('solo'); }
     }
-  }, [profile]);
+  }, [isTeamEvent, isOpen]); 
 
   if (!isOpen || !event) return null;
 
-  const isProfileComplete = profile?.rollNo && profile?.phone && profile?.branch && profile?.residency;
+  // 🔥 2. STRICT PROFILE CHECK (100% COMPLETE LOGIC)
+  // Group, Residency, Phone, Branch, RollNo - SAB Mandatory hain.
+  const isProfileComplete = 
+      profile?.userName &&
+      profile?.rollNo &&
+      profile?.phoneNumber && // Note: Ensure your profile saves as 'phoneNumber' or 'phone'. I checked both below.
+      profile?.branch &&
+      profile?.residency &&
+      profile?.group; // ✅ ADDED GROUP CHECK
+
+  // Handle Input for Custom Questions
+  const handleCustomAnswerChange = (qId, value) => {
+    setCustomAnswers(prev => ({ ...prev, [qId]: value }));
+  };
 
   const handleRegister = async (e) => {
     e.preventDefault();
     setLoading(true);
+    
+    // Combine Profile Data + Custom Answers
+    const finalData = {
+        ...profile, // Send full profile data
+        customAnswers: customAnswers // Attach dynamic answers
+    };
+
     try {
-      if (mode === 'solo') await registerForEvent(event.id, user, studentData);
-      else if (mode === 'create_team') await registerTeam(event.id, user, teamName, studentData);
-      else if (mode === 'join_team') await joinTeam(event.id, user, teamCode, studentData);
+      if (mode === 'solo') await registerForEvent(event.id, user, finalData);
+      else if (mode === 'create_team') await registerTeam(event.id, user, teamName, finalData);
+      else if (mode === 'join_team') await joinTeam(event.id, user, teamCode, finalData);
       
-      // 🆕 SUCCESS STATE instead of closing immediately
       setIsSuccess(true);
-      setIsAlreadyRegistered(true); // Prevent re-submission
+      setIsAlreadyRegistered(true);
     } catch (error) {
       alert("❌ " + (error.message || "Registration failed"));
     } finally {
@@ -92,13 +99,12 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
     }
   };
 
-  // 2. 🛡️ VIEW TICKET STATE (If Success or Already Registered)
+  // 🛡️ VIEW TICKET (ALREADY REGISTERED / SUCCESS)
   if (isAlreadyRegistered || isSuccess) {
     return (
       <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
         <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden text-center p-8 relative">
            
-           {/* Confetti Animation (CSS based) */}
            {isSuccess && (
              <div className="absolute inset-0 pointer-events-none overflow-hidden">
                <div className="absolute top-0 left-1/2 w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
@@ -115,46 +121,51 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
              {isSuccess ? "Welcome Aboard!" : "Already Onboard!"}
            </h2>
            <p className="text-zinc-500 font-medium text-sm mb-8">
-             Your pass for <span className="font-bold text-indigo-600">{event.title}</span> has been secured.
+             Your pass for <span className="font-bold text-indigo-600">{event.title}</span> is ready.
            </p>
            
            <div className="space-y-3">
-             <button 
-               onClick={() => { onClose(); navigate('/my-tickets'); }}
-               className="w-full py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
-             >
+             <button onClick={() => { onClose(); navigate('/my-tickets'); }} className="w-full py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2">
                <Ticket className="w-4 h-4" /> View My Pass
              </button>
-             <button onClick={onClose} className="text-xs font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-600">
-               Close
-             </button>
+             <button onClick={onClose} className="text-xs font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-600">Close</button>
            </div>
         </div>
       </div>
     );
   }
 
-  // 3. BLOCKING UI (Profile Missing)
+  // 🛡️ BLOCKING UI (INCOMPLETE PROFILE)
   if (!isProfileComplete) {
     return (
       <>
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden text-center p-8">
-             <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-6 text-red-600">
+             <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/20 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-600">
                <ShieldCheck className="w-8 h-8" />
              </div>
-             <h2 className="text-2xl font-black text-zinc-900 dark:text-white uppercase italic tracking-tighter mb-2">Identity Required</h2>
-             <p className="text-zinc-500 font-medium text-sm mb-8">
-               Please update your profile details to proceed.
+             <h2 className="text-2xl font-black text-zinc-900 dark:text-white uppercase italic tracking-tighter mb-2">Profile Incomplete</h2>
+             <p className="text-zinc-500 font-medium text-sm mb-6 px-4">
+               To ensure security, we need your full details before registration.
              </p>
+
+             {/* Missing Fields List */}
+             <div className="bg-zinc-100 dark:bg-zinc-900 rounded-xl p-4 mb-8 text-left text-xs font-bold text-zinc-500 space-y-1">
+                <p className="uppercase tracking-widest mb-2 border-b pb-2">Missing Information:</p>
+                {!profile?.rollNo && <p className="text-red-500 flex items-center gap-2"><AlertTriangle className="w-3 h-3"/> Roll Number</p>}
+                {!profile?.phoneNumber && <p className="text-red-500 flex items-center gap-2"><AlertTriangle className="w-3 h-3"/> Phone Number</p>}
+                {!profile?.branch && <p className="text-red-500 flex items-center gap-2"><AlertTriangle className="w-3 h-3"/> Branch</p>}
+                {!profile?.group && <p className="text-red-500 flex items-center gap-2"><AlertTriangle className="w-3 h-3"/> Group / Semester</p>}
+                {!profile?.residency && <p className="text-red-500 flex items-center gap-2"><AlertTriangle className="w-3 h-3"/> Residency (Hostel/Day)</p>}
+             </div>
+
              <button onClick={() => setShowProfileModal(true)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-xl active:scale-95 transition-all">
-               Update Profile
+               Complete Profile
              </button>
-             <button onClick={onClose} className="mt-4 text-xs font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-600">
-               Cancel
-             </button>
+             <button onClick={onClose} className="mt-4 text-xs font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-600">Cancel</button>
           </div>
         </div>
+        {/* Open UserProfile Modal to fix data */}
         <UserProfile isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
       </>
     );
@@ -174,44 +185,74 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
 
         <div className="p-8 overflow-y-auto custom-scrollbar">
           {step === 'choice' ? (
-             /* ... (Mode Selection Buttons - Same as before) ... */
              <div className="space-y-4">
+               {/* MODE SELECTION (Solo/Team) */}
                <button onClick={() => { setMode('solo'); setStep('form'); }} className="w-full p-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[1.5rem] hover:border-indigo-500 transition-all group flex items-center gap-4 text-left shadow-sm">
                  <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center"><User className="h-6 w-6" /></div>
-                 <div className="flex-1"><h3 className="font-black text-sm uppercase dark:text-white">Individual</h3></div>
+                 <div className="flex-1"><h3 className="font-black text-sm uppercase dark:text-white">Individual</h3><p className="text-[10px] text-zinc-500">Book for yourself</p></div>
                  <ArrowRight className="h-4 w-4 text-zinc-300" />
                </button>
-               {/* Add Team Buttons here if needed */}
+               {/* Team Logic can be added here if needed */}
              </div>
           ) : (
             <form onSubmit={handleRegister} className="space-y-6">
-              <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl flex gap-3 shadow-sm">
-                 <ShieldCheck className="w-5 h-5 text-indigo-600 shrink-0" />
-                 <p className="text-[10px] font-black text-indigo-700 dark:text-indigo-400 uppercase leading-tight">
-                    IDENTITY VERIFIED: {studentData.rollNo}
-                 </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 opacity-70 pointer-events-none">
-                 <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-zinc-400">Roll No</label>
-                    <input readOnly value={studentData.rollNo} className="w-full px-4 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl font-bold text-xs dark:text-white" />
+              
+              {/* Identity Card (READ ONLY) */}
+              <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl space-y-3 shadow-sm">
+                 <div className="flex items-center gap-2 border-b border-indigo-200 dark:border-indigo-800 pb-2 mb-2">
+                    <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                    <span className="text-[10px] font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-widest">Verified Identity</span>
                  </div>
-                 <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase text-zinc-400">Residency</label>
-                    <input readOnly value={studentData.residency} className="w-full px-4 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl font-bold text-xs dark:text-white" />
+                 <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-xs">
+                    <div><p className="text-[9px] text-indigo-400 uppercase">Name</p><p className="font-bold dark:text-white">{profile.userName}</p></div>
+                    <div><p className="text-[9px] text-indigo-400 uppercase">Roll No</p><p className="font-bold dark:text-white">{profile.rollNo}</p></div>
+                    <div><p className="text-[9px] text-indigo-400 uppercase">Group</p><p className="font-bold dark:text-white">{profile.group}</p></div>
+                    <div><p className="text-[9px] text-indigo-400 uppercase">Residency</p><p className="font-bold dark:text-white">{profile.residency}</p></div>
                  </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                  <div className="relative group">
-                    <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-                    <input required type="tel" pattern="\d{10}" className="w-full pl-10 pr-4 py-4 bg-zinc-100 dark:bg-black border-none rounded-2xl text-sm font-bold dark:text-white outline-none"
-                      value={studentData.phone} onChange={e => setStudentData({...studentData, phone: e.target.value})} />
-                  </div>
-                  <input required type="text" placeholder="Group" className="w-full px-4 py-4 bg-zinc-100 dark:bg-black border-none rounded-2xl text-sm font-bold dark:text-white outline-none"
-                    value={studentData.group} onChange={e => setStudentData({...studentData, group: e.target.value})} />
-              </div>
+              {/* ❓ CUSTOM QUESTIONS (Dynamic) */}
+              {event.customQuestions && event.customQuestions.length > 0 && (
+                <div className="space-y-4 pt-4 border-t border-dashed border-zinc-200 dark:border-zinc-800">
+                    <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Additional Details</p>
+                    {event.customQuestions.map((q) => (
+                        <div key={q.id} className="space-y-1">
+                            <label className="text-xs font-bold dark:text-zinc-300">
+                                {q.label} {q.required && <span className="text-red-500">*</span>}
+                            </label>
+                            
+                            {q.type === 'select' ? (
+                                <div className="relative">
+                                    <select 
+                                        required={q.required}
+                                        onChange={(e) => handleCustomAnswerChange(q.id, e.target.value)}
+                                        className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl appearance-none outline-none font-bold text-sm dark:text-white"
+                                    >
+                                        <option value="">Select an option</option>
+                                        {q.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                    </select>
+                                </div>
+                            ) : q.type === 'number' ? (
+                                <input 
+                                    type="number" 
+                                    required={q.required}
+                                    placeholder="Enter value"
+                                    onChange={(e) => handleCustomAnswerChange(q.id, e.target.value)}
+                                    className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl outline-none font-bold text-sm dark:text-white"
+                                />
+                            ) : (
+                                <input 
+                                    type="text" 
+                                    required={q.required}
+                                    placeholder="Your answer"
+                                    onChange={(e) => handleCustomAnswerChange(q.id, e.target.value)}
+                                    className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl outline-none font-bold text-sm dark:text-white"
+                                />
+                            )}
+                        </div>
+                    ))}
+                </div>
+              )}
 
               <button type="submit" disabled={loading} className="w-full py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-black text-[10px] uppercase tracking-[0.4em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all">
                 {loading ? <Loader2 className="animate-spin mx-auto h-4 w-4" /> : 'Confirm Registration'}
