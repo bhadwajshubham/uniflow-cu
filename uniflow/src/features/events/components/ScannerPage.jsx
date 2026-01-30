@@ -12,14 +12,13 @@ const ScannerPage = () => {
   const [scanResult, setScanResult] = useState(null); 
   const [message, setMessage] = useState('');
   
-  // Refs to handle scanning state without re-rendering
+  // Refs
   const scannerRef = useRef(null);
   const isProcessing = useRef(false);
   const lastScannedId = useRef(null);
 
   // 🔊 AUDIO & VOICE ENGINE
   const playFeedback = (type, name = "") => {
-    // Beep Logic
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const oscillator = audioCtx.createOscillator();
@@ -37,30 +36,21 @@ const ScannerPage = () => {
       oscillator.start();
       gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.1);
       oscillator.stop(audioCtx.currentTime + 0.1);
-    } catch (e) {
-      console.error("Audio error:", e);
-    }
+    } catch (e) { console.error("Audio error:", e); }
 
-    // Voice Logic
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel(); 
-      let text = "";
-      if (type === 'success') text = `Welcome, ${name}`;
-      if (type === 'error') text = `Access Denied`;
-      if (type === 'warning') text = `Already Scanned`;
-      if (type === 'security') text = `Unauthorized`;
-
+      let text = type === 'success' ? `Welcome, ${name}` : 
+                 type === 'error' ? 'Invalid Ticket' : 
+                 type === 'warning' ? 'Already Used' : 'Unauthorized';
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.0; 
       window.speechSynthesis.speak(utterance);
     }
   };
 
   useEffect(() => {
-    // 🛡️ SECURITY: Block non-admins
     if (profile?.role !== 'admin' && profile?.role !== 'super_admin') return;
 
-    // Initialize Scanner
     if (!scannerRef.current) {
         const scanner = new Html5QrcodeScanner(
           "reader",
@@ -71,7 +61,7 @@ const ScannerPage = () => {
             formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
             showTorchButtonIfSupported: true
           },
-          false // verbose
+          false 
         );
     
         scannerRef.current = scanner;
@@ -85,38 +75,31 @@ const ScannerPage = () => {
           setMessage('Verifying...');
     
           try {
-            // 1. Get Ticket
-            // NOTE: Ensure your QR contains just the Ticket ID string
-            const regRef = doc(db, 'registrations', decodedText);
-            const regSnap = await getDoc(regRef);
+            // ✅ FIX: Use 'tickets' collection
+            const ticketRef = doc(db, 'tickets', decodedText);
+            const ticketSnap = await getDoc(ticketRef);
     
-            if (!regSnap.exists()) {
+            if (!ticketSnap.exists()) {
               setScanResult('error');
               setMessage('Invalid Ticket');
               playFeedback('error');
             } else {
-              const data = regSnap.data();
+              const data = ticketSnap.data();
     
-              // 2. Security Check (Organizer)
-              if (profile.role !== 'super_admin' && data.eventCreatorId !== user.uid) {
-                setScanResult('error');
-                setMessage('Wrong Event');
-                playFeedback('security');
-              } 
-              // 3. Status Check
-              else if (data.used === true) {
+              // ✅ FIX: Use 'scanned' field instead of 'used'
+              if (data.scanned === true) {
                 setScanResult('warning');
-                setMessage(`Already Used: ${data.userName}`);
+                setMessage(`Used by: ${data.userName}`);
                 playFeedback('warning');
               } else {
-                // 4. Success Update
-                await updateDoc(regRef, {
-                  used: true,
-                  usedAt: serverTimestamp()
+                // ✅ Update ticket status
+                await updateDoc(ticketRef, {
+                  scanned: true,
+                  scannedAt: serverTimestamp()
                 });
                 setScanResult('success');
                 setMessage(data.userName);
-                playFeedback('success', data.userName.split(' ')[0]);
+                playFeedback('success', data.userName?.split(' ')[0]);
               }
             }
           } catch (err) {
@@ -125,20 +108,18 @@ const ScannerPage = () => {
             setMessage('Scan Error');
             playFeedback('error');
           } finally {
-            // Reset for next scan
             setTimeout(() => {
               isProcessing.current = false;
               lastScannedId.current = null;
               setScanResult(null);
               setMessage('');
-            }, 2000); 
+            }, 2500); 
           }
         };
     
         scanner.render(onScanSuccess, (err) => { /* ignore errors */ });
     }
 
-    // Cleanup
     return () => {
         if (scannerRef.current) {
             scannerRef.current.clear().catch(e => console.error("Clear failed", e));
@@ -147,7 +128,6 @@ const ScannerPage = () => {
     };
   }, [profile, user]);
 
-  // Unauthorized UI
   if (profile?.role !== 'admin' && profile?.role !== 'super_admin') {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center text-red-500">
@@ -161,7 +141,6 @@ const ScannerPage = () => {
   return (
     <div className="min-h-screen bg-black text-white pt-24 pb-12 px-6">
       <div className="max-w-md mx-auto">
-        {/* Header */}
         <div className="flex justify-between items-center mb-6">
             <button onClick={() => navigate('/admin')} className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors text-xs font-bold uppercase">
               <ArrowLeft className="w-5 h-5" /> Exit
@@ -172,11 +151,9 @@ const ScannerPage = () => {
             </div>
         </div>
 
-        {/* Scanner Box */}
         <div className="bg-zinc-900 rounded-[2rem] p-4 border border-zinc-800 shadow-2xl overflow-hidden relative">
           <div id="reader" className="overflow-hidden rounded-xl"></div>
           
-          {/* Result Overlay */}
           {scanResult && (
             <div className={`absolute inset-0 z-50 flex flex-col items-center justify-center p-6 text-center backdrop-blur-md animate-in fade-in duration-200 ${
               scanResult === 'success' ? 'bg-green-500/80' : 
