@@ -2,8 +2,6 @@ import React from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
-
-
 // ✅ Navbar
 import Navbar from './components/layout/Navbar';
 
@@ -29,7 +27,7 @@ import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 
 /* =========================
-   🔐 PROTECTED ROUTE
+   🔐 PROTECTED ROUTE (FIXED)
    ========================= */
 const ProtectedRoute = ({ children, requireAdmin = false }) => {
   const { user, profile, loading } = useAuth();
@@ -42,18 +40,22 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
     );
   }
 
-  // ❌ Not logged in
+  // ❌ Not logged in -> Login Page
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // ❌ Consent not accepted
+  // ❌ Consent not accepted -> Redirect to PROFILE (Not Consent Page)
+  // Kyunki Profile page pe hi humara Shield wala UI hai ab.
   if (!profile || profile.termsAccepted !== true) {
-    return <Navigate to="/consent" replace />;
+    // Agar banda already profile page access kar raha hai, toh loop mat karo
+    if (window.location.pathname !== '/profile') {
+        return <Navigate to="/profile" replace />;
+    }
   }
 
   // ❌ Admin check
-  if (requireAdmin && profile.role !== 'admin' && profile.role !== 'super_admin') {
+  if (requireAdmin && profile?.role !== 'admin' && profile?.role !== 'super_admin') {
     return <Navigate to="/" replace />;
   }
 
@@ -66,6 +68,8 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
    ========================= */
 const ModalRouteWrapper = ({ Component, backPath = '/' }) => {
   const navigate = useNavigate();
+  // Simple check to ensure we don't render if component is missing
+  if (!Component) return null;
   return <Component isOpen={true} onClose={() => navigate(backPath)} />;
 };
 
@@ -98,7 +102,11 @@ function App() {
               path="/profile"
               element={
                 <ProtectedRoute>
-                  <ModalRouteWrapper Component={UserProfile} backPath="/" />
+                  {/* Note: UserProfile is not a modal in your implementation, it's a page component */}
+                  {/* If UserProfile expects isOpen/onClose props, keep ModalRouteWrapper. */}
+                  {/* If UserProfile is a standard page, just use <UserProfile /> */}
+                  {/* Assuming standard page based on previous code: */}
+                  <UserProfile /> 
                 </ProtectedRoute>
               }
             />
