@@ -5,7 +5,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { Ticket, Calendar, Clock, Search, MapPin, XCircle, Users, CheckCircle, Award, Star, ExternalLink, ArrowRight, Copy, Loader2 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 
-// ✅ CORRECT IMPORTS (Assuming files are in the same folder)
+// ✅ CORRECT IMPORTS (Preserved from your code)
 import CertificateModal from './CertificateModal';
 import RateEventModal from './RateEventModal'; 
 
@@ -29,14 +29,26 @@ const MyTicketsPage = () => {
     const fetchTickets = async () => {
       if (!user) return;
       try {
-        const q = query(collection(db, 'registrations'), where('userId', '==', user.uid));
+        // ✅ FIX 1: Collection changed from 'registrations' to 'tickets'
+        const q = query(collection(db, 'tickets'), where('userId', '==', user.uid));
         const snapshot = await getDocs(q);
-        const ticketData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        // Sort Newest First
+        const ticketData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return { 
+                id: doc.id, 
+                ...data,
+                // ✅ FIX 2: Field Mapping (Handle both Old and New field names)
+                eventTitle: data.eventName || data.eventTitle || "Event Name Unavailable",
+                eventLocation: data.eventVenue || data.eventLocation || "Venue TBD",
+                eventTime: data.eventTime || "Time TBD"
+            };
+        });
+        
+        // Sort Newest First (Using bookedAt OR createdAt)
         ticketData.sort((a, b) => {
-            const timeA = a.createdAt?.seconds || 0;
-            const timeB = b.createdAt?.seconds || 0;
+            const timeA = a.bookedAt?.seconds || a.createdAt?.seconds || 0;
+            const timeB = b.bookedAt?.seconds || b.createdAt?.seconds || 0;
             return timeB - timeA;
         });
         
@@ -64,6 +76,7 @@ const MyTicketsPage = () => {
     const isCancelled = ticket.status === 'cancelled';
 
     let matchesTab = false;
+    // 'confirmed' status goes to Upcoming
     if (activeTab === 'upcoming') matchesTab = !isPast && !isCompleted && !isCancelled;
     else matchesTab = isPast || isCompleted || isCancelled;
 
@@ -201,13 +214,14 @@ const MyTicketsPage = () => {
                     )}
 
                     <h3 className="text-2xl font-black text-zinc-900 dark:text-white mb-2 leading-tight uppercase tracking-tight">
-                      {ticket.eventTitle || "Event Name Unavailable"}
+                      {ticket.eventTitle}
                     </h3>
                     
                     <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-zinc-500 dark:text-zinc-400 mb-4 uppercase tracking-wide">
-                      <div className="flex items-center gap-1.5"><Calendar className="w-3 h-3 text-indigo-500" /><span>{ticket.eventDate || "TBA"}</span></div>
-                      <div className="flex items-center gap-1.5"><Clock className="w-3 h-3 text-indigo-500" /><span>{ticket.eventTime || "TBA"}</span></div>
-                      <div className="flex items-center gap-1.5"><MapPin className="w-3 h-3 text-indigo-500" /><span>{ticket.eventLocation || "Venue"}</span></div>
+                      <div className="flex items-center gap-1.5"><Calendar className="w-3 h-3 text-indigo-500" /><span>{new Date(ticket.eventDate).toLocaleDateString()}</span></div>
+                      {/* Only show time if valid, else generic message */}
+                      <div className="flex items-center gap-1.5"><Clock className="w-3 h-3 text-indigo-500" /><span>{ticket.eventTime.includes("TBD") ? "Time TBA" : ticket.eventTime}</span></div>
+                      <div className="flex items-center gap-1.5"><MapPin className="w-3 h-3 text-indigo-500" /><span>{ticket.eventLocation}</span></div>
                     </div>
                   </div>
 
@@ -250,7 +264,7 @@ const MyTicketsPage = () => {
             <CertificateModal 
                 isOpen={isCertificateOpen}
                 onClose={() => setIsCertificateOpen(false)}
-                ticket={selectedTicketForCert} // Pass full object to be safe
+                ticket={selectedTicketForCert} 
             />
         )}
 
@@ -259,7 +273,7 @@ const MyTicketsPage = () => {
             <RateEventModal 
                 isOpen={isRateOpen}
                 onClose={() => setIsRateOpen(false)}
-                ticket={selectedTicketForRating} // Pass full object
+                ticket={selectedTicketForRating} 
             />
         )}
 
