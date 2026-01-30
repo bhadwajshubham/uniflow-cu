@@ -1,40 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, auth } from '../../../lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { Calendar, MapPin, ArrowLeft, Share2, Shield, Loader2, QrCode, X, CheckCircle } from 'lucide-react';
-import { registerForEvent, registerTeam, joinTeam } from '../services/registrationService';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { Calendar, MapPin, ArrowLeft, Loader2, QrCode, X, CheckCircle, Info } from 'lucide-react';
+import { registerForEvent } from '../services/registrationService';
 
 const EventDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   
+  // Data States
   const [event, setEvent] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [registering, setRegistering] = useState(false);
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   
+  // UI States
+  const [loading, setLoading] = useState(true);
+  const [registering, setRegistering] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [isHousefull, setIsHousefull] = useState(false);
+  const [isClosed, setIsClosed] = useState(false);
+  
   // Modals
   const [showConsentModal, setShowConsentModal] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false); 
-  const [showTeamModal, setShowTeamModal] = useState(false);
-  const [showQRModal, setShowQRModal] = useState(false);
-  
-  // ✅ NEW: Success Modal State
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-
-  // Consent Checkbox
   const [termsChecked, setTermsChecked] = useState(false);
-  const [privacyChecked, setPrivacyChecked] = useState(false);
 
-  // Forms
-  const [formData, setFormData] = useState({ rollNo: '', phone: '', branch: 'B.E. (CSE)', customBranch: '', semester: '1st' });
-  const [teamMode, setTeamMode] = useState('create');
-  const [teamName, setTeamName] = useState('');
-  const [teamCode, setTeamCode] = useState('');
-
-  // 1. Fetch Data
+  // 1. Fetch Data & Status
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -42,250 +34,242 @@ const EventDetailsPage = () => {
         const currentUser = auth.currentUser;
         setUser(currentUser);
 
+        // A. Fetch User Profile (if logged in)
         if (currentUser) {
           const userDoc = await getDoc(doc(db, "users", currentUser.uid));
           if (userDoc.exists()) {
-            const userData = userDoc.data();
-            setProfile(userData);
-            const isStandard = ['B.E. (CSE)', 'B.E. (CSE-AI)', 'B.E. (ECE)', 'B.E. (ME)'].includes(userData.branch);
-            setFormData({
-              rollNo: userData.rollNo || '',
-              phone: userData.phone || '',
-              branch: isStandard ? userData.branch : (userData.branch ? 'Others' : 'B.E. (CSE)'),
-              customBranch: isStandard ? '' : userData.branch || '',
-              semester: userData.semester || '1st'
-            });
+            setProfile(userDoc.data());
           }
         }
 
-        const eventDoc = await getDoc(doc(db, "events", id));
-        if (eventDoc.exists()) {
-            setEvent({ id: eventDoc.id, ...eventDoc.data() });
+        // B. Fetch Event Data
+        const eventRef = doc(db, "events", id);
+        const eventSnap = await getDoc(eventRef);
+
+        if (eventSnap.exists()) {
+            const evtData = eventSnap.data();
+            setEvent({ id: eventSnap.id, ...evtData });
+
+            // 🔥 LOGIC 1: Check if Already Booked
+            // Hum seedha Event ke participants array check kar rahe hain (Fastest & Safest)
+            if (currentUser && evtData.participants && evtData.participants.includes(currentUser.uid)) {
+                setIsRegistered(true);
+            }
+
+            // 🔥 LOGIC 2: Check Housefull
+            if (evtData.registered >= evtData.totalTickets) {
+                setIsHousefull(true);
+            }
+
+            // 🔥 LOGIC 3: Check if Closed Manually
+            if (evtData.isOpen === false) {
+                setIsClosed(true);
+            }
         }
-      } catch (error) { console.error(error); } 
-      finally { setLoading(false); }
+      } catch (error) { 
+        console.error("Error fetching details:", error);
+      } finally { 
+        setLoading(false); 
+      }
     };
     fetchData();
-  }, [id, navigate]);
+  }, [id, auth.currentUser]);
 
-  const handleShare = async () => {
-    const url = window.location.href;
-    if (navigator.share) {
-      try { await navigator.share({ title: event.title, url }); } catch (err) {}
-    } else {
-      await navigator.clipboard.writeText(url);
-      alert("Link copied!");
-    }
-  };
-
+  // 2. Pre-Booking Checks
   const checkRequirements = () => {
     if (!user) { navigate('/login'); return false; }
-    if (!profile?.rollNo || !profile?.phone || !profile?.branch) { setShowProfileModal(true); return false; }
-    if (!profile.termsAccepted) { setShowConsentModal(true); return false; }
+    
+    // Check Terms
+    if (!profile?.termsAccepted) { 
+        setShowConsentModal(true); 
+        return false; 
+    }
     return true;
   };
 
-  const handleSaveProfile = async () => {
-    if (formData.phone.length !== 10) { alert("Invalid Phone"); return; }
-    if (formData.rollNo.length < 5) { alert("Invalid Roll No"); return; }
-    const finalBranch = formData.branch === 'Others' ? formData.customBranch.trim() : formData.branch;
-    try {
-      setRegistering(true);
-      const userRef = doc(db, "users", user.uid);
-      const updatedData = {
-        rollNo: formData.rollNo.toUpperCase(),
-        phone: formData.phone,
-        branch: finalBranch,
-        semester: formData.semester,
-        updatedAt: serverTimestamp(),
-        isProfileComplete: true
-      };
-      await setDoc(userRef, updatedData, { merge: true });
-      setProfile(prev => ({ ...prev, ...updatedData }));
-      setShowProfileModal(false);
-      if (!profile?.termsAccepted) { setShowConsentModal(true); }
-    } catch (error) { alert("Error: " + error.message); } finally { setRegistering(false); }
-  };
-
+  // 3. Handle Terms Acceptance
   const handleAgreeToTerms = async () => {
-    if (!termsChecked || !privacyChecked) { alert("Please accept both checkboxes."); return; }
+    if (!termsChecked) { alert("Please accept the terms."); return; }
     try {
-      setRegistering(true);
+      setRegistering(true); // Temporary loading state
       const userRef = doc(db, "users", user.uid);
-      await setDoc(userRef, { termsAccepted: true, updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(userRef, { termsAccepted: true }, { merge: true });
+      
       setProfile(prev => ({ ...prev, termsAccepted: true }));
       setShowConsentModal(false);
-      if (event.maxTeamSize > 1) setShowTeamModal(true);
-      else executeIndividualBooking();
-    } catch (error) { alert("Error: " + error.message); } finally { setRegistering(false); }
+      setRegistering(false);
+      
+      // Auto-trigger booking after consent
+      executeBooking();
+    } catch (error) { 
+        alert(error.message); 
+        setRegistering(false);
+    }
   };
 
-  // ✅ UPDATED BOOKING LOGIC (Success Modal + UI Update)
-  const executeIndividualBooking = async () => {
+  // 4. Final Booking Action
+  const executeBooking = async () => {
     try {
       setRegistering(true);
+      
+      // Backend Service Call
       await registerForEvent(event.id, user, profile);
       
-      // Update UI locally (Disable button immediately)
-      setProfile(prev => ({
-         ...prev,
-         registeredEvents: [...(prev.registeredEvents || []), event.id]
-      }));
-
-      // Show Success Modal
+      // Update UI on Success
+      setIsRegistered(true); 
       setShowSuccessModal(true);
-
-    } catch (error) { alert("Failed: " + error.message); }
-    finally { setRegistering(false); }
+      
+    } catch (error) { 
+        console.error(error);
+        alert("Booking Failed: " + error.message); 
+    } finally { 
+        setRegistering(false); 
+    }
   };
 
-  if (loading) return <div className="p-10 text-center">Loading...</div>;
-  if (!event) return <div className="p-10 text-center text-red-500">Event Not Found</div>;
+  if (loading) return (
+    <div className="flex items-center justify-center h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600"/>
+    </div>
+  );
 
-  const eventImage = event.image || event.imageUrl || event.poster || null;
-  const isRegistered = profile?.registeredEvents?.includes(event.id); // ✅ Check Registration Status
+  if (!event) return <div className="p-10 text-center">Event Not Found</div>;
+
+  const eventImage = event.image || event.imageUrl || null;
 
   return (
-    <div className="max-w-4xl mx-auto p-4 pb-32 pt-20">
-      <button onClick={() => navigate(-1)} className="flex items-center text-gray-600 mb-4"><ArrowLeft className="w-5 h-5 mr-2" /> Back</button>
+    <div className="max-w-4xl mx-auto p-4 pb-32 pt-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg overflow-hidden border border-zinc-200 dark:border-zinc-800">
+      {/* Back Button */}
+      <button onClick={() => navigate(-1)} className="group flex items-center text-zinc-500 hover:text-indigo-600 mb-6 transition-colors">
+        <div className="p-2 bg-white dark:bg-zinc-800 rounded-full mr-3 shadow-sm group-hover:shadow-md transition-all">
+            <ArrowLeft className="w-5 h-5" /> 
+        </div>
+        <span className="font-bold text-sm">Back to Events</span>
+      </button>
+      
+      {/* 🖼️ Event Hero Card */}
+      <div className="bg-white dark:bg-zinc-900 rounded-[2rem] shadow-xl shadow-zinc-200/50 dark:shadow-none overflow-hidden border border-zinc-100 dark:border-zinc-800 relative">
         
-        {/* HEADER IMAGE */}
-        <div className={`relative h-56 sm:h-80 w-full ${!eventImage ? 'bg-gradient-to-r from-indigo-600 to-purple-700' : 'bg-black'}`}>
-           {eventImage ? (
-             <>
-               <img src={eventImage} alt={event.title} className="w-full h-full object-cover opacity-90"/>
-               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
-             </>
-           ) : (
-             <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-           )}
+        {/* Image Background */}
+        <div className={`relative h-64 sm:h-96 w-full ${!eventImage ? 'bg-gradient-to-r from-indigo-600 to-purple-700' : 'bg-black'}`}>
+           {eventImage && <img src={eventImage} alt={event.title} className="w-full h-full object-cover opacity-90"/>}
+           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
            
-           <div className="absolute top-4 right-4 flex gap-2 z-10">
-              <button onClick={() => setShowQRModal(true)} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition"><QrCode className="w-6 h-6" /></button>
-              <button onClick={handleShare} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition"><Share2 className="w-6 h-6" /></button>
-           </div>
-
-           <div className="absolute bottom-0 left-0 right-0 p-6 text-white z-20">
-             <span className="bg-white/20 backdrop-blur-md text-xs font-bold px-3 py-1 rounded-full border border-white/30 uppercase">{event.category || 'Event'}</span>
-             <h1 className="text-3xl sm:text-4xl font-extrabold mt-3 shadow-sm">{event.title}</h1>
-             <div className="flex gap-4 mt-3 opacity-90 text-sm font-medium">
-                <span className="flex items-center"><Calendar className="w-4 h-4 mr-1"/>{new Date(event.date).toLocaleDateString()}</span>
-                <span className="flex items-center"><MapPin className="w-4 h-4 mr-1"/>{event.venue || event.location}</span>
+           {/* Title & Badge Over Image */}
+           <div className="absolute bottom-0 left-0 right-0 p-8 text-white z-20">
+             <div className="flex items-center gap-3 mb-3">
+                 <span className="bg-white/20 backdrop-blur-md text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider border border-white/10">
+                    {event.category || 'Tech'}
+                 </span>
+                 {isHousefull && <span className="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Housefull</span>}
+             </div>
+             <h1 className="text-3xl sm:text-5xl font-black tracking-tight mb-2">{event.title}</h1>
+             <div className="flex flex-wrap gap-6 mt-4 text-sm font-medium opacity-90">
+                <span className="flex items-center"><Calendar className="w-4 h-4 mr-2 text-indigo-400"/>{new Date(event.date).toLocaleDateString()} at {event.time}</span>
+                <span className="flex items-center"><MapPin className="w-4 h-4 mr-2 text-indigo-400"/>{event.venue || 'TBA'}</span>
              </div>
            </div>
         </div>
 
-        <div className="p-6">
-          <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-8 whitespace-pre-wrap">{event.description}</p>
+        {/* Content Section */}
+        <div className="p-8">
+          <div className="prose dark:prose-invert max-w-none">
+            <h3 className="text-sm font-black text-zinc-400 uppercase tracking-widest mb-3">About Event</h3>
+            <p className="text-zinc-600 dark:text-zinc-300 leading-relaxed text-lg whitespace-pre-wrap">{event.description}</p>
+          </div>
           
-          <div className="flex gap-4 pt-6 border-t border-zinc-200 dark:border-zinc-800">
-            {/* ✅ DYNAMIC BUTTON: Already Booked vs Book Ticket */}
+          {/* 🔥 DYNAMIC ACTION BUTTON */}
+          <div className="mt-10 pt-8 border-t border-dashed border-zinc-200 dark:border-zinc-800">
             {isRegistered ? (
-               <button disabled className="flex-1 bg-green-600 text-white py-4 rounded-xl font-bold shadow-lg flex justify-center items-center gap-2 cursor-not-allowed opacity-90">
-                 <CheckCircle className="w-5 h-5"/> Already Booked
-               </button>
-            ) : event.maxTeamSize > 1 ? (
-              <button onClick={() => checkRequirements() && setShowTeamModal(true)} disabled={registering} className="flex-1 bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 disabled:opacity-50 flex justify-center">
-                {registering ? <Loader2 className="animate-spin"/> : "Register as Team"}
-              </button>
+                // ✅ STATE 1: ALREADY BOOKED
+                <button disabled className="w-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 py-4 rounded-2xl font-black text-lg flex justify-center items-center gap-3 border border-green-200 dark:border-green-800 cursor-default">
+                    <CheckCircle className="w-6 h-6 fill-green-600 text-white dark:text-black"/> 
+                    TICKET CONFIRMED
+                </button>
+            ) : isClosed ? (
+                // ⛔ STATE 2: REGISTRATION CLOSED (Admin Toggle)
+                <button disabled className="w-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 py-4 rounded-2xl font-black text-lg flex justify-center items-center gap-3 cursor-not-allowed">
+                    <X className="w-6 h-6"/> REGISTRATION CLOSED
+                </button>
+            ) : isHousefull ? (
+                // 🏠 STATE 3: HOUSEFULL
+                <button disabled className="w-full bg-red-50 dark:bg-red-900/20 text-red-500 py-4 rounded-2xl font-black text-lg flex justify-center items-center gap-3 border border-red-200 dark:border-red-900 cursor-not-allowed">
+                    <Info className="w-6 h-6"/> HOUSEFULL
+                </button>
             ) : (
-              <button onClick={() => checkRequirements() && executeIndividualBooking()} disabled={registering} className="flex-1 bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 disabled:opacity-50 flex justify-center">
-                {registering ? <Loader2 className="animate-spin"/> : "Book Ticket"}
-              </button>
+                // 🚀 STATE 4: READY TO BOOK
+                <button 
+                    onClick={() => checkRequirements() && executeBooking()} 
+                    disabled={registering} 
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-indigo-200 dark:shadow-none flex justify-center items-center gap-3 transition-all"
+                >
+                    {registering ? <Loader2 className="animate-spin w-6 h-6"/> : "BOOK TICKET NOW"}
+                </button>
+            )}
+            
+            {!isRegistered && !isClosed && !isHousefull && (
+                <p className="text-center text-xs text-zinc-400 mt-3 font-medium">
+                    ⚡ Fast booking. Ticket sent to email instantly.
+                </p>
             )}
           </div>
         </div>
       </div>
 
-      {/* MODALS */}
-      {/* 1. Profile Modal */}
-      {showProfileModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 max-w-md w-full shadow-2xl">
-            <h3 className="text-xl font-bold text-center mb-4 dark:text-white">Complete Profile</h3>
-            <div className="space-y-3">
-                 <input value={formData.phone} onChange={e=>setFormData({...formData, phone:e.target.value})} placeholder="Phone" className="w-full p-3 border rounded-xl bg-zinc-50 text-zinc-900"/>
-                 <input value={formData.rollNo} onChange={e=>setFormData({...formData, rollNo:e.target.value})} placeholder="Roll No" className="w-full p-3 border rounded-xl bg-zinc-50 text-zinc-900"/>
-                 <select value={formData.branch} onChange={e=>setFormData({...formData, branch:e.target.value})} className="w-full p-3 border rounded-xl bg-zinc-50 text-zinc-900"><option>B.E. (CSE)</option><option>Others</option></select>
-                 {formData.branch==='Others' && <input value={formData.customBranch} onChange={e=>setFormData({...formData, customBranch:e.target.value})} placeholder="Specify Branch" className="w-full p-3 border rounded-xl bg-zinc-50 text-zinc-900"/>}
-            </div>
-            <button onClick={handleSaveProfile} disabled={registering} className="w-full mt-4 bg-indigo-600 text-white py-3 rounded-xl font-bold">Save</button>
-          </div>
-        </div>
-      )}
-
-      {/* 2. Consent Modal */}
-      {showConsentModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-in fade-in">
-           <div className="bg-white dark:bg-zinc-900 rounded-3xl p-8 max-w-sm w-full border border-zinc-200 dark:border-zinc-800 text-center shadow-2xl">
-             <Shield className="w-14 h-14 text-indigo-600 mx-auto mb-4" />
-             <h3 className="text-2xl font-extrabold mb-2 dark:text-white">Consent Required</h3>
-             <p className="text-zinc-500 text-sm mb-6">Please review and accept to continue</p>
-             <div className="text-left space-y-3 mb-6 bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-zinc-100 dark:border-zinc-700">
-                <label className="flex gap-3 cursor-pointer dark:text-gray-300 items-center">
-                    <input type="checkbox" checked={termsChecked} onChange={e => setTermsChecked(e.target.checked)} className="w-5 h-5 text-indigo-600 rounded"/> 
-                    <span className="text-sm font-medium">I agree to <a href="/terms" target="_blank" className="text-indigo-600 font-bold underline" onClick={e=>e.stopPropagation()}>Terms</a></span>
-                </label>
-                <label className="flex gap-3 cursor-pointer dark:text-gray-300 items-center">
-                    <input type="checkbox" checked={privacyChecked} onChange={e => setPrivacyChecked(e.target.checked)} className="w-5 h-5 text-indigo-600 rounded"/> 
-                    <span className="text-sm font-medium">I agree to <a href="/privacy" target="_blank" className="text-indigo-600 font-bold underline" onClick={e=>e.stopPropagation()}>Privacy</a></span>
-                </label>
-             </div>
-             <button onClick={handleAgreeToTerms} disabled={!termsChecked || !privacyChecked} className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold flex items-center justify-center gap-2">
-                <CheckCircle className="w-5 h-5" /> Accept & Continue
-             </button>
-           </div>
-        </div>
-      )}
-
-      {/* 3. QR Modal */}
-      {showQRModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white p-6 rounded-3xl shadow-2xl text-center max-w-xs w-full relative">
-             <button onClick={() => setShowQRModal(false)} className="absolute top-4 right-4 p-2 bg-zinc-100 rounded-full text-zinc-500 hover:bg-zinc-200"><X className="w-5 h-5" /></button>
-             <h3 className="text-lg font-bold text-zinc-900 mb-1">Scan to Book</h3>
-             <div className="bg-white p-2 rounded-xl border-2 border-dashed border-indigo-200 inline-block mt-4">
-                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${window.location.href}&color=4f46e5`} alt="Event QR" className="w-48 h-48 object-contain"/>
-             </div>
-          </div>
-        </div>
-      )}
-      
-      {/* 4. Team Modal */}
-      {showTeamModal && (
-         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 max-w-md w-full">
-               <h3 className="text-xl font-bold mb-4 dark:text-white">Team Setup</h3>
-               <div className="flex bg-gray-100 dark:bg-zinc-800 p-1 rounded-lg mb-4"><button onClick={()=>setTeamMode('create')} className={`flex-1 py-2 rounded ${teamMode==='create'?'bg-white shadow text-black':'text-gray-500'}`}>Create</button><button onClick={()=>setTeamMode('join')} className={`flex-1 py-2 rounded ${teamMode==='join'?'bg-white shadow text-black':'text-gray-500'}`}>Join</button></div>
-               {teamMode==='create' ? <input value={teamName} onChange={e=>setTeamName(e.target.value)} placeholder="Team Name" className="w-full border p-3 rounded-lg mb-4 bg-zinc-50 text-zinc-900"/> : <input value={teamCode} onChange={e=>setTeamCode(e.target.value)} placeholder="Team Code" className="w-full border p-3 rounded-lg mb-4 uppercase bg-zinc-50 text-zinc-900"/>}
-               <button onClick={async()=>{ setRegistering(true); try { if(teamMode==='create') await registerTeam(event.id,user,teamName,profile); else await joinTeam(event.id,user,teamCode,profile); setProfile(prev=>({...prev, registeredEvents: [...(prev.registeredEvents||[]), event.id]})); setShowTeamModal(false); setShowSuccessModal(true); } catch(e){alert(e.message)} finally{setRegistering(false)} }} disabled={registering} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold">Confirm</button>
-               <button onClick={()=>setShowTeamModal(false)} className="w-full mt-2 text-gray-500">Cancel</button>
-            </div>
-         </div>
-      )}
-
-      {/* ✅ 5. SUCCESS MODAL (New) */}
+      {/* 🎉 SUCCESS MODAL (Beautiful Ticket) */}
       {showSuccessModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-in zoom-in">
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-green-500/20 relative">
-             <button onClick={() => setShowSuccessModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X className="w-6 h-6"/></button>
-             
-             <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
-                <CheckCircle className="w-10 h-10 text-green-600 dark:text-green-400" />
-             </div>
-             
-             <h2 className="text-2xl font-black mb-2 text-zinc-900 dark:text-white">You're Going! 🎉</h2>
-             <p className="text-zinc-500 dark:text-zinc-400 mb-8 text-sm leading-relaxed">
-               Your ticket has been confirmed. Check your email or "My Tickets" for the QR code.
-             </p>
-             
-             <button onClick={() => navigate('/my-tickets')} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xl shadow-indigo-200 dark:shadow-none transition-all active:scale-95">
-               View My Ticket
-             </button>
-          </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white dark:bg-zinc-900 w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-300">
+                {/* Purple Gradient Header */}
+                <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-8 text-center text-white relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                    <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-md shadow-inner border border-white/20">
+                        <CheckCircle className="w-10 h-10 text-white" />
+                    </div>
+                    <h2 className="text-3xl font-black tracking-tight">You're In!</h2>
+                    <p className="text-indigo-100 font-medium mt-1">Ticket has been emailed to you.</p>
+                </div>
+
+                <div className="p-6 text-center space-y-4">
+                    <div className="bg-zinc-50 dark:bg-black border border-zinc-100 dark:border-zinc-800 rounded-2xl p-4">
+                         <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-1">Event</p>
+                         <p className="text-lg font-black text-zinc-800 dark:text-white line-clamp-1">{event.title}</p>
+                    </div>
+
+                    <button onClick={() => navigate('/my-tickets')} className="w-full py-4 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
+                        <QrCode className="w-5 h-5"/> View Digital Ticket
+                    </button>
+                    
+                    <button onClick={() => setShowSuccessModal(false)} className="w-full py-3 text-zinc-400 font-bold text-sm hover:text-zinc-600 transition-colors">
+                        Close
+                    </button>
+                </div>
+            </div>
         </div>
+      )}
+
+      {/* 🛡️ CONSENT MODAL */}
+      {showConsentModal && (
+         <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
+           <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2rem] max-w-sm w-full shadow-2xl animate-in slide-in-from-bottom-10">
+             <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center text-indigo-600 mb-4">
+                <Info className="w-6 h-6"/>
+             </div>
+             <h3 className="font-black text-2xl mb-2 dark:text-white">Almost There</h3>
+             <p className="text-zinc-500 text-sm mb-6 leading-relaxed">To ensure a safe environment, please agree to our community guidelines and privacy policy.</p>
+             
+             <label className="flex items-start gap-3 p-4 bg-zinc-50 dark:bg-black rounded-xl cursor-pointer border border-zinc-100 dark:border-zinc-800 mb-6 group hover:border-indigo-500 transition-colors">
+                <input type="checkbox" checked={termsChecked} onChange={e=>setTermsChecked(e.target.checked)} className="mt-1 w-5 h-5 accent-indigo-600"/>
+                <span className="text-sm font-bold text-zinc-700 dark:text-zinc-300 group-hover:text-indigo-600 transition-colors">I agree to the Terms & Conditions</span>
+             </label>
+             
+             <button onClick={handleAgreeToTerms} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 dark:shadow-none">
+                Confirm & Book
+             </button>
+             <button onClick={() => setShowConsentModal(false)} className="w-full mt-3 py-3 text-zinc-400 font-bold text-sm hover:text-zinc-600">Cancel</button>
+           </div>
+         </div>
       )}
     </div>
   );
