@@ -19,12 +19,13 @@ const RateEventModal = ({ isOpen, onClose, eventTitle, eventId }) => {
     
     setLoading(true);
     try {
+      // ✅ Writes to 'reviews' collection (Independent of tickets logic)
       await addDoc(collection(db, 'reviews'), {
         eventId,
-        eventTitle,
+        eventTitle: eventTitle || 'Unknown Event',
         userId: user.uid,
-        userName: user.displayName,
-        userPhoto: user.photoURL,
+        userName: user.displayName || 'Anonymous',
+        userPhoto: user.photoURL || '',
         rating,
         comment,
         createdAt: serverTimestamp()
