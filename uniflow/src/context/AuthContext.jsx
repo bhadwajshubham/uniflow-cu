@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const navigate = useNavigate();
-  const location = useLocation();
+  const location = useLocation(); // Hook to get current path
 
   const login = async () => {
     try {
@@ -61,7 +61,7 @@ export const AuthProvider = ({ children }) => {
       const userRef = doc(db, 'users', currentUser.uid);
 
       try {
-        // 🔒 ATOMIC USER CREATION (Safe for 500+ concurrent users)
+        // 🔒 ATOMIC USER CREATION
         await runTransaction(db, async (tx) => {
           const snap = await tx.get(userRef);
           if (!snap.exists()) {
@@ -69,7 +69,7 @@ export const AuthProvider = ({ children }) => {
               displayName: currentUser.displayName || 'Student',
               email: currentUser.email,
               photoURL: currentUser.photoURL || null,
-              role: 'student', // Default Role
+              role: 'student',
               termsAccepted: false,
               createdAt: serverTimestamp()
             });
@@ -81,7 +81,7 @@ export const AuthProvider = ({ children }) => {
         if (freshSnap.exists()) {
             const data = freshSnap.data();
             
-            // Sync Email if changed in Google
+            // Sync Email if changed
             if (data.email !== currentUser.email) {
                 await setDoc(userRef, { email: currentUser.email }, { merge: true });
                 data.email = currentUser.email;
@@ -89,11 +89,19 @@ export const AuthProvider = ({ children }) => {
 
             setProfile(data);
 
-            // 🚦 REDIRECTION LOGIC:
-            // Agar Terms accepted nahi hain -> Go to Profile (Shield UI)
+            // ============================================================
+            // 🚦 REDIRECTION LOGIC (FIXED) 🚦
+            // ============================================================
+            
+            // Ye wo pages hain jo bina Terms Accept kiye dikhne chahiye
+            const publicPages = ['/profile', '/terms', '/privacy', '/about', '/login'];
+            const currentPath = window.location.pathname;
+
+            // Check: Agar Terms accepted nahi hai
             if (data.termsAccepted === false) {
-                // Loop prevent karne ke liye check
-                if (window.location.pathname !== '/profile') {
+                // Aur agar banda kisi PUBLIC page pe nahi hai
+                if (!publicPages.includes(currentPath)) {
+                    console.log("Redirecting to profile for consent...");
                     navigate('/profile'); 
                 }
             }
@@ -110,7 +118,7 @@ export const AuthProvider = ({ children }) => {
     });
 
     return () => unsubscribe();
-  }, [navigate]);
+  }, [navigate]); // Removed location dependency to avoid loop
 
   return (
     <AuthContext.Provider value={{ user, profile, login, logout, loading }}>
