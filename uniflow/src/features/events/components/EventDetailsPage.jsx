@@ -3,8 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { db, auth } from '../../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Calendar, MapPin, ArrowLeft, Loader2, QrCode, X, CheckCircle, Info } from 'lucide-react';
-import { registerForEvent } from '../services/registrationService';
-import RegisterModal from './RegisterModal'; // Ensure this path is correct based on your folder structure
+import RegisterModal from './RegisterModal'; // Ensure path is correct
 
 const EventDetailsPage = () => {
   const { id } = useParams();
@@ -36,7 +35,7 @@ const EventDetailsPage = () => {
         const currentUser = auth.currentUser;
         setUser(currentUser);
 
-        // A. Fetch User Profile (if logged in)
+        // A. Fetch User Profile
         if (currentUser) {
           const userDoc = await getDoc(doc(db, "users", currentUser.uid));
           if (userDoc.exists()) {
@@ -52,17 +51,17 @@ const EventDetailsPage = () => {
             const evtData = eventSnap.data();
             setEvent({ id: eventSnap.id, ...evtData });
 
-            // 🔥 LOGIC 1: Check if Already Booked (Fast Check via Event Array)
+            // Check if already booked (Client-side fast check)
             if (currentUser && evtData.participants && evtData.participants.includes(currentUser.uid)) {
                 setIsRegistered(true);
             }
 
-            // 🔥 LOGIC 2: Check Housefull
+            // Check Ticket Limit
             if (evtData.registered >= evtData.totalTickets) {
                 setIsHousefull(true);
             }
 
-            // 🔥 LOGIC 3: Check if Closed Manually
+            // Check Manual Close
             if (evtData.isOpen === false) {
                 setIsClosed(true);
             }
@@ -80,27 +79,28 @@ const EventDetailsPage = () => {
   const checkRequirements = () => {
     if (!user) { navigate('/login'); return false; }
     
-    // Check Terms
-    if (!profile?.termsAccepted) { 
-        setShowConsentModal(true); 
-        return false; 
-    }
-    return true;
+    // 🔥 Agar user ne pehle kabhi terms accept nahi kiye, toh ab karvayenge
+    // Even if accepted, showing it here acts as specific event consent
+    setShowConsentModal(true); 
+    return false;
   };
 
   // 3. Handle Terms Acceptance
   const handleAgreeToTerms = async () => {
-    if (!termsChecked) { alert("Please accept the terms."); return; }
+    if (!termsChecked) { alert("Please accept the terms to proceed."); return; }
     try {
       setRegistering(true); 
+      
+      // Update DB that user has accepted terms (One-time flag)
       const userRef = doc(db, "users", user.uid);
       await setDoc(userRef, { termsAccepted: true }, { merge: true });
       
+      // Update local state
       setProfile(prev => ({ ...prev, termsAccepted: true }));
+      
+      // Close Consent, Open Registration
       setShowConsentModal(false);
       setRegistering(false);
-      
-      // Open Registration Modal after consent
       setShowRegisterModal(true);
     } catch (error) { 
         alert(error.message); 
@@ -109,12 +109,12 @@ const EventDetailsPage = () => {
   };
 
   if (loading) return (
-    <div className="flex items-center justify-center h-screen">
+    <div className="flex items-center justify-center h-screen bg-zinc-50 dark:bg-black">
         <Loader2 className="w-8 h-8 animate-spin text-indigo-600"/>
     </div>
   );
 
-  if (!event) return <div className="p-10 text-center">Event Not Found</div>;
+  if (!event) return <div className="p-10 text-center text-zinc-500">Event Not Found</div>;
 
   const eventImage = event.image || event.imageUrl || null;
 
@@ -137,7 +137,7 @@ const EventDetailsPage = () => {
            {eventImage && <img src={eventImage} alt={event.title} className="w-full h-full object-cover opacity-90"/>}
            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
            
-           {/* Title & Badge Over Image */}
+           {/* Title & Badge */}
            <div className="absolute bottom-0 left-0 right-0 p-8 text-white z-20">
              <div className="flex items-center gap-3 mb-3">
                  <span className="bg-white/20 backdrop-blur-md text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider border border-white/10">
@@ -163,25 +163,21 @@ const EventDetailsPage = () => {
           {/* 🔥 DYNAMIC ACTION BUTTON */}
           <div className="mt-10 pt-8 border-t border-dashed border-zinc-200 dark:border-zinc-800">
             {isRegistered ? (
-                // ✅ STATE 1: ALREADY BOOKED
                 <button disabled className="w-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 py-4 rounded-2xl font-black text-lg flex justify-center items-center gap-3 border border-green-200 dark:border-green-800 cursor-default">
                     <CheckCircle className="w-6 h-6 fill-green-600 text-white dark:text-black"/> 
                     TICKET CONFIRMED
                 </button>
             ) : isClosed ? (
-                // ⛔ STATE 2: REGISTRATION CLOSED (Admin Toggle)
                 <button disabled className="w-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 py-4 rounded-2xl font-black text-lg flex justify-center items-center gap-3 cursor-not-allowed">
                     <X className="w-6 h-6"/> REGISTRATION CLOSED
                 </button>
             ) : isHousefull ? (
-                // 🏠 STATE 3: HOUSEFULL
                 <button disabled className="w-full bg-red-50 dark:bg-red-900/20 text-red-500 py-4 rounded-2xl font-black text-lg flex justify-center items-center gap-3 border border-red-200 dark:border-red-900 cursor-not-allowed">
                     <Info className="w-6 h-6"/> HOUSEFULL
                 </button>
             ) : (
-                // 🚀 STATE 4: READY TO BOOK
                 <button 
-                    onClick={() => checkRequirements() && setShowRegisterModal(true)} 
+                    onClick={checkRequirements} // Opens Consent Modal first
                     disabled={registering} 
                     className="w-full bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-indigo-200 dark:shadow-none flex justify-center items-center gap-3 transition-all"
                 >
@@ -198,12 +194,11 @@ const EventDetailsPage = () => {
         </div>
       </div>
 
-      {/* 🎉 SUCCESS MODAL (Beautiful Ticket) */}
+      {/* 🎉 SUCCESS MODAL */}
       {showSuccessModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white dark:bg-zinc-900 w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-300">
-                <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-8 text-center text-white relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-8 text-center text-white relative">
                     <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-md shadow-inner border border-white/20">
                         <CheckCircle className="w-10 h-10 text-white" />
                     </div>
@@ -212,11 +207,6 @@ const EventDetailsPage = () => {
                 </div>
 
                 <div className="p-6 text-center space-y-4">
-                    <div className="bg-zinc-50 dark:bg-black border border-zinc-100 dark:border-zinc-800 rounded-2xl p-4">
-                         <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-1">Event</p>
-                         <p className="text-lg font-black text-zinc-800 dark:text-white line-clamp-1">{event.title}</p>
-                    </div>
-
                     <button onClick={() => navigate('/my-tickets')} className="w-full py-4 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
                         <QrCode className="w-5 h-5"/> View Digital Ticket
                     </button>
@@ -229,30 +219,56 @@ const EventDetailsPage = () => {
         </div>
       )}
 
-      {/* 🛡️ CONSENT MODAL WITH WORKING LINKS */}
+      {/* 🛡️ CONSENT MODAL (WITH FIXED LINKS) */}
       {showConsentModal && (
          <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
            <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2rem] max-w-sm w-full shadow-2xl animate-in slide-in-from-bottom-10">
+             
              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center text-indigo-600 mb-4">
                 <Info className="w-6 h-6"/>
              </div>
-             <h3 className="font-black text-2xl mb-2 dark:text-white">Almost There</h3>
-             <p className="text-zinc-500 text-sm mb-6 leading-relaxed">To ensure a safe environment, please agree to our community guidelines.</p>
              
-             <div className="flex items-start gap-3 p-4 bg-zinc-50 dark:bg-black rounded-xl border border-zinc-100 dark:border-zinc-800 mb-6 group hover:border-indigo-500 transition-colors cursor-pointer" onClick={() => setTermsChecked(!termsChecked)}>
-                <input type="checkbox" checked={termsChecked} onChange={() => {}} className="mt-1 w-5 h-5 accent-indigo-600 cursor-pointer pointer-events-none"/>
-                <label className="text-sm font-bold text-zinc-700 dark:text-zinc-300 cursor-pointer pointer-events-none">
-                    I agree to the{' '}
+             <h3 className="font-black text-2xl mb-2 dark:text-white">Almost There</h3>
+             <p className="text-zinc-500 text-sm mb-6 leading-relaxed">
+                To ensure a safe environment, please agree to our guidelines.
+             </p>
+             
+             {/* 🔥 LINK LOGIC FIXED */}
+             <div className="flex items-start gap-3 p-4 bg-zinc-50 dark:bg-black rounded-xl border border-zinc-100 dark:border-zinc-800 mb-6 group hover:border-indigo-500 transition-colors">
+                <div className="pt-1">
+                    <input 
+                        type="checkbox" 
+                        id="termsCheck"
+                        checked={termsChecked} 
+                        onChange={(e) => setTermsChecked(e.target.checked)} 
+                        className="w-5 h-5 accent-indigo-600 cursor-pointer"
+                    />
+                </div>
+                
+                <div className="text-sm font-bold text-zinc-700 dark:text-zinc-300 leading-snug">
+                    <label htmlFor="termsCheck" className="cursor-pointer">I agree to the </label>
+                    
+                    {/* Hyperlinks with Stop Propagation */}
                     <Link 
                         to="/terms" 
                         target="_blank" 
-                        className="text-indigo-600 hover:underline pointer-events-auto"
-                        onClick={(e) => e.stopPropagation()} // 🔥 FIX IS HERE
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 hover:underline z-50 relative inline-block mx-1"
+                        onClick={(e) => e.stopPropagation()} 
                     >
                         Terms & Conditions
                     </Link>
-                    .
-                </label>
+                    and
+                    <Link 
+                        to="/privacy" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 hover:underline z-50 relative inline-block mx-1"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        Privacy Policy
+                    </Link>.
+                </div>
              </div>
              
              <button onClick={handleAgreeToTerms} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 dark:shadow-none">
