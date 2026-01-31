@@ -28,20 +28,23 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
 
   const isTeamEvent = event?.type === 'team' || event?.teamSize > 1;
 
-  // 1. CALCULATE MISSING FIELDS (Robust Method)
+  // ==========================================
+  // 🔍 1. MISSING FIELDS LOGIC (Improved)
+  // ==========================================
   const getMissingFields = () => {
-    if (!profile) return []; // Profile loading/null
+    if (!profile) return ["Loading Profile..."];
+    
     const missing = [];
     
-    // Check for empty strings or undefined/null
-    if (!profile.rollNo || profile.rollNo.trim() === '') missing.push("Roll Number");
-    if (!profile.branch || profile.branch.trim() === '') missing.push("Branch");
-    if (!profile.group || profile.group.trim() === '') missing.push("Group / Semester");
-    if (!profile.residency || profile.residency.trim() === '') missing.push("Residency (Hostel/Day)");
+    // Check fields strictly
+    if (!profile.rollNo || String(profile.rollNo).trim() === '') missing.push("Roll Number");
+    if (!profile.branch || String(profile.branch).trim() === '') missing.push("Branch");
+    if (!profile.group || String(profile.group).trim() === '') missing.push("Group / Semester");
+    if (!profile.residency || String(profile.residency).trim() === '') missing.push("Residency");
     
-    // Phone check (handle both naming conventions)
+    // Check phone (handle variations)
     const phone = profile.phoneNumber || profile.phone;
-    if (!phone || phone.trim() === '') missing.push("Phone Number");
+    if (!phone || String(phone).trim() === '') missing.push("Phone Number");
 
     return missing;
   };
@@ -77,7 +80,7 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
 
   if (!isOpen || !event) return null;
 
-  // Handle Input for Custom Questions
+  // Handle Custom Questions
   const handleCustomAnswerChange = (qId, value) => {
     setCustomAnswers(prev => ({ ...prev, [qId]: value }));
   };
@@ -86,9 +89,13 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
     e.preventDefault();
     setLoading(true);
     
+    // Fallback for Name (To fix Image 5 issue)
+    const finalName = profile.userName || profile.name || user.displayName || 'Student';
+
     const finalData = {
-        ...profile, // Send full profile data
-        customAnswers: customAnswers // Attach dynamic answers
+        ...profile,
+        userName: finalName, // Ensure name is sent
+        customAnswers: customAnswers
     };
 
     try {
@@ -105,7 +112,9 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
     }
   };
 
-  // 🛡️ VIEW TICKET (ALREADY REGISTERED / SUCCESS)
+  // ------------------------------------------
+  // STATE 1: SUCCESS / ALREADY REGISTERED
+  // ------------------------------------------
   if (isAlreadyRegistered || isSuccess) {
     return (
       <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
@@ -141,7 +150,9 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
     );
   }
 
-  // 🛡️ BLOCKING UI (INCOMPLETE PROFILE)
+  // ------------------------------------------
+  // STATE 2: PROFILE INCOMPLETE (BLOCKING UI)
+  // ------------------------------------------
   if (!isProfileComplete) {
     return (
       <>
@@ -152,16 +163,16 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
              </div>
              <h2 className="text-2xl font-black text-zinc-900 dark:text-white uppercase italic tracking-tighter mb-2">Profile Incomplete</h2>
              <p className="text-zinc-500 font-medium text-sm mb-6 px-4">
-               To ensure security, please complete the following details:
+               Complete your profile to register.
              </p>
 
-             {/* 🔥 FIXED MISSING FIELDS LIST */}
+             {/* ✅ FIX: Dynamic List of Missing Fields */}
              <div className="bg-zinc-100 dark:bg-zinc-900 rounded-xl p-4 mb-8 text-left text-xs font-bold text-zinc-500 space-y-2">
-                <p className="uppercase tracking-widest mb-2 border-b pb-2 text-zinc-400">Required Info:</p>
-                {missingFields.map((field, index) => (
-                    <p key={index} className="text-red-500 flex items-center gap-2 animate-pulse">
+                <p className="uppercase tracking-widest mb-2 border-b border-zinc-300 dark:border-zinc-700 pb-2 text-zinc-400">Missing Info:</p>
+                {missingFields.map((field, idx) => (
+                    <div key={idx} className="flex items-center gap-2 text-red-500 animate-pulse">
                         <AlertTriangle className="w-3 h-3"/> {field}
-                    </p>
+                    </div>
                 ))}
              </div>
 
@@ -171,16 +182,19 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
              <button onClick={onClose} className="mt-4 text-xs font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-600">Cancel</button>
           </div>
         </div>
-        {/* Open UserProfile Modal to fix data */}
         <UserProfile isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
       </>
     );
   }
 
-  // 4. REGISTRATION FORM (Standard)
+  // ------------------------------------------
+  // STATE 3: READY TO REGISTER (VERIFIED IDENTITY)
+  // ------------------------------------------
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
       <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh]">
+        
+        {/* Header */}
         <div className="p-6 border-b border-zinc-100 dark:border-zinc-900 flex justify-between items-center bg-white dark:bg-black/40 text-center relative">
           <div className="w-full">
             <h2 className="text-xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase italic">Entry Portal</h2>
@@ -198,26 +212,41 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
                  <div className="flex-1"><h3 className="font-black text-sm uppercase dark:text-white">Individual</h3><p className="text-[10px] text-zinc-500">Book for yourself</p></div>
                  <ArrowRight className="h-4 w-4 text-zinc-300" />
                </button>
-               {/* Team Logic can be added here if needed */}
+               {/* Team Logic will go here */}
              </div>
           ) : (
             <form onSubmit={handleRegister} className="space-y-6">
               
-              {/* Identity Card (READ ONLY) */}
+              {/* ✅ IDENTITY CARD (With Name Fix) */}
               <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl space-y-3 shadow-sm">
-                 <div className="flex items-center gap-2 border-b border-indigo-200 dark:border-indigo-800 pb-2 mb-2">
-                    <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                 <div className="flex items-center gap-2 border-b border-indigo-200 dark:border-indigo-800 pb-2 mb-2 text-indigo-600">
+                    <ShieldCheck className="w-4 h-4" />
                     <span className="text-[10px] font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-widest">Verified Identity</span>
                  </div>
-                 <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-xs">
-                    <div><p className="text-[9px] text-indigo-400 uppercase">Name</p><p className="font-bold dark:text-white">{profile.userName}</p></div>
-                    <div><p className="text-[9px] text-indigo-400 uppercase">Roll No</p><p className="font-bold dark:text-white">{profile.rollNo}</p></div>
-                    <div><p className="text-[9px] text-indigo-400 uppercase">Group</p><p className="font-bold dark:text-white">{profile.group}</p></div>
-                    <div><p className="text-[9px] text-indigo-400 uppercase">Residency</p><p className="font-bold dark:text-white">{profile.residency}</p></div>
+                 <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-xs">
+                    {/* Name Fix: Check multiple fields */}
+                    <div>
+                        <p className="text-[9px] text-indigo-400 uppercase font-bold">Name</p>
+                        <p className="font-black dark:text-white truncate">
+                            {profile.userName || profile.name || user.displayName || 'Student'}
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-[9px] text-indigo-400 uppercase font-bold">Roll No</p>
+                        <p className="font-black dark:text-white">{profile.rollNo}</p>
+                    </div>
+                    <div>
+                        <p className="text-[9px] text-indigo-400 uppercase font-bold">Group</p>
+                        <p className="font-black dark:text-white">{profile.group}</p>
+                    </div>
+                    <div>
+                        <p className="text-[9px] text-indigo-400 uppercase font-bold">Residency</p>
+                        <p className="font-black dark:text-white">{profile.residency}</p>
+                    </div>
                  </div>
               </div>
 
-              {/* ❓ CUSTOM QUESTIONS (Dynamic) */}
+              {/* ❓ CUSTOM QUESTIONS */}
               {event.customQuestions && event.customQuestions.length > 0 && (
                 <div className="space-y-4 pt-4 border-t border-dashed border-zinc-200 dark:border-zinc-800">
                     <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Additional Details</p>
