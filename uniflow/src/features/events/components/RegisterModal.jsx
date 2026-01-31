@@ -2,20 +2,20 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   X, User, Loader2, ArrowRight, ShieldCheck, 
-  Ticket, CheckCircle, AlertTriangle
+  Ticket, CheckCircle, AlertTriangle, Save
 } from 'lucide-react';
-import { doc, getDoc } from 'firebase/firestore'; 
+import { doc, getDoc, updateDoc } from 'firebase/firestore'; 
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { registerForEvent, registerTeam, joinTeam } from '../services/registrationService';
-import UserProfile from '../../auth/components/UserProfile';
 
 const RegisterModal = ({ event, onClose, isOpen }) => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   
-  const [showProfileModal, setShowProfileModal] = useState(false);
+  // States
   const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false); // 🔥 NEW: Toggle for Quick Update
   const [isAlreadyRegistered, setIsAlreadyRegistered] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
@@ -26,44 +26,30 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
   const [mode, setMode] = useState('solo');
   const [customAnswers, setCustomAnswers] = useState({});
 
+  // Quick Update State
+  const [updateData, setUpdateData] = useState({
+    rollNo: '', phone: '', branch: '', group: '', residency: ''
+  });
+
   const isTeamEvent = event?.type === 'team' || event?.teamSize > 1;
 
-  // ==========================================
-  // 🔍 1. NAME HELPER (Fixes Blank Name Issue)
-  // ==========================================
-  const getSafeName = () => {
-    const rawName = profile?.userName || profile?.name || user?.displayName;
-    return rawName && rawName.trim() !== "" ? rawName : "Student";
-  };
-
-  const displayName = getSafeName();
-
-  // ==========================================
-  // 🛡️ 2. PROFILE VALIDATION (Now Checks Name too)
-  // ==========================================
+  // 1. MISSING FIELDS CHECK
   const getMissingFields = () => {
-    if (!profile) return ["Loading..."];
+    if (!profile) return [];
     const missing = [];
-    
     if (!profile.rollNo?.trim()) missing.push("Roll Number");
     if (!profile.branch?.trim()) missing.push("Branch");
     if (!profile.group?.trim()) missing.push("Group / Semester");
     if (!profile.residency?.trim()) missing.push("Residency");
-    
-    // 🔥 Added Name Check to prevent blank ID card
-    if (displayName === "Student") missing.push("Full Name");
-
-    // Phone Check
     const phone = profile.phoneNumber || profile.phone;
     if (!phone?.trim()) missing.push("Phone Number");
-
     return missing;
   };
 
   const missingFields = getMissingFields();
   const isProfileComplete = missingFields.length === 0;
 
-  // 3. CHECK REGISTRATION STATUS
+  // 2. CHECK REGISTRATION STATUS
   useEffect(() => {
     const checkRegistration = async () => {
       if (user && event && isOpen) {
@@ -77,27 +63,59 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
     checkRegistration();
   }, [user, event, isOpen]);
 
-  // Reset Logic
+  // Init Data for Edit Mode
   useEffect(() => {
-    if (isOpen) {
-        if (isTeamEvent) { setStep('choice'); setMode(null); } 
-        else { setStep('form'); setMode('solo'); }
+    if (profile) {
+        setUpdateData({
+            rollNo: profile.rollNo || '',
+            phone: profile.phoneNumber || profile.phone || '',
+            branch: profile.branch || '',
+            group: profile.group || '',
+            residency: profile.residency || ''
+        });
     }
-  }, [isTeamEvent, isOpen]); 
+  }, [profile]);
 
   if (!isOpen || !event) return null;
 
+  // 3. HANDLERS
   const handleCustomAnswerChange = (qId, value) => {
     setCustomAnswers(prev => ({ ...prev, [qId]: value }));
+  };
+
+  // 🔥 QUICK PROFILE UPDATE
+  const handleQuickUpdate = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, {
+            rollNo: updateData.rollNo,
+            phoneNumber: updateData.phone, // Standardize key
+            phone: updateData.phone,       // Backwards compatibility
+            branch: updateData.branch,
+            group: updateData.group,
+            residency: updateData.residency
+        });
+        // Profile will auto-update via AuthContext, triggering re-render
+        setIsEditing(false);
+    } catch (error) {
+        alert("Update failed: " + error.message);
+    } finally {
+        setLoading(false);
+    }
   };
 
   const handleRegister = async (e) => {
     e.preventDefault();
     setLoading(true);
     
+    // Ensure Name Exists
+    const finalName = profile.userName || profile.name || user.displayName || 'Student';
+
     const finalData = {
         ...profile,
-        userName: displayName, // ✅ Send Safe Name
+        userName: finalName,
         customAnswers: customAnswers
     };
 
@@ -105,47 +123,28 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
       if (mode === 'solo') await registerForEvent(event.id, user, finalData);
       else if (mode === 'create_team') await registerTeam(event.id, user, teamName, finalData);
       else if (mode === 'join_team') await joinTeam(event.id, user, teamCode, finalData);
-      
       setIsSuccess(true);
       setIsAlreadyRegistered(true);
     } catch (error) {
-      alert("❌ " + (error.message || "Registration failed"));
+      alert("❌ " + error.message);
     } finally {
       setLoading(false);
     }
   };
 
   // ------------------------------------------
-  // STATE 1: SUCCESS / ALREADY REGISTERED
+  // UI 1: SUCCESS
   // ------------------------------------------
   if (isAlreadyRegistered || isSuccess) {
     return (
-      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
-        <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden text-center p-8 relative">
-           
-           {isSuccess && (
-             <div className="absolute inset-0 pointer-events-none overflow-hidden">
-               <div className="absolute top-0 left-1/2 w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
-               <div className="absolute top-5 right-1/4 w-2 h-2 bg-green-500 rounded-full animate-ping delay-150"></div>
-             </div>
-           )}
-
-           <div className="w-20 h-20 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-6 text-green-600 animate-in zoom-in duration-500">
-             <CheckCircle className="w-10 h-10" />
-           </div>
-           
-           <h2 className="text-2xl font-black text-zinc-900 dark:text-white uppercase italic tracking-tighter mb-2">
-             {isSuccess ? "Welcome Aboard!" : "Already Onboard!"}
-           </h2>
-           <p className="text-zinc-500 font-medium text-sm mb-8">
-             Your pass for <span className="font-bold text-indigo-600">{event.title}</span> is ready.
-           </p>
-           
+      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in">
+        <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] p-8 text-center border dark:border-zinc-800">
+           <div className="w-20 h-20 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-6 text-green-600"><CheckCircle className="w-10 h-10" /></div>
+           <h2 className="text-2xl font-black dark:text-white uppercase italic mb-2">Confirmed!</h2>
+           <p className="text-zinc-500 text-sm mb-8">Pass secured for <span className="font-bold text-indigo-600">{event.title}</span>.</p>
            <div className="space-y-3">
-             <button onClick={() => { onClose(); navigate('/my-tickets'); }} className="w-full py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2">
-               <Ticket className="w-4 h-4" /> View My Pass
-             </button>
-             <button onClick={onClose} className="text-xs font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-600">Close</button>
+             <button onClick={() => { onClose(); navigate('/my-tickets'); }} className="w-full py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2"><Ticket className="w-4 h-4" /> View Pass</button>
+             <button onClick={onClose} className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Close</button>
            </div>
         </div>
       </div>
@@ -153,101 +152,111 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
   }
 
   // ------------------------------------------
-  // STATE 2: PROFILE INCOMPLETE (BLOCKING UI)
+  // UI 2: PROFILE INCOMPLETE (BLOCKING)
   // ------------------------------------------
   if (!isProfileComplete) {
     return (
-      <>
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden text-center p-8">
-             <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/20 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-600">
-               <ShieldCheck className="w-8 h-8" />
+      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+        <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] shadow-2xl border dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh]">
+             
+             {/* Header */}
+             <div className="p-6 text-center">
+                <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/20 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-600"><ShieldCheck className="w-8 h-8" /></div>
+                <h2 className="text-2xl font-black dark:text-white uppercase italic">Complete Profile</h2>
+                <p className="text-zinc-500 text-xs mt-1 px-4">Required to generate your ID Card.</p>
              </div>
-             <h2 className="text-2xl font-black text-zinc-900 dark:text-white uppercase italic tracking-tighter mb-2">Profile Incomplete</h2>
-             <p className="text-zinc-500 font-medium text-sm mb-6 px-4">
-               Complete your profile to register.
-             </p>
 
-             {/* ✅ MISSING FIELDS LIST (Now Checks Name Too) */}
-             <div className="bg-zinc-100 dark:bg-zinc-900 rounded-xl p-4 mb-8 text-left text-xs font-bold text-zinc-500 space-y-2">
-                <p className="uppercase tracking-widest mb-2 border-b border-zinc-300 dark:border-zinc-700 pb-2 text-zinc-400">Missing Info:</p>
-                {missingFields.map((field, idx) => (
-                    <div key={idx} className="flex items-center gap-2 text-red-500 animate-pulse">
-                        <AlertTriangle className="w-3 h-3"/> {field}
+             {/* 🔥 QUICK EDIT FORM */}
+             <div className="p-8 pt-0 overflow-y-auto custom-scrollbar">
+                {isEditing ? (
+                    <form onSubmit={handleQuickUpdate} className="space-y-4">
+                        {missingFields.includes("Roll Number") && (
+                            <input placeholder="Roll Number (e.g. 211099XXXX)" required value={updateData.rollNo} onChange={e=>setUpdateData({...updateData, rollNo: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-sm outline-none dark:text-white" />
+                        )}
+                        {missingFields.includes("Phone Number") && (
+                            <input placeholder="Phone Number" type="tel" required value={updateData.phone} onChange={e=>setUpdateData({...updateData, phone: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-sm outline-none dark:text-white" />
+                        )}
+                        {missingFields.includes("Branch") && (
+                            <input placeholder="Branch (e.g. CSE)" required value={updateData.branch} onChange={e=>setUpdateData({...updateData, branch: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-sm outline-none dark:text-white" />
+                        )}
+                        {missingFields.includes("Group / Semester") && (
+                            <input placeholder="Group (e.g. G12 / Sem 4)" required value={updateData.group} onChange={e=>setUpdateData({...updateData, group: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-sm outline-none dark:text-white" />
+                        )}
+                        {missingFields.includes("Residency") && (
+                            <select required value={updateData.residency} onChange={e=>setUpdateData({...updateData, residency: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-sm outline-none dark:text-white appearance-none">
+                                <option value="">Select Residency</option>
+                                <option value="Day Scholar">Day Scholar</option>
+                                <option value="Hosteller">Hosteller</option>
+                            </select>
+                        )}
+                        <button type="submit" disabled={loading} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest mt-4">
+                            {loading ? <Loader2 className="animate-spin mx-auto w-4 h-4"/> : 'Save & Continue'}
+                        </button>
+                    </form>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="bg-zinc-100 dark:bg-zinc-900 rounded-xl p-4 text-left text-xs font-bold text-zinc-500 space-y-2">
+                            <p className="uppercase tracking-widest mb-2 border-b pb-2">Missing Fields:</p>
+                            {missingFields.map((field, idx) => (
+                                <div key={idx} className="flex items-center gap-2 text-red-500 animate-pulse"><AlertTriangle className="w-3 h-3"/> {field}</div>
+                            ))}
+                        </div>
+                        {/* 🔥 THIS BUTTON NOW ACTIVATES EDIT MODE */}
+                        <button onClick={() => setIsEditing(true)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-xl active:scale-95 transition-all">
+                           Update Now
+                        </button>
+                        <button onClick={onClose} className="w-full text-xs font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-600">Cancel</button>
                     </div>
-                ))}
+                )}
              </div>
-
-             <button onClick={() => setShowProfileModal(true)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-xl active:scale-95 transition-all">
-               Complete Profile
-             </button>
-             <button onClick={onClose} className="mt-4 text-xs font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-600">Cancel</button>
-          </div>
         </div>
-        <UserProfile isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
-      </>
+      </div>
     );
   }
 
   // ------------------------------------------
-  // STATE 3: READY TO REGISTER (VERIFIED IDENTITY)
+  // UI 3: REGISTER (PROFILE COMPLETE)
   // ------------------------------------------
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh]">
-        
-        <div className="p-6 border-b border-zinc-100 dark:border-zinc-900 flex justify-between items-center bg-white dark:bg-black/40 text-center relative">
-          <div className="w-full">
-            <h2 className="text-xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase italic">Entry Portal</h2>
-            <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">{event.title}</p>
-          </div>
-          <button onClick={onClose} className="absolute right-4 p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-all"><X className="h-5 w-5 text-zinc-500" /></button>
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in">
+      <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] shadow-2xl border dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="p-6 border-b dark:border-zinc-900 flex justify-between items-center relative">
+          <div><h2 className="text-xl font-black dark:text-white uppercase italic">Entry Portal</h2><p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">{event.title}</p></div>
+          <button onClick={onClose} className="absolute right-4 p-2 text-zinc-400"><X className="h-5 w-5" /></button>
         </div>
 
         <div className="p-8 overflow-y-auto custom-scrollbar">
           {step === 'choice' ? (
              <div className="space-y-4">
-               <button onClick={() => { setMode('solo'); setStep('form'); }} className="w-full p-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[1.5rem] hover:border-indigo-500 transition-all group flex items-center gap-4 text-left shadow-sm">
-                 <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center"><User className="h-6 w-6" /></div>
-                 <div className="flex-1"><h3 className="font-black text-sm uppercase dark:text-white">Individual</h3><p className="text-[10px] text-zinc-500">Book for yourself</p></div>
+               <button onClick={() => { setMode('solo'); setStep('form'); }} className="w-full p-6 bg-white dark:bg-zinc-900 border dark:border-zinc-800 rounded-[1.5rem] flex items-center gap-4 hover:border-indigo-500 shadow-sm">
+                 <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center"><User className="h-6 w-6" /></div>
+                 <div className="flex-1 text-left"><h3 className="font-black text-sm uppercase dark:text-white">Individual</h3></div>
                  <ArrowRight className="h-4 w-4 text-zinc-300" />
                </button>
              </div>
           ) : (
             <form onSubmit={handleRegister} className="space-y-6">
-              
-              {/* ✅ IDENTITY CARD (Fixed Name Display) */}
-              <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl space-y-3 shadow-sm">
-                 <div className="flex items-center gap-2 border-b border-indigo-200 dark:border-indigo-800 pb-2 mb-2 text-indigo-600">
-                    <ShieldCheck className="w-4 h-4" />
-                    <span className="text-[10px] font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-widest">Verified Identity</span>
+              <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl space-y-3 shadow-sm">
+                 <div className="flex items-center gap-2 border-b dark:border-indigo-800 pb-2 mb-2 text-indigo-600">
+                    <ShieldCheck className="w-4 h-4" /><span className="text-[10px] font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-widest">Verified Identity</span>
                  </div>
                  <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-xs">
-                    <div>
-                        <p className="text-[9px] text-indigo-400 uppercase font-bold">Name</p>
-                        {/* 🔥 Added text-zinc-900 to ensure visibility in light mode */}
-                        <p className="font-black text-zinc-900 dark:text-white truncate">{displayName}</p>
-                    </div>
+                    <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Name</p><p className="font-black text-zinc-900 dark:text-white truncate">{profile.userName || profile.name || user.displayName || 'Student'}</p></div>
                     <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Roll No</p><p className="font-black text-zinc-900 dark:text-white">{profile.rollNo}</p></div>
                     <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Group</p><p className="font-black text-zinc-900 dark:text-white">{profile.group}</p></div>
                     <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Residency</p><p className="font-black text-zinc-900 dark:text-white">{profile.residency}</p></div>
                  </div>
               </div>
-
-              {event.customQuestions && event.customQuestions.map((q) => (
+              
+              {event.customQuestions && event.customQuestions.map(q => (
                   <div key={q.id} className="space-y-1">
-                      <label className="text-xs font-bold dark:text-zinc-300">{q.label} {q.required && <span className="text-red-500">*</span>}</label>
-                      <input 
-                        type={q.type === 'number' ? 'number' : 'text'} 
-                        required={q.required} 
-                        onChange={(e) => handleCustomAnswerChange(q.id, e.target.value)} 
-                        className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl outline-none font-bold text-sm dark:text-white"
-                      />
+                      <label className="text-xs font-bold dark:text-zinc-300">{q.label} {q.required && '*'}</label>
+                      <input type={q.type === 'number' ? 'number' : 'text'} required={q.required} onChange={e => handleCustomAnswerChange(q.id, e.target.value)} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl outline-none font-bold text-sm dark:text-white" />
                   </div>
               ))}
 
               <button type="submit" disabled={loading} className="w-full py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-black text-[10px] uppercase tracking-[0.4em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all">
-                {loading ? <Loader2 className="animate-spin mx-auto h-4 w-4" /> : 'Confirm Registration'}
+                {loading ? <Loader2 className="animate-spin mx-auto h-4 w-4" /> : 'Confirm Booking'}
               </button>
             </form>
           )}
