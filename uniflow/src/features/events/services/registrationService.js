@@ -3,11 +3,8 @@ import {
   doc, 
   runTransaction, 
   serverTimestamp, 
-  getDoc, 
-  setDoc, 
-  updateDoc, 
-  arrayUnion, 
-  increment,
+  increment, 
+  arrayUnion,
   collection,
   query,
   where,
@@ -15,10 +12,9 @@ import {
 } from 'firebase/firestore';
 
 // ==========================================
-// 🎨 1. PROFESSIONAL EMAIL TEMPLATE (FIXED QR & LAYOUT)
+// 🎨 1. EMAIL TEMPLATE
 // ==========================================
 const getTicketEmailTemplate = (userName, eventName, eventDate, venue, ticketId) => {
-  // QR Code Generation using Google Charts API (Reliable for Emails)
   const qrUrl = `https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=${ticketId}&choe=UTF-8`;
 
   return `
@@ -26,74 +22,27 @@ const getTicketEmailTemplate = (userName, eventName, eventDate, venue, ticketId)
     <html>
     <head>
       <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 0; }
-        .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e4e4e7; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        .header { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 30px 20px; text-align: center; color: white; }
-        .header h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
-        .header p { margin: 5px 0 0 0; opacity: 0.9; font-size: 14px; }
-        .content { padding: 30px; color: #333; }
-        .greeting { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: #18181b; }
-        .card { background-color: #f8fafc; border: 2px dashed #e2e8f0; border-radius: 12px; padding: 25px; margin: 20px 0; }
-        .row { margin-bottom: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; }
-        .row:last-child { border-bottom: none; margin-bottom: 0; }
-        .label { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; display: block; margin-bottom: 4px; }
-        .value { font-size: 15px; font-weight: 600; color: #0f172a; display: block; }
-        
-        /* 🔥 FIX: Ticket ID Overflow */
-        .ticket-id { font-family: monospace; color: #4f46e5; word-break: break-all; overflow-wrap: break-word; font-size: 14px; }
-
-        .btn { display: inline-block; background-color: #4f46e5; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; margin-top: 20px; }
-        .footer { background-color: #f1f5f9; padding: 20px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; }
-        
-        .qr-container { text-align: center; margin-top: 20px; padding: 10px; background: white; border-radius: 8px; display: inline-block; border: 1px solid #eee; }
-        .qr-img { width: 150px; height: 150px; display: block; }
+        body { font-family: sans-serif; background-color: #f4f4f5; padding: 20px; }
+        .container { max-width: 600px; margin: auto; background: white; border-radius: 16px; overflow: hidden; border: 1px solid #e4e4e7; }
+        .header { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 30px; text-align: center; color: white; }
+        .content { padding: 30px; }
+        .card { background: #f8fafc; border: 2px dashed #e2e8f0; border-radius: 12px; padding: 20px; }
+        .ticket-id { font-family: monospace; color: #4f46e5; word-break: break-all; }
+        .btn { display: inline-block; background: #4f46e5; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; margin-top: 20px; }
       </style>
     </head>
     <body>
       <div class="container">
-        <div class="header">
-          <h1>UniFlow Ticket</h1>
-          <p>You're confirmed! 🎟️</p>
-        </div>
+        <div class="header"><h1>UniFlow Ticket</h1><p>You're confirmed! 🎟️</p></div>
         <div class="content">
-          <p class="greeting">Hi ${userName},</p>
-          <p>Your registration for <strong>${eventName}</strong> is confirmed. See you there!</p>
-          
+          <p>Hi ${userName}, registration for <strong>${eventName}</strong> is confirmed.</p>
           <div class="card">
-            <div class="row">
-              <span class="label">Event</span>
-              <span class="value">${eventName}</span>
-            </div>
-            <div class="row">
-              <span class="label">Date</span>
-              <span class="value">${new Date(eventDate).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</span>
-            </div>
-            <div class="row">
-              <span class="label">Venue</span>
-              <span class="value">${venue || 'Campus Venue'}</span>
-            </div>
-            <div class="row" style="border-bottom: none;">
-              <span class="label">Ticket ID</span>
-              <span class="value ticket-id">${ticketId}</span>
-            </div>
+            <p><strong>Event:</strong> ${eventName}</p>
+            <p><strong>Ticket ID:</strong> <span class="ticket-id">${ticketId}</span></p>
           </div>
-
-          <div style="text-align: center;">
-            <div class="qr-container">
-              <img src="${qrUrl}" alt="Ticket QR Code" class="qr-img" />
-            </div>
-            <p style="font-size: 12px; color: #888; margin-top: 5px;">Scan this at entry</p>
-          </div>
-
-          <div style="text-align: center;">
-            <a href="https://uniflow-cu.vercel.app/my-tickets" class="btn">View Digital Ticket</a>
-          </div>
-        </div>
-        <div class="footer">
-          <p>© 2026 UniFlow Event Management</p>
-          <p>This is an automated message. Please do not reply.</p>
+          <div style="text-align:center;"><img src="${qrUrl}" width="150" /></div>
+          <div style="text-align:center;"><a href="https://uniflow-cu.vercel.app/my-tickets" class="btn">View Ticket</a></div>
         </div>
       </div>
     </body>
@@ -102,12 +51,10 @@ const getTicketEmailTemplate = (userName, eventName, eventDate, venue, ticketId)
 };
 
 // ==========================================
-// 🚀 2. INDIVIDUAL REGISTRATION
+// 🚀 2. INDIVIDUAL REGISTRATION (FIXED)
 // ==========================================
-
 export const registerForEvent = async (eventId, user, profile) => {
   if (!user || !profile) throw new Error("User profile incomplete");
-  if (!profile.termsAccepted) throw new Error("Terms not accepted");
 
   const eventRef = doc(db, 'events', eventId);
   const userRef = doc(db, 'users', user.uid);
@@ -126,27 +73,50 @@ export const registerForEvent = async (eventId, user, profile) => {
       const ticketDoc = await transaction.get(ticketRef);
       if (ticketDoc.exists()) throw new Error("You are already registered!");
 
+      // 🔥 CRASH FIX: Default to 'N/A' if undefined
+      const safeUserName = profile.userName || profile.displayName || user.displayName || 'Student';
+      const safeRollNo = profile.rollNo || profile.rollNumber || 'N/A';
+      const safePhone = profile.phoneNumber || profile.phone || 'N/A';
+      const safeBranch = profile.branch || 'N/A';
+      const safeGroup = profile.group || 'N/A';
+      const safeResidency = profile.residency || 'N/A';
+
       ticketData = {
         eventId,
         userId: user.uid,
-        userEmail: user.email,
-        userName: profile.displayName || user.displayName || 'Student',
-        userRollNo: profile.rollNo,
-        eventName: eventData.title,
-        eventDate: eventData.date,
-        eventVenue: eventData.venue || eventData.location,
+        userEmail: user.email || '',
+        userName: safeUserName,
+        userRollNo: safeRollNo,
+        userPhone: safePhone,
+        userBranch: safeBranch,
+        userGroup: safeGroup,
+        userResidency: safeResidency,
+        customAnswers: profile.customAnswers || {},
+        eventName: eventData.title || 'Event',
+        eventDate: eventData.date || '',
+        eventVenue: eventData.venue || eventData.location || 'TBA',
         status: 'confirmed',
         bookedAt: serverTimestamp(),
         scanned: false,
         qrCode: `${eventId}_${user.uid}`
       };
 
+      // Set Ticket
       transaction.set(ticketRef, ticketData);
-      transaction.update(eventRef, { registered: increment(1), participants: arrayUnion(user.uid) });
-      transaction.update(userRef, { registeredEvents: arrayUnion(eventId) });
+      
+      // Update Event Count
+      transaction.update(eventRef, { 
+        registered: increment(1), 
+        participants: arrayUnion(user.uid) 
+      });
+      
+      // Update User History
+      transaction.update(userRef, { 
+        registeredEvents: arrayUnion(eventId) 
+      });
     });
 
-    // 📧 SEND EMAIL
+    // 📧 SEND EMAIL (Silent Fail)
     try {
         const emailHtml = getTicketEmailTemplate(ticketData.userName, ticketData.eventName, ticketData.eventDate, ticketData.eventVenue, ticketRef.id);
         await fetch('/api/email', {
@@ -157,13 +127,15 @@ export const registerForEvent = async (eventId, user, profile) => {
     } catch (e) { console.error("Email failed", e); }
 
     return true;
-  } catch (error) { console.error("Registration Failed:", error); throw error; }
+  } catch (error) { 
+    console.error("Registration Failed:", error); 
+    throw error; 
+  }
 };
 
 // ==========================================
-// 👥 3. TEAM REGISTRATION (CREATE)
+// 👥 3. TEAM REGISTRATION (FIXED)
 // ==========================================
-
 export const registerTeam = async (eventId, user, teamName, profile) => {
   if (!teamName) throw new Error("Team Name required");
   
@@ -181,8 +153,12 @@ export const registerTeam = async (eventId, user, teamName, profile) => {
         const eventData = eventDoc.data();
         if (eventData.registered >= eventData.totalTickets) throw new Error("Event Full");
 
-        // Create Team
+        // 🔥 CRASH FIX FOR TEAM
+        const safeUserName = profile.userName || profile.displayName || user.displayName || 'Leader';
+        const safeRollNo = profile.rollNo || 'N/A';
+
         const teamCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        
         transaction.set(teamRef, {
             eventId,
             teamName,
@@ -192,20 +168,21 @@ export const registerTeam = async (eventId, user, teamName, profile) => {
             createdAt: serverTimestamp()
         });
 
-        // Create Ticket
         ticketData = {
             eventId,
             userId: user.uid,
             teamId,
             teamName,
             role: 'LEADER',
-            userName: profile.displayName || user.displayName,
-            userRollNo: profile.rollNo,
+            userName: safeUserName,
+            userRollNo: safeRollNo,
             eventName: eventData.title,
             eventDate: eventData.date,
+            eventVenue: eventData.venue || eventData.location,
             status: 'confirmed',
             bookedAt: serverTimestamp(),
-            scanned: false
+            scanned: false,
+            qrCode: `${eventId}_${user.uid}`
         };
 
         transaction.set(ticketRef, ticketData);
@@ -227,20 +204,16 @@ export const registerTeam = async (eventId, user, teamName, profile) => {
 };
 
 // ==========================================
-// 🤝 4. JOIN TEAM (RESTORED ✅)
+// 🤝 4. JOIN TEAM (FIXED)
 // ==========================================
-
 export const joinTeam = async (eventId, user, teamCode, profile) => {
   if (!teamCode) throw new Error("Team Code required");
 
-  // 1. Find Team by Code
   const teamsRef = collection(db, 'teams');
   const q = query(teamsRef, where('teamCode', '==', teamCode.toUpperCase().trim()), where('eventId', '==', eventId));
   const querySnapshot = await getDocs(q);
 
-  if (querySnapshot.empty) {
-    throw new Error("Invalid Team Code for this event");
-  }
+  if (querySnapshot.empty) throw new Error("Invalid Team Code");
 
   const teamDoc = querySnapshot.docs[0];
   const teamData = teamDoc.data();
@@ -259,40 +232,40 @@ export const joinTeam = async (eventId, user, teamCode, profile) => {
       if (!eventDoc.exists()) throw new Error("Event not found");
       const eventData = eventDoc.data();
 
-      // Check Limits
       if (eventData.registered >= eventData.totalTickets) throw new Error("Event Full");
-      if (teamData.members.length >= eventData.maxTeamSize) throw new Error("Team is Full");
+      if (teamData.members.length >= (eventData.teamSize || 5)) throw new Error("Team is Full");
       if (teamData.members.includes(user.uid)) throw new Error("Already in this team");
 
-      // Check Existing Ticket
       const existingTicket = await transaction.get(ticketRef);
       if (existingTicket.exists()) throw new Error("You already have a ticket");
 
-      // Prepare Ticket
+      // 🔥 CRASH FIX FOR JOINER
+      const safeUserName = profile.userName || profile.displayName || user.displayName || 'Member';
+      const safeRollNo = profile.rollNo || 'N/A';
+
       ticketData = {
         eventId,
         userId: user.uid,
         teamId,
         teamName: teamData.teamName,
         role: 'MEMBER',
-        userName: profile.displayName || user.displayName,
-        userRollNo: profile.rollNo,
+        userName: safeUserName,
+        userRollNo: safeRollNo,
         eventName: eventData.title,
         eventDate: eventData.date,
         eventVenue: eventData.venue || eventData.location,
         status: 'confirmed',
         bookedAt: serverTimestamp(),
-        scanned: false
+        scanned: false,
+        qrCode: `${eventId}_${user.uid}`
       };
 
-      // Updates
       transaction.set(ticketRef, ticketData);
       transaction.update(teamRefDoc, { members: arrayUnion(user.uid) });
       transaction.update(eventRef, { registered: increment(1), participants: arrayUnion(user.uid) });
       transaction.update(userRef, { registeredEvents: arrayUnion(eventId) });
     });
 
-    // 📧 SEND EMAIL TO MEMBER
     try {
         const emailHtml = getTicketEmailTemplate(ticketData.userName, ticketData.eventName, ticketData.eventDate, ticketData.eventVenue, ticketRef.id);
         await fetch('/api/email', {
