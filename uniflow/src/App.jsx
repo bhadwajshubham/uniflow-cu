@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 // ✅ Navbar
@@ -27,10 +27,11 @@ import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 
 /* =========================
-   🔐 PROTECTED ROUTE (FIXED)
+   🔐 PROTECTED ROUTE (FIXED LOGIC)
    ========================= */
 const ProtectedRoute = ({ children, requireAdmin = false }) => {
   const { user, profile, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -40,26 +41,22 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
     );
   }
 
-  // ❌ Not logged in -> Login Page
+  // 1. Not Logged In -> Go to Login
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // ❌ Consent not accepted -> Redirect to PROFILE (Not Consent Page)
-  // Kyunki Profile page pe hi humara Shield wala UI hai ab.
-  if (!profile || profile.termsAccepted !== true) {
-    // Agar banda already profile page access kar raha hai, toh loop mat karo
-    if (window.location.pathname !== '/profile') {
-        return <Navigate to="/profile" replace />;
-    }
-  }
-
-  // ❌ Admin check
+  // 2. Admin Check
   if (requireAdmin && profile?.role !== 'admin' && profile?.role !== 'super_admin') {
     return <Navigate to="/" replace />;
   }
 
-  // ✅ Allowed
+  // 3. (Optional) Force Profile Completion
+  // Note: We generally don't block access to the *whole* app based on profile 
+  // completeness because it can cause loops. Instead, we block specific actions 
+  // (like booking a ticket) inside the components themselves.
+  // However, if you MUST block navigation, ensure you don't block the /profile route itself.
+  
   return children;
 };
 
@@ -68,13 +65,12 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
    ========================= */
 const ModalRouteWrapper = ({ Component, backPath = '/' }) => {
   const navigate = useNavigate();
-  // Simple check to ensure we don't render if component is missing
   if (!Component) return null;
   return <Component isOpen={true} onClose={() => navigate(backPath)} />;
 };
 
 /* =========================
-   🚀 APP
+   🚀 APP COMPONENT
    ========================= */
 function App() {
   return (
@@ -87,25 +83,23 @@ function App() {
         <main className="flex-grow">
           <Routes>
 
-            {/* 🌐 Public */}
+            {/* 🌐 PUBLIC ROUTES (Accessible by everyone) */}
             <Route path="/" element={<HomePage />} />
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/:id" element={<EventDetailsPage />} />
             <Route path="/login" element={<LoginPage />} />
+            
+            {/* Trust Pages (Must be public to avoid loops) */}
             <Route path="/about" element={<AboutPage />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/privacy" element={<Privacy />} />
-            
 
-            {/* 👤 User */}
+            {/* 👤 USER ROUTES (Protected) */}
             <Route
               path="/profile"
               element={
                 <ProtectedRoute>
-                  {/* Note: UserProfile is not a modal in your implementation, it's a page component */}
-                  {/* If UserProfile expects isOpen/onClose props, keep ModalRouteWrapper. */}
-                  {/* If UserProfile is a standard page, just use <UserProfile /> */}
-                  {/* Assuming standard page based on previous code: */}
+                  {/* UserProfile handles its own "editing" state */}
                   <UserProfile /> 
                 </ProtectedRoute>
               }
@@ -129,7 +123,7 @@ function App() {
               }
             />
 
-            {/* 🛠️ Admin */}
+            {/* 🛠️ ADMIN ROUTES (Protected + Admin Role) */}
             <Route
               path="/admin"
               element={
@@ -157,7 +151,7 @@ function App() {
               }
             />
 
-            {/* 🔚 Fallback */}
+            {/* 🔚 Fallback Route */}
             <Route path="*" element={<Navigate to="/" replace />} />
 
           </Routes>
