@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { X, Download, Share2, Award, ShieldCheck, CheckCircle, Loader2 } from 'lucide-react';
+import { X, Download, Award, CheckCircle, Loader2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
@@ -21,18 +21,18 @@ const CertificateModal = ({ isOpen, onClose, ticket }) => {
     setDownloading(true);
     
     try {
-      // 1. Capture Canvas
+      // Small delay to ensure rendering
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       const canvas = await html2canvas(certificateRef.current, {
-        scale: 3, // 🔥 Ultra Sharp Quality
+        scale: 3, // High Res
         useCORS: true,
-        backgroundColor: '#ffffff',
+        backgroundColor: '#fffbf0', // Cream Background explicitly set
         logging: false
       });
       
       const imgData = canvas.toDataURL('image/png');
-      
-      // 2. Generate PDF
-      const pdf = new jsPDF('l', 'mm', 'a4'); // Landscape
+      const pdf = new jsPDF('l', 'mm', 'a4'); 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       
@@ -55,13 +55,13 @@ const CertificateModal = ({ isOpen, onClose, ticket }) => {
         <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-950">
           <h3 className="text-zinc-400 font-bold text-sm uppercase tracking-widest flex items-center gap-2">
             <Award className="w-4 h-4 text-yellow-500" />
-            Verified Credential
+            Official Certificate
           </h3>
           <div className="flex gap-3">
             <button 
               onClick={handleDownload} 
               disabled={downloading}
-              className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-black rounded-full text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-yellow-500/20 disabled:opacity-50"
+              className="flex items-center gap-2 px-5 py-2 bg-yellow-600 hover:bg-yellow-500 text-black rounded-full text-xs font-black uppercase tracking-widest transition-all shadow-lg disabled:opacity-50"
             >
               {downloading ? <Loader2 className="w-4 h-4 animate-spin"/> : <><Download className="w-4 h-4" /> Download PDF</>}
             </button>
@@ -71,99 +71,161 @@ const CertificateModal = ({ isOpen, onClose, ticket }) => {
           </div>
         </div>
 
-        {/* 📜 CERTIFICATE PREVIEW AREA */}
+        {/* 📜 PREVIEW AREA */}
         <div className="p-8 overflow-auto bg-zinc-900 flex justify-center items-center min-h-[400px]">
           
-          {/* THE ACTUAL CERTIFICATE (Designed for A4 Landscape) */}
+          {/* THE ACTUAL CERTIFICATE (CSS-in-JS for Reliability) */}
           <div 
             ref={certificateRef}
-            className="w-[842px] h-[595px] bg-[#fffdf5] text-black relative flex flex-col shadow-2xl shrink-0 overflow-hidden"
-            style={{ fontFamily: "'Times New Roman', serif" }}
+            style={{
+                width: '842px',
+                height: '595px',
+                backgroundColor: '#fffbf0',
+                color: '#1a1a1a',
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '60px',
+                fontFamily: "'Times New Roman', serif",
+                boxSizing: 'border-box'
+            }}
           >
-            {/* 🎨 ORNAMENTAL BORDER */}
-            <div className="absolute inset-3 border-4 border-double border-zinc-800 pointer-events-none z-20"></div>
-            <div className="absolute inset-5 border border-zinc-300 pointer-events-none z-20"></div>
-            
-            {/* CORNER ACCENTS */}
-            <div className="absolute top-0 left-0 w-32 h-32 bg-[url('https://www.transparenttextures.com/patterns/arabesque.png')] opacity-20"></div>
-            <div className="absolute bottom-0 right-0 w-32 h-32 bg-[url('https://www.transparenttextures.com/patterns/arabesque.png')] opacity-20 rotate-180"></div>
+            {/* 🎨 GOLD BORDER FRAME */}
+            <div style={{
+                position: 'absolute',
+                top: '20px', left: '20px', right: '20px', bottom: '20px',
+                border: '4px double #DAA520', // Goldenrod
+                pointerEvents: 'none',
+                zIndex: 20
+            }}></div>
 
-            {/* GOLD SIDE BAR */}
-            <div className="absolute left-0 top-0 bottom-0 w-4 bg-gradient-to-b from-yellow-700 via-yellow-400 to-yellow-700 z-10"></div>
+            {/* CORNER DECORATIONS (CSS Shapes) */}
+            <div style={{ position: 'absolute', top: '20px', left: '20px', width: '80px', height: '80px', borderTop: '4px solid #B8860B', borderLeft: '4px solid #B8860B', zIndex: 21 }}></div>
+            <div style={{ position: 'absolute', top: '20px', right: '20px', width: '80px', height: '80px', borderTop: '4px solid #B8860B', borderRight: '4px solid #B8860B', zIndex: 21 }}></div>
+            <div style={{ position: 'absolute', bottom: '20px', left: '20px', width: '80px', height: '80px', borderBottom: '4px solid #B8860B', borderLeft: '4px solid #B8860B', zIndex: 21 }}></div>
+            <div style={{ position: 'absolute', bottom: '20px', right: '20px', width: '80px', height: '80px', borderBottom: '4px solid #B8860B', borderRight: '4px solid #B8860B', zIndex: 21 }}></div>
 
-            {/* CONTENT CONTAINER */}
-            <div className="flex-1 flex flex-col items-center justify-between py-16 px-20 text-center relative z-10">
-              
-              {/* HEADER */}
-              <div className="space-y-2">
-                 <div className="flex items-center justify-center gap-3 mb-4 opacity-90">
-                    <ShieldCheck className="w-8 h-8 text-indigo-900" />
-                    <span className="text-sm font-sans font-bold tracking-[0.3em] uppercase text-zinc-500">Official Document</span>
-                 </div>
-                 <h1 className="text-5xl font-black uppercase tracking-widest text-indigo-950" style={{ fontFamily: 'serif' }}>
-                    Certificate
-                 </h1>
-                 <p className="text-xl text-yellow-600 font-bold uppercase tracking-[0.4em] scale-y-75">
-                    Of Participation
-                 </p>
-              </div>
+            {/* WATERMARK BACKGROUND (Low Opacity) */}
+            <div style={{
+                position: 'absolute',
+                top: '50%', left: '50%',
+                transform: 'translate(-50%, -50%)',
+                opacity: 0.05,
+                pointerEvents: 'none',
+                zIndex: 0
+            }}>
+                {/* SVG Shield Icon manually for SVG support */}
+                <svg width="400" height="400" viewBox="0 0 24 24" fill="currentColor" color="black">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+            </div>
 
-              {/* BODY */}
-              <div className="space-y-6 my-4">
-                 <p className="text-lg text-zinc-500 font-sans italic">This certificate is proudly presented to</p>
+            {/* CONTENT */}
+            <div style={{ zIndex: 10, width: '100%', textAlign: 'center' }}>
+                
+                {/* Header */}
+                <div style={{ marginBottom: '20px' }}>
+                    <h1 style={{ 
+                        fontSize: '36px', 
+                        fontWeight: 'bold', 
+                        textTransform: 'uppercase', 
+                        color: '#1e3a8a', // Dark Blue
+                        margin: 0,
+                        letterSpacing: '2px'
+                    }}>
+                        Chitkara University
+                    </h1>
+                    <div style={{ width: '100px', height: '3px', backgroundColor: '#DAA520', margin: '15px auto' }}></div>
+                    <h2 style={{ fontSize: '48px', fontWeight: 'bold', margin: '10px 0', color: '#000' }}>Certificate of Participation</h2>
+                </div>
+
+                {/* Body */}
+                <div style={{ marginTop: '30px' }}>
+                    <p style={{ fontSize: '18px', fontStyle: 'italic', color: '#555' }}>is hereby awarded to</p>
+                    
+                    <h3 style={{ 
+                        fontSize: '42px', 
+                        fontWeight: 'bold', 
+                        color: '#1e3a8a', 
+                        margin: '20px 0',
+                        fontFamily: 'cursive', // Falls back nicely
+                        borderBottom: '2px solid #ddd',
+                        display: 'inline-block',
+                        paddingBottom: '10px',
+                        minWidth: '400px'
+                    }}>
+                        {studentName}
+                    </h3>
+
+                    <p style={{ fontSize: '18px', color: '#555', margin: '10px 0' }}>
+                        For successfully attending and actively participating in
+                    </p>
+
+                    <h4 style={{ fontSize: '28px', fontWeight: 'bold', color: '#000', textTransform: 'uppercase', margin: '15px 0' }}>
+                        {eventName}
+                    </h4>
+
+                    <p style={{ fontSize: '16px', fontWeight: 'bold', color: '#666' }}>
+                        Held on {date}
+                    </p>
+                </div>
+            </div>
+
+            {/* FOOTER */}
+            <div style={{ 
+                zIndex: 10, 
+                width: '100%', 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'flex-end',
+                marginTop: '40px',
+                padding: '0 40px'
+            }}>
                  
-                 <h2 className="text-5xl font-bold text-black border-b-2 border-zinc-300 pb-4 px-10 inline-block min-w-[400px] italic" style={{ fontFamily: 'cursive' }}>
-                    {studentName}
-                 </h2>
-
-                 <p className="text-lg text-zinc-600 max-w-2xl mx-auto leading-relaxed">
-                    For active participation and successful completion of <br/>
-                    <strong className="text-2xl text-indigo-900 uppercase tracking-wide block mt-2">{eventName}</strong>
-                 </p>
-                 
-                 <p className="text-md font-bold text-zinc-400 font-sans uppercase tracking-widest">
-                    Held on {date}
-                 </p>
-              </div>
-
-              {/* FOOTER */}
-              <div className="w-full flex justify-between items-end mt-8">
-                 
-                 {/* QR Verification */}
-                 <div className="text-left">
-                    <div className="w-20 h-20 bg-white p-1 border border-zinc-200 mb-2">
+                 {/* Validation */}
+                 <div style={{ textAlign: 'left' }}>
+                    <div style={{ 
+                        width: '80px', height: '80px', 
+                        border: '2px solid #000', 
+                        padding: '4px',
+                        backgroundColor: 'white'
+                    }}>
                        <img 
                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${certId}`} 
                          alt="QR" 
-                         className="w-full h-full object-contain" 
+                         style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
                        />
                     </div>
-                    <p className="text-[9px] font-sans font-bold text-zinc-400 uppercase tracking-widest">ID: {certId}</p>
+                    <p style={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', marginTop: '5px', color: '#666' }}>Digitally Verified</p>
+                    <p style={{ fontSize: '10px', fontFamily: 'monospace', color: '#888' }}>ID: {certId}</p>
                  </div>
 
-                 {/* Gold Seal */}
-                 <div className="absolute bottom-16 left-1/2 -translate-x-1/2">
-                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-600 flex items-center justify-center shadow-lg shadow-yellow-500/30">
-                       <div className="w-20 h-20 rounded-full border-2 border-yellow-800/30 flex items-center justify-center bg-yellow-500 text-yellow-900">
-                          <CheckCircle className="w-10 h-10" />
-                       </div>
+                 {/* Gold Seal (CSS) */}
+                 <div style={{ position: 'absolute', bottom: '60px', left: '50%', transform: 'translateX(-50%)' }}>
+                    <div style={{ 
+                        width: '90px', height: '90px', 
+                        borderRadius: '50%', 
+                        background: 'linear-gradient(135deg, #FFD700, #B8860B)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
+                    }}>
+                       <CheckCircle color="#704214" size={40} />
                     </div>
                  </div>
 
                  {/* Signature */}
-                 <div className="text-right">
-                    <div className="w-48 border-b border-black mb-2 flex justify-center pb-1">
-                        <img src="/signature.png" alt="Signature" className="h-10 opacity-80" onError={(e) => e.target.style.display = 'none'} /> 
-                        {/* Fallback if no image */}
-                        <span className="font-cursive text-2xl opacity-60" style={{fontFamily: 'cursive'}}>UniFlow Admin</span>
+                 <div style={{ textAlign: 'center' }}>
+                    <div style={{ width: '180px', borderBottom: '2px solid #000', marginBottom: '8px', paddingBottom: '5px' }}>
+                        {/* Fake Signature Font */}
+                        <span style={{ fontFamily: 'cursive', fontSize: '24px', opacity: 0.7 }}>UniFlow Admin</span>
                     </div>
-                    <p className="text-xs font-bold text-zinc-900 uppercase">Event Organizer</p>
-                    <p className="text-[10px] text-zinc-400 font-sans uppercase">Chitkara University</p>
+                    <p style={{ fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase' }}>Event Organizer</p>
                  </div>
 
-              </div>
-
             </div>
+
           </div>
         </div>
       </div>
