@@ -182,6 +182,7 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
              <button onClick={onClose} className="mt-4 text-xs font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-600">Cancel</button>
           </div>
         </div>
+        {/* Open UserProfile Modal to fix data */}
         <UserProfile isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
       </>
     );
