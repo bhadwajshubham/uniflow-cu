@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { db, auth } from '../../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Calendar, MapPin, ArrowLeft, Loader2, QrCode, X, CheckCircle, Info } from 'lucide-react';
 import { registerForEvent } from '../services/registrationService';
+import RegisterModal from './RegisterModal'; // Ensure this path is correct based on your folder structure
 
 const EventDetailsPage = () => {
   const { id } = useParams();
@@ -23,6 +24,7 @@ const EventDetailsPage = () => {
   
   // Modals
   const [showConsentModal, setShowConsentModal] = useState(false);
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [termsChecked, setTermsChecked] = useState(false);
 
@@ -50,8 +52,7 @@ const EventDetailsPage = () => {
             const evtData = eventSnap.data();
             setEvent({ id: eventSnap.id, ...evtData });
 
-            // 🔥 LOGIC 1: Check if Already Booked
-            // Hum seedha Event ke participants array check kar rahe hain (Fastest & Safest)
+            // 🔥 LOGIC 1: Check if Already Booked (Fast Check via Event Array)
             if (currentUser && evtData.participants && evtData.participants.includes(currentUser.uid)) {
                 setIsRegistered(true);
             }
@@ -91,7 +92,7 @@ const EventDetailsPage = () => {
   const handleAgreeToTerms = async () => {
     if (!termsChecked) { alert("Please accept the terms."); return; }
     try {
-      setRegistering(true); // Temporary loading state
+      setRegistering(true); 
       const userRef = doc(db, "users", user.uid);
       await setDoc(userRef, { termsAccepted: true }, { merge: true });
       
@@ -99,31 +100,11 @@ const EventDetailsPage = () => {
       setShowConsentModal(false);
       setRegistering(false);
       
-      // Auto-trigger booking after consent
-      executeBooking();
+      // Open Registration Modal after consent
+      setShowRegisterModal(true);
     } catch (error) { 
         alert(error.message); 
         setRegistering(false);
-    }
-  };
-
-  // 4. Final Booking Action
-  const executeBooking = async () => {
-    try {
-      setRegistering(true);
-      
-      // Backend Service Call
-      await registerForEvent(event.id, user, profile);
-      
-      // Update UI on Success
-      setIsRegistered(true); 
-      setShowSuccessModal(true);
-      
-    } catch (error) { 
-        console.error(error);
-        alert("Booking Failed: " + error.message); 
-    } finally { 
-        setRegistering(false); 
     }
   };
 
@@ -200,7 +181,7 @@ const EventDetailsPage = () => {
             ) : (
                 // 🚀 STATE 4: READY TO BOOK
                 <button 
-                    onClick={() => checkRequirements() && executeBooking()} 
+                    onClick={() => checkRequirements() && setShowRegisterModal(true)} 
                     disabled={registering} 
                     className="w-full bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-indigo-200 dark:shadow-none flex justify-center items-center gap-3 transition-all"
                 >
@@ -221,7 +202,6 @@ const EventDetailsPage = () => {
       {showSuccessModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white dark:bg-zinc-900 w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-300">
-                {/* Purple Gradient Header */}
                 <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-8 text-center text-white relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
                     <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-md shadow-inner border border-white/20">
@@ -249,7 +229,7 @@ const EventDetailsPage = () => {
         </div>
       )}
 
-      {/* 🛡️ CONSENT MODAL */}
+      {/* 🛡️ CONSENT MODAL WITH WORKING LINKS */}
       {showConsentModal && (
          <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
            <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2rem] max-w-sm w-full shadow-2xl animate-in slide-in-from-bottom-10">
@@ -257,12 +237,23 @@ const EventDetailsPage = () => {
                 <Info className="w-6 h-6"/>
              </div>
              <h3 className="font-black text-2xl mb-2 dark:text-white">Almost There</h3>
-             <p className="text-zinc-500 text-sm mb-6 leading-relaxed">To ensure a safe environment, please agree to our community guidelines and privacy policy.</p>
+             <p className="text-zinc-500 text-sm mb-6 leading-relaxed">To ensure a safe environment, please agree to our community guidelines.</p>
              
-             <label className="flex items-start gap-3 p-4 bg-zinc-50 dark:bg-black rounded-xl cursor-pointer border border-zinc-100 dark:border-zinc-800 mb-6 group hover:border-indigo-500 transition-colors">
-                <input type="checkbox" checked={termsChecked} onChange={e=>setTermsChecked(e.target.checked)} className="mt-1 w-5 h-5 accent-indigo-600"/>
-                <span className="text-sm font-bold text-zinc-700 dark:text-zinc-300 group-hover:text-indigo-600 transition-colors">I agree to the Terms & Conditions</span>
-             </label>
+             <div className="flex items-start gap-3 p-4 bg-zinc-50 dark:bg-black rounded-xl border border-zinc-100 dark:border-zinc-800 mb-6 group hover:border-indigo-500 transition-colors cursor-pointer" onClick={() => setTermsChecked(!termsChecked)}>
+                <input type="checkbox" checked={termsChecked} onChange={() => {}} className="mt-1 w-5 h-5 accent-indigo-600 cursor-pointer pointer-events-none"/>
+                <label className="text-sm font-bold text-zinc-700 dark:text-zinc-300 cursor-pointer pointer-events-none">
+                    I agree to the{' '}
+                    <Link 
+                        to="/terms" 
+                        target="_blank" 
+                        className="text-indigo-600 hover:underline pointer-events-auto"
+                        onClick={(e) => e.stopPropagation()} // 🔥 FIX IS HERE
+                    >
+                        Terms & Conditions
+                    </Link>
+                    .
+                </label>
+             </div>
              
              <button onClick={handleAgreeToTerms} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 dark:shadow-none">
                 Confirm & Book
@@ -270,6 +261,15 @@ const EventDetailsPage = () => {
              <button onClick={() => setShowConsentModal(false)} className="w-full mt-3 py-3 text-zinc-400 font-bold text-sm hover:text-zinc-600">Cancel</button>
            </div>
          </div>
+      )}
+
+      {/* 📝 REGISTRATION MODAL */}
+      {showRegisterModal && (
+        <RegisterModal 
+            event={event} 
+            isOpen={showRegisterModal} 
+            onClose={() => setShowRegisterModal(false)} 
+        />
       )}
     </div>
   );

@@ -2,16 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
-import { Ticket, Calendar, Clock, Search, MapPin, XCircle, Users, CheckCircle, Award, Star, ExternalLink, ArrowRight, Copy, Loader2 } from 'lucide-react';
+import { 
+  Ticket, Calendar, Clock, Search, MapPin, XCircle, 
+  Users, CheckCircle, Award, Star, ExternalLink, ArrowRight, 
+  Copy, Loader2 
+} from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 
-// ✅ CORRECT IMPORTS (Preserved from your code)
+// ✅ YOUR ORIGINAL MODALS
 import CertificateModal from './CertificateModal';
 import RateEventModal from './RateEventModal'; 
 
 const MyTicketsPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('upcoming');
@@ -28,9 +33,16 @@ const MyTicketsPage = () => {
   useEffect(() => {
     const fetchTickets = async () => {
       if (!user) return;
+      
       try {
-        // ✅ FIX 1: Collection changed from 'registrations' to 'tickets'
-        const q = query(collection(db, 'tickets'), where('userId', '==', user.uid));
+        setLoading(true);
+        
+        // 🔥 FIX: Query 'tickets' strictly by userId to pass Security Rules
+        const q = query(
+            collection(db, 'tickets'), 
+            where('userId', '==', user.uid)
+        );
+        
         const snapshot = await getDocs(q);
         
         const ticketData = snapshot.docs.map(doc => {
@@ -38,18 +50,20 @@ const MyTicketsPage = () => {
             return { 
                 id: doc.id, 
                 ...data,
-                // ✅ FIX 2: Field Mapping (Handle both Old and New field names)
+                // Handle Field Compatibility (Old vs New)
                 eventTitle: data.eventName || data.eventTitle || "Event Name Unavailable",
                 eventLocation: data.eventVenue || data.eventLocation || "Venue TBD",
-                eventTime: data.eventTime || "Time TBD"
+                eventTime: data.eventTime || "Time TBD",
+                // Map 'scanned' to 'used' logic if needed
+                isCompleted: data.scanned === true || data.status === 'attended' || data.used === true
             };
         });
         
-        // Sort Newest First (Using bookedAt OR createdAt)
+        // 🔥 FIX: Sort Client-Side (Safest way to avoid Index Errors)
         ticketData.sort((a, b) => {
-            const timeA = a.bookedAt?.seconds || a.createdAt?.seconds || 0;
-            const timeB = b.bookedAt?.seconds || b.createdAt?.seconds || 0;
-            return timeB - timeA;
+            const timeA = a.bookedAt?.seconds || 0;
+            const timeB = b.bookedAt?.seconds || 0;
+            return timeB - timeA; // Latest first
         });
         
         setTickets(ticketData);
@@ -59,6 +73,7 @@ const MyTicketsPage = () => {
         setLoading(false); 
       }
     };
+    
     fetchTickets();
   }, [user]);
 
@@ -72,25 +87,29 @@ const MyTicketsPage = () => {
     eventDate.setHours(0, 0, 0, 0);
 
     const isPast = eventDate < today;
-    const isCompleted = ticket.status === 'attended' || ticket.used === true;
+    const isCompleted = ticket.isCompleted; // Uses our mapped field
     const isCancelled = ticket.status === 'cancelled';
 
     let matchesTab = false;
-    // 'confirmed' status goes to Upcoming
-    if (activeTab === 'upcoming') matchesTab = !isPast && !isCompleted && !isCancelled;
-    else matchesTab = isPast || isCompleted || isCancelled;
+    
+    if (activeTab === 'upcoming') {
+        // Show in upcoming if NOT past AND NOT scanned AND NOT cancelled
+        matchesTab = !isPast && !isCompleted && !isCancelled;
+    } else {
+        // Show in history if Past OR Scanned OR Cancelled
+        matchesTab = isPast || isCompleted || isCancelled;
+    }
 
     const matchesSearch = (ticket.eventTitle || '').toLowerCase().includes(searchTerm.toLowerCase());
     return matchesTab && matchesSearch;
   });
 
-  // Open Certificate Handler
+  // Handlers
   const openCertificate = (ticket) => {
     setSelectedTicketForCert(ticket);
     setIsCertificateOpen(true);
   };
 
-  // Open Rating Handler
   const openRating = (ticket) => {
     setSelectedTicketForRating(ticket);
     setIsRateOpen(true);
@@ -143,7 +162,7 @@ const MyTicketsPage = () => {
             <Ticket className="w-16 h-16 text-zinc-300 mx-auto mb-4" />
             <h3 className="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-tight">No Tickets Found</h3>
             <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mt-2">You have no {activeTab} events.</p>
-            <Link to="/events" className="mt-6 inline-block px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest">Browse Events</Link>
+            <Link to="/" className="mt-6 inline-block px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest">Browse Events</Link>
           </div>
         ) : (
           <div className="space-y-6">
@@ -158,15 +177,15 @@ const MyTicketsPage = () => {
                 <div className="absolute top-4 right-4 z-10">
                   <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
                     ticket.status === 'cancelled' ? 'bg-red-100 text-red-600' : 
-                    (ticket.status === 'attended' || ticket.used) ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
+                    ticket.isCompleted ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
                   }`}>
-                    {(ticket.status === 'attended' || ticket.used) ? 'COMPLETED' : ticket.status || 'CONFIRMED'}
+                    {ticket.status === 'cancelled' ? 'CANCELLED' : ticket.isCompleted ? 'COMPLETED' : 'CONFIRMED'}
                   </span>
                 </div>
 
                 {/* 🔳 QR / STATUS SECTION */}
                 <div className="flex-shrink-0 flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 rounded-2xl w-full md:w-40 p-4 border border-zinc-200 dark:border-zinc-800">
-                   {(ticket.status === 'attended' || ticket.used) ? (
+                   {ticket.isCompleted ? (
                      <div className="text-center">
                        <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-2" />
                        <span className="text-[10px] font-black text-green-600 uppercase tracking-wider">Attended</span>
@@ -219,15 +238,14 @@ const MyTicketsPage = () => {
                     
                     <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-zinc-500 dark:text-zinc-400 mb-4 uppercase tracking-wide">
                       <div className="flex items-center gap-1.5"><Calendar className="w-3 h-3 text-indigo-500" /><span>{new Date(ticket.eventDate).toLocaleDateString()}</span></div>
-                      {/* Only show time if valid, else generic message */}
-                      <div className="flex items-center gap-1.5"><Clock className="w-3 h-3 text-indigo-500" /><span>{ticket.eventTime.includes("TBD") ? "Time TBA" : ticket.eventTime}</span></div>
+                      <div className="flex items-center gap-1.5"><Clock className="w-3 h-3 text-indigo-500" /><span>{ticket.eventTime}</span></div>
                       <div className="flex items-center gap-1.5"><MapPin className="w-3 h-3 text-indigo-500" /><span>{ticket.eventLocation}</span></div>
                     </div>
                   </div>
 
                   {/* 📱 MOBILE ACTION BUTTON */}
                   <div className="mt-2 md:hidden">
-                    {(ticket.status !== 'cancelled' && !ticket.used) && (
+                    {(!ticket.isCompleted && ticket.status !== 'cancelled') && (
                         <button 
                            onClick={() => navigate(`/tickets/${ticket.id}`)}
                            className="w-full py-3 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-200 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
@@ -244,7 +262,7 @@ const MyTicketsPage = () => {
                     </span>
                     
                     {/* ⭐ RATE EVENT BUTTON (Visible in History or Attended) */}
-                    {(activeTab === 'past' || ticket.status === 'attended' || ticket.used) && (
+                    {(activeTab === 'past' || ticket.isCompleted) && (
                       <button 
                         onClick={() => openRating(ticket)}
                         className="text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-indigo-600 flex items-center gap-1 transition-colors"
