@@ -13,43 +13,44 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   
-  // States
   const [loading, setLoading] = useState(false);
-  const [isEditing, setIsEditing] = useState(false); // 🔥 NEW: Toggle for Quick Update
+  const [isEditing, setIsEditing] = useState(false); 
   const [isAlreadyRegistered, setIsAlreadyRegistered] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  // Form States
-  const [teamName, setTeamName] = useState('');
-  const [teamCode, setTeamCode] = useState('');
   const [step, setStep] = useState('form'); 
   const [mode, setMode] = useState('solo');
+  const [teamName, setTeamName] = useState(''); // Added missing state
+  const [teamCode, setTeamCode] = useState(''); // Added missing state
   const [customAnswers, setCustomAnswers] = useState({});
 
-  // Quick Update State
+  // 🔥 ALL FIELDS STATE
   const [updateData, setUpdateData] = useState({
-    rollNo: '', phone: '', branch: '', group: '', residency: ''
+    name: '', rollNo: '', phone: '', 
+    gender: '', branch: '', semester: '', 
+    group: '', residency: ''
   });
 
   const isTeamEvent = event?.type === 'team' || event?.teamSize > 1;
 
-  // 1. MISSING FIELDS CHECK
+  // 1. MISSING FIELDS CHECK (Full Profile)
   const getMissingFields = () => {
     if (!profile) return [];
     const missing = [];
     if (!profile.rollNo?.trim()) missing.push("Roll Number");
+    if (!profile.phoneNumber?.trim() && !profile.phone?.trim()) missing.push("Phone Number");
+    if (!profile.gender?.trim()) missing.push("Gender");
     if (!profile.branch?.trim()) missing.push("Branch");
-    if (!profile.group?.trim()) missing.push("Group / Semester");
+    if (!profile.semester?.trim()) missing.push("Semester");
+    if (!profile.group?.trim()) missing.push("Group");
     if (!profile.residency?.trim()) missing.push("Residency");
-    const phone = profile.phoneNumber || profile.phone;
-    if (!phone?.trim()) missing.push("Phone Number");
     return missing;
   };
 
   const missingFields = getMissingFields();
   const isProfileComplete = missingFields.length === 0;
 
-  // 2. CHECK REGISTRATION STATUS
+  // 2. CHECK REGISTRATION
   useEffect(() => {
     const checkRegistration = async () => {
       if (user && event && isOpen) {
@@ -57,7 +58,7 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
           const regRef = doc(db, 'tickets', `${event.id}_${user.uid}`);
           const regSnap = await getDoc(regRef);
           if (regSnap.exists()) setIsAlreadyRegistered(true);
-        } catch (err) { console.error("Check Error", err); }
+        } catch (err) { console.error(err); }
       }
     };
     checkRegistration();
@@ -67,41 +68,45 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
   useEffect(() => {
     if (profile) {
         setUpdateData({
+            name: profile.name || profile.userName || user.displayName || '',
             rollNo: profile.rollNo || '',
             phone: profile.phoneNumber || profile.phone || '',
+            gender: profile.gender || '',
             branch: profile.branch || '',
+            semester: profile.semester || '',
             group: profile.group || '',
             residency: profile.residency || ''
         });
     }
-  }, [profile]);
+  }, [profile, user]);
 
   if (!isOpen || !event) return null;
 
-  // 3. HANDLERS
+  // 3. ACTIONS
   const handleCustomAnswerChange = (qId, value) => {
     setCustomAnswers(prev => ({ ...prev, [qId]: value }));
   };
 
-  // 🔥 QUICK PROFILE UPDATE
   const handleQuickUpdate = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
         const userRef = doc(db, 'users', user.uid);
         await updateDoc(userRef, {
+            name: updateData.name,
             rollNo: updateData.rollNo,
-            phoneNumber: updateData.phone, // Standardize key
-            phone: updateData.phone,       // Backwards compatibility
+            phoneNumber: updateData.phone,
+            phone: updateData.phone,
+            gender: updateData.gender,
             branch: updateData.branch,
+            semester: updateData.semester,
             group: updateData.group,
             residency: updateData.residency
         });
-        // Profile will auto-update via AuthContext, triggering re-render
-        setIsEditing(false);
+        // 🔥 FORCE RELOAD TO FIX LOOP ISSUE
+        window.location.reload(); 
     } catch (error) {
         alert("Update failed: " + error.message);
-    } finally {
         setLoading(false);
     }
   };
@@ -110,14 +115,7 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
     e.preventDefault();
     setLoading(true);
     
-    // Ensure Name Exists
-    const finalName = profile.userName || profile.name || user.displayName || 'Student';
-
-    const finalData = {
-        ...profile,
-        userName: finalName,
-        customAnswers: customAnswers
-    };
+    const finalData = { ...profile, ...updateData, customAnswers };
 
     try {
       if (mode === 'solo') await registerForEvent(event.id, user, finalData);
@@ -132,65 +130,82 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
     }
   };
 
-  // ------------------------------------------
-  // UI 1: SUCCESS
-  // ------------------------------------------
+  // --- UI: SUCCESS ---
   if (isAlreadyRegistered || isSuccess) {
     return (
-      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in">
+      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
         <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] p-8 text-center border dark:border-zinc-800">
            <div className="w-20 h-20 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-6 text-green-600"><CheckCircle className="w-10 h-10" /></div>
            <h2 className="text-2xl font-black dark:text-white uppercase italic mb-2">Confirmed!</h2>
-           <p className="text-zinc-500 text-sm mb-8">Pass secured for <span className="font-bold text-indigo-600">{event.title}</span>.</p>
-           <div className="space-y-3">
-             <button onClick={() => { onClose(); navigate('/my-tickets'); }} className="w-full py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2"><Ticket className="w-4 h-4" /> View Pass</button>
-             <button onClick={onClose} className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Close</button>
-           </div>
+           <p className="text-zinc-500 text-sm mb-8">See you at <span className="font-bold text-indigo-600">{event.title}</span>.</p>
+           <button onClick={() => { onClose(); navigate('/my-tickets'); }} className="w-full py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2"><Ticket className="w-4 h-4" /> View Pass</button>
         </div>
       </div>
     );
   }
 
-  // ------------------------------------------
-  // UI 2: PROFILE INCOMPLETE (BLOCKING)
-  // ------------------------------------------
+  // --- UI: PROFILE INCOMPLETE (QUICK EDIT) ---
   if (!isProfileComplete) {
     return (
       <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
         <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] shadow-2xl border dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh]">
              
-             {/* Header */}
              <div className="p-6 text-center">
                 <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/20 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-600"><ShieldCheck className="w-8 h-8" /></div>
                 <h2 className="text-2xl font-black dark:text-white uppercase italic">Complete Profile</h2>
-                <p className="text-zinc-500 text-xs mt-1 px-4">Required to generate your ID Card.</p>
+                <p className="text-zinc-500 text-xs mt-1">One-time setup for all events.</p>
              </div>
 
-             {/* 🔥 QUICK EDIT FORM */}
              <div className="p-8 pt-0 overflow-y-auto custom-scrollbar">
                 {isEditing ? (
                     <form onSubmit={handleQuickUpdate} className="space-y-4">
-                        {missingFields.includes("Roll Number") && (
-                            <input placeholder="Roll Number (e.g. 211099XXXX)" required value={updateData.rollNo} onChange={e=>setUpdateData({...updateData, rollNo: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-sm outline-none dark:text-white" />
-                        )}
-                        {missingFields.includes("Phone Number") && (
-                            <input placeholder="Phone Number" type="tel" required value={updateData.phone} onChange={e=>setUpdateData({...updateData, phone: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-sm outline-none dark:text-white" />
-                        )}
-                        {missingFields.includes("Branch") && (
-                            <input placeholder="Branch (e.g. CSE)" required value={updateData.branch} onChange={e=>setUpdateData({...updateData, branch: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-sm outline-none dark:text-white" />
-                        )}
-                        {missingFields.includes("Group / Semester") && (
-                            <input placeholder="Group (e.g. G12 / Sem 4)" required value={updateData.group} onChange={e=>setUpdateData({...updateData, group: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-sm outline-none dark:text-white" />
-                        )}
-                        {missingFields.includes("Residency") && (
-                            <select required value={updateData.residency} onChange={e=>setUpdateData({...updateData, residency: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-sm outline-none dark:text-white appearance-none">
-                                <option value="">Select Residency</option>
+                        {/* Name & Roll */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <input placeholder="Full Name" required value={updateData.name} onChange={e=>setUpdateData({...updateData, name: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white" />
+                            <input placeholder="Roll No" required value={updateData.rollNo} onChange={e=>setUpdateData({...updateData, rollNo: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white" />
+                        </div>
+
+                        {/* Phone & Gender */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <input placeholder="Phone" type="tel" required value={updateData.phone} onChange={e=>setUpdateData({...updateData, phone: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white" />
+                            <select required value={updateData.gender} onChange={e=>setUpdateData({...updateData, gender: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white">
+                                <option value="">Gender</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+
+                        {/* Branch & Semester */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <select required value={updateData.branch} onChange={e=>setUpdateData({...updateData, branch: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white">
+                                <option value="">Branch</option>
+                                <option value="CSE">CSE</option>
+                                <option value="ECE">ECE</option>
+                                <option value="ME">ME</option>
+                                <option value="CE">CE</option>
+                                <option value="BBA">BBA</option>
+                                <option value="MBA">MBA</option>
+                                <option value="BCA">BCA</option>
+                            </select>
+                            <select required value={updateData.semester} onChange={e=>setUpdateData({...updateData, semester: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white">
+                                <option value="">Sem</option>
+                                {[1,2,3,4,5,6,7,8].map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+
+                        {/* Group & Residency */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <input placeholder="Group (e.g. G12)" required value={updateData.group} onChange={e=>setUpdateData({...updateData, group: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white" />
+                            <select required value={updateData.residency} onChange={e=>setUpdateData({...updateData, residency: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white">
+                                <option value="">Residency</option>
                                 <option value="Day Scholar">Day Scholar</option>
                                 <option value="Hosteller">Hosteller</option>
                             </select>
-                        )}
-                        <button type="submit" disabled={loading} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest mt-4">
-                            {loading ? <Loader2 className="animate-spin mx-auto w-4 h-4"/> : 'Save & Continue'}
+                        </div>
+
+                        <button type="submit" disabled={loading} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest mt-2 flex justify-center gap-2">
+                            {loading ? <Loader2 className="animate-spin w-4 h-4"/> : <><Save className="w-4 h-4"/> Save & Continue</>}
                         </button>
                     </form>
                 ) : (
@@ -201,7 +216,6 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
                                 <div key={idx} className="flex items-center gap-2 text-red-500 animate-pulse"><AlertTriangle className="w-3 h-3"/> {field}</div>
                             ))}
                         </div>
-                        {/* 🔥 THIS BUTTON NOW ACTIVATES EDIT MODE */}
                         <button onClick={() => setIsEditing(true)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-xl active:scale-95 transition-all">
                            Update Now
                         </button>
@@ -214,9 +228,7 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
     );
   }
 
-  // ------------------------------------------
-  // UI 3: REGISTER (PROFILE COMPLETE)
-  // ------------------------------------------
+  // --- UI: REGISTER ---
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in">
       <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] shadow-2xl border dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh]">
@@ -238,13 +250,13 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
             <form onSubmit={handleRegister} className="space-y-6">
               <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl space-y-3 shadow-sm">
                  <div className="flex items-center gap-2 border-b dark:border-indigo-800 pb-2 mb-2 text-indigo-600">
-                    <ShieldCheck className="w-4 h-4" /><span className="text-[10px] font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-widest">Verified Identity</span>
+                    <ShieldCheck className="w-4 h-4" /><span className="text-[10px] font-black uppercase tracking-widest">Verified Identity</span>
                  </div>
                  <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-xs">
-                    <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Name</p><p className="font-black text-zinc-900 dark:text-white truncate">{profile.userName || profile.name || user.displayName || 'Student'}</p></div>
-                    <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Roll No</p><p className="font-black text-zinc-900 dark:text-white">{profile.rollNo}</p></div>
-                    <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Group</p><p className="font-black text-zinc-900 dark:text-white">{profile.group}</p></div>
-                    <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Residency</p><p className="font-black text-zinc-900 dark:text-white">{profile.residency}</p></div>
+                    <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Name</p><p className="font-black dark:text-white truncate">{updateData.name}</p></div>
+                    <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Roll No</p><p className="font-black dark:text-white">{updateData.rollNo}</p></div>
+                    <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Group</p><p className="font-black dark:text-white">{updateData.group}</p></div>
+                    <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Residency</p><p className="font-black dark:text-white">{updateData.residency}</p></div>
                  </div>
               </div>
               
