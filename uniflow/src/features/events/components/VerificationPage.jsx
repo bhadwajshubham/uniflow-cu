@@ -1,119 +1,185 @@
-import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { db } from '../../../lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
-import { ShieldCheck, XCircle, Search, Loader2, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from '../../../lib/firebase';
+import { ShieldCheck, Loader2, CheckCircle, LogOut } from 'lucide-react';
 
 const VerificationPage = () => {
-  const [searchParams] = useSearchParams();
-  const urlId = searchParams.get('id'); // ?id=XYZ
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   
-  const [ticketId, setTicketId] = useState(urlId || '');
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
+  // Checkbox States
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
-  // Auto-verify if ID is in URL
+  // Check if user is already verified
   useEffect(() => {
-    if (urlId) verifyTicket(urlId);
-  }, [urlId]);
+    const checkUserStatus = async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        navigate('/login');
+        return;
+      }
 
-  const verifyTicket = async (idToVerify) => {
-    if (!idToVerify.trim()) return;
-    setLoading(true);
-    setResult(null);
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          // Agar pehle se accepted hai, toh seedha home bhejo
+          if (data.termsAccepted) {
+            navigate('/'); 
+          }
+        }
+      } catch (error) {
+        console.error("Check Error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkUserStatus();
+  }, [navigate]);
+
+  // Handle Accept Logic
+  const handleAccept = async () => {
+    if (!termsAccepted || !privacyAccepted) {
+      alert("Please accept both Terms & Conditions and Privacy Policy to continue.");
+      return;
+    }
+
+    setSubmitting(true);
+    const user = auth.currentUser;
 
     try {
-      const docRef = doc(db, 'registrations', idToVerify.trim());
-      const docSnap = await getDoc(docRef);
+      const userRef = doc(db, 'users', user.uid);
+      
+      // Update DB
+      await updateDoc(userRef, {
+        termsAccepted: true,
+        termsAcceptedAt: serverTimestamp(),
+        lastActive: serverTimestamp()
+      });
 
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.status === 'attended') {
-          setResult({ valid: true, data });
-        } else {
-          setResult({ 
-            valid: false, 
-            reason: data.status === 'cancelled' ? 'Ticket Cancelled' : 'Did Not Attend Event' 
-          });
-        }
-      } else {
-        setResult({ valid: false, reason: 'Invalid Certificate ID' });
-      }
+      // Redirect to Home
+      navigate('/');
+      
     } catch (error) {
-      console.error(error);
-      setResult({ valid: false, reason: 'System Error' });
+      console.error("Error accepting terms:", error);
+      alert("Something went wrong. Please try again.");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    verifyTicket(ticketId);
+  const handleLogout = async () => {
+    await auth.signOut();
+    navigate('/login');
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black">
+        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black font-sans flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-black p-4 relative">
       
-      <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+      {/* Logout Option (In case they want to switch account) */}
+      <button 
+        onClick={handleLogout} 
+        className="absolute top-6 right-6 text-zinc-400 hover:text-red-500 text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition-colors"
+      >
+        <LogOut className="w-4 h-4" /> Logout
+      </button>
+
+      <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-zinc-200 dark:border-zinc-800 p-8 text-center animate-in fade-in zoom-in-95 duration-300">
         
-        {/* Header */}
-        <div className="bg-indigo-600 p-8 text-center">
-          <div className="bg-white/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
-            <ShieldCheck className="h-8 w-8 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-white">Credential Verification</h1>
-          <p className="text-indigo-100 text-sm mt-1">UniFlow-cu Official Records</p>
+        {/* Icon */}
+        <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-900/20 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-600">
+          <ShieldCheck className="w-10 h-10" />
         </div>
 
-        {/* Search Box */}
-        <div className="p-8">
-          <form onSubmit={handleSearch} className="relative mb-8">
-            <Search className="absolute left-3 top-3.5 h-5 w-5 text-zinc-400" />
-            <input 
-              type="text" 
-              placeholder="Enter Certificate ID"
-              className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all uppercase font-mono tracking-widest text-center dark:text-white"
-              value={ticketId}
-              onChange={(e) => setTicketId(e.target.value)}
-            />
-          </form>
+        {/* Title */}
+        <h1 className="text-2xl font-black text-zinc-900 dark:text-white mb-2 tracking-tight">
+          Consent Required
+        </h1>
+        <p className="text-zinc-500 text-sm mb-8 px-4 leading-relaxed">
+          To ensure a safe and secure community for everyone at UniFlow, please review and accept our guidelines.
+        </p>
 
-          {/* Result Area */}
-          {loading ? (
-             <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-indigo-600" /></div>
-          ) : result ? (
-             <div className={`text-center p-6 rounded-xl border-2 animate-in zoom-in duration-300 ${result.valid ? 'bg-emerald-50 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-900' : 'bg-red-50 border-red-100 dark:bg-red-900/10 dark:border-red-900'}`}>
-                {result.valid ? (
-                  <>
-                    <CheckCircle className="h-12 w-12 text-emerald-500 mx-auto mb-3" />
-                    <h3 className="text-xl font-bold text-emerald-700 dark:text-emerald-400">Verified Authentic</h3>
-                    <div className="mt-4 space-y-2 text-sm text-zinc-600 dark:text-zinc-400 text-left bg-white/50 dark:bg-black/20 p-4 rounded-lg">
-                      <p><span className="font-bold text-zinc-900 dark:text-white">Student:</span> {result.data.userName}</p>
-                      <p><span className="font-bold text-zinc-900 dark:text-white">Event:</span> {result.data.eventTitle}</p>
-                      <p><span className="font-bold text-zinc-900 dark:text-white">Date:</span> {new Date(result.data.eventDate).toLocaleDateString()}</p>
-                      <p><span className="font-bold text-zinc-900 dark:text-white">ID:</span> <span className="font-mono">{ticketId}</span></p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="h-12 w-12 text-red-500 mx-auto mb-3" />
-                    <h3 className="text-xl font-bold text-red-700 dark:text-red-400">Verification Failed</h3>
-                    <p className="text-zinc-500 mt-2">{result.reason}</p>
-                  </>
-                )}
-             </div>
-          ) : (
-            <div className="text-center text-zinc-400 text-sm">
-              Enter the ID found at the bottom of the certificate.
+        {/* Checkboxes Area */}
+        <div className="bg-zinc-50 dark:bg-zinc-950/50 rounded-2xl p-6 mb-8 text-left border border-zinc-100 dark:border-zinc-800 space-y-4">
+          
+          {/* Checkbox 1: Terms */}
+          <div className="flex items-start gap-3">
+            <div className="pt-1">
+              <input 
+                type="checkbox" 
+                id="check_terms"
+                checked={termsAccepted}
+                onChange={(e) => setTermsAccepted(e.target.checked)}
+                className="w-5 h-5 accent-indigo-600 cursor-pointer rounded"
+              />
             </div>
-          )}
+            <label htmlFor="check_terms" className="text-sm font-bold text-zinc-600 dark:text-zinc-300 cursor-pointer select-none">
+              I agree to the{' '}
+              <Link 
+                to="/terms" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-indigo-600 hover:underline z-10 relative"
+                onClick={(e) => e.stopPropagation()} // 🔥 FIX: Prevents checkbox toggle when clicking link
+              >
+                Terms & Conditions
+              </Link>
+            </label>
+          </div>
+
+          {/* Checkbox 2: Privacy */}
+          <div className="flex items-start gap-3">
+            <div className="pt-1">
+              <input 
+                type="checkbox" 
+                id="check_privacy"
+                checked={privacyAccepted}
+                onChange={(e) => setPrivacyAccepted(e.target.checked)}
+                className="w-5 h-5 accent-indigo-600 cursor-pointer rounded"
+              />
+            </div>
+            <label htmlFor="check_privacy" className="text-sm font-bold text-zinc-600 dark:text-zinc-300 cursor-pointer select-none">
+              I agree to the{' '}
+              <Link 
+                to="/privacy" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-indigo-600 hover:underline z-10 relative"
+                onClick={(e) => e.stopPropagation()} // 🔥 FIX: Prevents checkbox toggle when clicking link
+              >
+                Privacy Policy
+              </Link>
+            </label>
+          </div>
+
         </div>
 
-        {/* Footer */}
-        <div className="p-4 bg-zinc-50 dark:bg-black text-center text-xs text-zinc-400 border-t border-zinc-100 dark:border-zinc-800">
-          SECURE VERIFICATION SYSTEM • UNIFLOW-CU
-        </div>
+        {/* Action Button */}
+        <button 
+          onClick={handleAccept}
+          disabled={!termsAccepted || !privacyAccepted || submitting}
+          className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${
+            termsAccepted && privacyAccepted 
+              ? 'bg-indigo-600 text-white shadow-xl hover:bg-indigo-700 hover:scale-[1.02] active:scale-95' 
+              : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed'
+          }`}
+        >
+          {submitting ? <Loader2 className="w-5 h-5 animate-spin"/> : <><CheckCircle className="w-5 h-5" /> Accept & Continue</>}
+        </button>
 
       </div>
     </div>
