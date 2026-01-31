@@ -29,28 +29,33 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
   const isTeamEvent = event?.type === 'team' || event?.teamSize > 1;
 
   // ==========================================
-  // 🔍 1. MISSING FIELDS LOGIC (Improved)
+  // 🔍 1. ROBUST PROFILE VALIDATION (Unified Logic)
   // ==========================================
-  const getMissingFields = () => {
-    if (!profile) return ["Loading Profile..."];
+  const getProfileStatus = () => {
+    if (!profile) return { complete: false, missing: ["Loading Profile..."] };
     
     const missing = [];
     
-    // Check fields strictly
-    if (!profile.rollNo || String(profile.rollNo).trim() === '') missing.push("Roll Number");
-    if (!profile.branch || String(profile.branch).trim() === '') missing.push("Branch");
-    if (!profile.group || String(profile.group).trim() === '') missing.push("Group / Semester");
-    if (!profile.residency || String(profile.residency).trim() === '') missing.push("Residency");
+    // Check fields strictly (Empty string counts as missing)
+    if (!profile.rollNo?.trim()) missing.push("Roll Number");
+    if (!profile.branch?.trim()) missing.push("Branch");
+    if (!profile.group?.trim()) missing.push("Group / Semester");
+    if (!profile.residency?.trim()) missing.push("Residency");
     
     // Check phone (handle variations)
     const phone = profile.phoneNumber || profile.phone;
-    if (!phone || String(phone).trim() === '') missing.push("Phone Number");
+    if (!phone?.trim()) missing.push("Phone Number");
 
-    return missing;
+    return { 
+        complete: missing.length === 0, 
+        missing 
+    };
   };
 
-  const missingFields = getMissingFields();
-  const isProfileComplete = missingFields.length === 0;
+  const { complete: isProfileComplete, missing: missingFields } = getProfileStatus();
+
+  // Get Safe Name for Display
+  const safeDisplayName = profile?.userName || profile?.name || user?.displayName || 'Student';
 
   // 2. CHECK REGISTRATION STATUS
   useEffect(() => {
@@ -59,12 +64,8 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
         try {
           const regRef = doc(db, 'tickets', `${event.id}_${user.uid}`);
           const regSnap = await getDoc(regRef);
-          if (regSnap.exists()) {
-            setIsAlreadyRegistered(true);
-          }
-        } catch (err) {
-          console.error("Check Error", err);
-        }
+          if (regSnap.exists()) setIsAlreadyRegistered(true);
+        } catch (err) { console.error("Check Error", err); }
       }
     };
     checkRegistration();
@@ -80,7 +81,6 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
 
   if (!isOpen || !event) return null;
 
-  // Handle Custom Questions
   const handleCustomAnswerChange = (qId, value) => {
     setCustomAnswers(prev => ({ ...prev, [qId]: value }));
   };
@@ -89,12 +89,9 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
     e.preventDefault();
     setLoading(true);
     
-    // Fallback for Name (To fix Image 5 issue)
-    const finalName = profile.userName || profile.name || user.displayName || 'Student';
-
     const finalData = {
         ...profile,
-        userName: finalName, // Ensure name is sent
+        userName: safeDisplayName, // Ensure name is passed
         customAnswers: customAnswers
     };
 
@@ -166,7 +163,7 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
                Complete your profile to register.
              </p>
 
-             {/* ✅ FIX: Dynamic List of Missing Fields */}
+             {/* ✅ FIXED MISSING FIELDS LIST (Now uses the same logic as the check) */}
              <div className="bg-zinc-100 dark:bg-zinc-900 rounded-xl p-4 mb-8 text-left text-xs font-bold text-zinc-500 space-y-2">
                 <p className="uppercase tracking-widest mb-2 border-b border-zinc-300 dark:border-zinc-700 pb-2 text-zinc-400">Missing Info:</p>
                 {missingFields.map((field, idx) => (
@@ -174,6 +171,8 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
                         <AlertTriangle className="w-3 h-3"/> {field}
                     </div>
                 ))}
+                {/* Fallback if logic mismatch happens (Safety net) */}
+                {missingFields.length === 0 && <p className="text-red-500">Please update profile to refresh.</p>}
              </div>
 
              <button onClick={() => setShowProfileModal(true)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-xl active:scale-95 transition-all">
@@ -182,7 +181,6 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
              <button onClick={onClose} className="mt-4 text-xs font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-600">Cancel</button>
           </div>
         </div>
-        {/* Open UserProfile Modal to fix data */}
         <UserProfile isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
       </>
     );
@@ -207,47 +205,34 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
         <div className="p-8 overflow-y-auto custom-scrollbar">
           {step === 'choice' ? (
              <div className="space-y-4">
-               {/* MODE SELECTION (Solo/Team) */}
                <button onClick={() => { setMode('solo'); setStep('form'); }} className="w-full p-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[1.5rem] hover:border-indigo-500 transition-all group flex items-center gap-4 text-left shadow-sm">
                  <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center"><User className="h-6 w-6" /></div>
                  <div className="flex-1"><h3 className="font-black text-sm uppercase dark:text-white">Individual</h3><p className="text-[10px] text-zinc-500">Book for yourself</p></div>
                  <ArrowRight className="h-4 w-4 text-zinc-300" />
                </button>
-               {/* Team Logic will go here */}
              </div>
           ) : (
             <form onSubmit={handleRegister} className="space-y-6">
               
-              {/* ✅ IDENTITY CARD (With Name Fix) */}
+              {/* ✅ IDENTITY CARD (FIXED NAME DISPLAY) */}
               <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl space-y-3 shadow-sm">
                  <div className="flex items-center gap-2 border-b border-indigo-200 dark:border-indigo-800 pb-2 mb-2 text-indigo-600">
                     <ShieldCheck className="w-4 h-4" />
                     <span className="text-[10px] font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-widest">Verified Identity</span>
                  </div>
                  <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-xs">
-                    {/* Name Fix: Check multiple fields */}
                     <div>
                         <p className="text-[9px] text-indigo-400 uppercase font-bold">Name</p>
-                        <p className="font-black dark:text-white truncate">
-                            {profile.userName || profile.name || user.displayName || 'Student'}
-                        </p>
+                        {/* 🔥 Name Fallback Added */}
+                        <p className="font-black dark:text-white truncate">{safeDisplayName}</p>
                     </div>
-                    <div>
-                        <p className="text-[9px] text-indigo-400 uppercase font-bold">Roll No</p>
-                        <p className="font-black dark:text-white">{profile.rollNo}</p>
-                    </div>
-                    <div>
-                        <p className="text-[9px] text-indigo-400 uppercase font-bold">Group</p>
-                        <p className="font-black dark:text-white">{profile.group}</p>
-                    </div>
-                    <div>
-                        <p className="text-[9px] text-indigo-400 uppercase font-bold">Residency</p>
-                        <p className="font-black dark:text-white">{profile.residency}</p>
-                    </div>
+                    <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Roll No</p><p className="font-black dark:text-white">{profile.rollNo}</p></div>
+                    <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Group</p><p className="font-black dark:text-white">{profile.group}</p></div>
+                    <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Residency</p><p className="font-black dark:text-white">{profile.residency}</p></div>
                  </div>
               </div>
 
-              {/* ❓ CUSTOM QUESTIONS */}
+              {/* Custom Questions */}
               {event.customQuestions && event.customQuestions.length > 0 && (
                 <div className="space-y-4 pt-4 border-t border-dashed border-zinc-200 dark:border-zinc-800">
                     <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Additional Details</p>
