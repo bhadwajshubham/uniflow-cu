@@ -17,6 +17,10 @@ const ScannerPage = () => {
   const isProcessing = useRef(false);
   const lastScannedId = useRef(null);
 
+  // ✅ Allowed Roles Helper
+  const allowedRoles = ['admin', 'super_admin', 'scanner'];
+  const canAccess = profile && allowedRoles.includes(profile.role);
+
   // 🔊 AUDIO & VOICE ENGINE
   const playFeedback = (type, name = "") => {
     try {
@@ -49,7 +53,8 @@ const ScannerPage = () => {
   };
 
   useEffect(() => {
-    if (profile?.role !== 'admin' && profile?.role !== 'super_admin') return;
+    // 🛠️ FIX 1: Scanner ko bhi allow kiya initialize hone ke liye
+    if (!canAccess) return;
 
     if (!scannerRef.current) {
         const scanner = new Html5QrcodeScanner(
@@ -75,7 +80,6 @@ const ScannerPage = () => {
           setMessage('Verifying...');
     
           try {
-            // ✅ FIX: Use 'tickets' collection
             const ticketRef = doc(db, 'tickets', decodedText);
             const ticketSnap = await getDoc(ticketRef);
     
@@ -86,13 +90,11 @@ const ScannerPage = () => {
             } else {
               const data = ticketSnap.data();
     
-              // ✅ FIX: Use 'scanned' field instead of 'used'
               if (data.scanned === true) {
                 setScanResult('warning');
                 setMessage(`Used by: ${data.userName}`);
                 playFeedback('warning');
               } else {
-                // ✅ Update ticket status
                 await updateDoc(ticketRef, {
                   scanned: true,
                   scannedAt: serverTimestamp()
@@ -126,28 +128,39 @@ const ScannerPage = () => {
             scannerRef.current = null;
         }
     };
-  }, [profile, user]);
+  }, [profile, user, canAccess]);
 
-  if (profile?.role !== 'admin' && profile?.role !== 'super_admin') {
+  // 🛠️ FIX 2: UI Render Logic Update
+  if (!canAccess) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center text-red-500">
         <ShieldAlert className="w-20 h-20 mb-4 animate-pulse" />
         <h1 className="text-2xl font-black uppercase">Restricted</h1>
+        <p className="text-zinc-500 mt-2">You don't have permission to scan tickets.</p>
         <button onClick={() => navigate('/')} className="mt-8 px-6 py-3 bg-zinc-800 text-white rounded-xl font-bold">Home</button>
       </div>
     );
   }
 
+  // 🛠️ FIX 3: Smart Exit Logic
+  const handleExit = () => {
+    if (profile?.role === 'scanner') {
+        navigate('/'); // Scanner ghar jaye
+    } else {
+        navigate('/admin'); // Admin dashboard jaye
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black text-white pt-24 pb-12 px-6">
       <div className="max-w-md mx-auto">
         <div className="flex justify-between items-center mb-6">
-            <button onClick={() => navigate('/admin')} className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors text-xs font-bold uppercase">
+            <button onClick={handleExit} className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors text-xs font-bold uppercase">
               <ArrowLeft className="w-5 h-5" /> Exit
             </button>
             <div className="flex items-center gap-2 text-indigo-400">
                 <Zap className="w-4 h-4 fill-current animate-pulse" />
-                <span className="text-[10px] font-black uppercase">Live</span>
+                <span className="text-[10px] font-black uppercase">Live Scanner</span>
             </div>
         </div>
 
