@@ -7,6 +7,8 @@ import {
   Hash, Loader2, Share2, Download, ShieldCheck 
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
+// ✅ FIX: Use QRCodeCanvas instead of <img> for PDF export
+import { QRCodeCanvas } from 'qrcode.react';
 
 const TicketPage = () => {
   const { ticketId } = useParams();
@@ -23,7 +25,7 @@ const TicketPage = () => {
         if (!ticketId) return;
         setLoading(true);
         
-        // ✅ FIX: Fetch from 'tickets' collection directly
+        // ✅ Fetch Ticket
         const docRef = doc(db, 'tickets', ticketId);
         const docSnap = await getDoc(docRef);
 
@@ -43,13 +45,18 @@ const TicketPage = () => {
     fetchTicket();
   }, [ticketId]);
 
-  // 📥 Download Function
+  // 📥 Download Function (Now works with QR)
   const handleDownload = async () => {
     if (ticketRef.current) {
-      const canvas = await html2canvas(ticketRef.current, { backgroundColor: '#ffffff' });
+      // Use useCORS: true just in case, though canvas fixes the main issue
+      const canvas = await html2canvas(ticketRef.current, { 
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          scale: 2 // Better Quality
+      });
       const link = document.createElement('a');
       link.download = `Ticket_${ticket.eventName || 'Event'}.png`;
-      link.href = canvas.toDataURL();
+      link.href = canvas.toDataURL('image/png');
       link.click();
     }
   };
@@ -153,12 +160,13 @@ const TicketPage = () => {
                     </div>
                 </div>
 
-                {/* QR Code */}
-                <div className="bg-white p-2 rounded-xl border border-zinc-200 shadow-sm">
-                    <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${ticket.id}`} 
-                        alt="QR Code" 
-                        className="w-48 h-48 object-contain mix-blend-multiply" 
+                {/* ✅ QR CODE (Using QRCodeCanvas) */}
+                <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
+                    <QRCodeCanvas 
+                        value={ticket.id} 
+                        size={180}
+                        level={"H"} // High Error Correction
+                        includeMargin={true}
                     />
                 </div>
                 
