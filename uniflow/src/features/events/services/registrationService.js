@@ -132,7 +132,7 @@ export const registerForEvent = async (eventId, user, profile) => {
         const emailHtml = getTicketEmailTemplate(ticketData.userName, ticketData.eventName, ticketData.eventDate, ticketData.eventVenue, ticketRef.id);
         
         // ✅ FIX 4: Ensure endpoint matches backend file name (Assuming 'send-email.js')
-        await fetch('/api/send-email', {
+        await fetch('/api/email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
