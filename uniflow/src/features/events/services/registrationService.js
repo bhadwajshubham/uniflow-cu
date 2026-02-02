@@ -12,13 +12,13 @@ import {
 } from 'firebase/firestore';
 
 // ==========================================
-// 🎨 1. EMAIL TEMPLATE (UPDATED)
+// 🎨 1. EMAIL TEMPLATE
 // ==========================================
 const getTicketEmailTemplate = (userName, eventName, eventDate, venue, ticketId) => {
-  // ✅ FIX 1: Reliable QR Code (Gmail friendly)
+  // ✅ QR Code (Gmail Friendly)
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${ticketId}`;
   
-  // ✅ FIX 2: Dynamic Link to Specific Ticket
+  // ✅ Dynamic Link
   const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://uniflow-cu.vercel.app';
   const ticketLink = `${appUrl}/tickets/${ticketId}`;
 
@@ -65,7 +65,7 @@ const getTicketEmailTemplate = (userName, eventName, eventDate, venue, ticketId)
 };
 
 // ==========================================
-// 🚀 2. INDIVIDUAL REGISTRATION (FIXED)
+// 🚀 2. INDIVIDUAL REGISTRATION
 // ==========================================
 export const registerForEvent = async (eventId, user, profile) => {
   if (!user || !profile) throw new Error("User profile incomplete");
@@ -87,7 +87,7 @@ export const registerForEvent = async (eventId, user, profile) => {
       const ticketDoc = await transaction.get(ticketRef);
       if (ticketDoc.exists()) throw new Error("You are already registered!");
 
-      // 🔥 FIX 3: ADD SEMESTER
+      // SAFE DATA & SEMESTER FIX
       const safeUserName = profile.name || profile.userName || user.displayName || 'Student';
       const safeRollNo = profile.rollNo ? profile.rollNo.toUpperCase() : 'N/A';
       const safePhone = profile.phoneNumber || profile.phone || 'N/A';
@@ -104,7 +104,7 @@ export const registerForEvent = async (eventId, user, profile) => {
         userRollNo: safeRollNo,
         userPhone: safePhone,
         userBranch: safeBranch,
-        userSemester: safeSemester, // ✅ Included in Ticket
+        userSemester: safeSemester, 
         userGroup: safeGroup,
         userResidency: safeResidency,
         customAnswers: profile.customAnswers || {},
@@ -118,20 +118,15 @@ export const registerForEvent = async (eventId, user, profile) => {
       };
 
       transaction.set(ticketRef, ticketData);
-      transaction.update(eventRef, { 
-        registered: increment(1), 
-        participants: arrayUnion(user.uid) 
-      });
-      transaction.update(userRef, { 
-        registeredEvents: arrayUnion(eventId) 
-      });
+      transaction.update(eventRef, { registered: increment(1), participants: arrayUnion(user.uid) });
+      transaction.update(userRef, { registeredEvents: arrayUnion(eventId) });
     });
 
-    // 📧 SEND EMAIL
+    // 📧 SEND EMAIL (URL FIXED for 'api/email.js')
     try {
         const emailHtml = getTicketEmailTemplate(ticketData.userName, ticketData.eventName, ticketData.eventDate, ticketData.eventVenue, ticketRef.id);
         
-        // ✅ FIX 4: Ensure endpoint matches backend file name (Assuming 'send-email.js')
+        // ✅ CHANGED BACK TO '/api/email'
         await fetch('/api/email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -151,7 +146,7 @@ export const registerForEvent = async (eventId, user, profile) => {
 };
 
 // ==========================================
-// 👥 3. TEAM REGISTRATION (FIXED)
+// 👥 3. TEAM REGISTRATION
 // ==========================================
 export const registerTeam = async (eventId, user, teamName, profile) => {
   if (!teamName) throw new Error("Team Name required");
@@ -172,7 +167,7 @@ export const registerTeam = async (eventId, user, teamName, profile) => {
 
         const safeUserName = profile.name || user.displayName || 'Leader';
         const safeRollNo = profile.rollNo ? profile.rollNo.toUpperCase() : 'N/A';
-        const safeSemester = profile.semester ? profile.semester.toString() : 'N/A'; // ✅ Saved
+        const safeSemester = profile.semester ? profile.semester.toString() : 'N/A'; 
 
         const teamCode = Math.random().toString(36).substring(2, 8).toUpperCase();
         
@@ -193,7 +188,7 @@ export const registerTeam = async (eventId, user, teamName, profile) => {
             role: 'LEADER',
             userName: safeUserName,
             userRollNo: safeRollNo,
-            userSemester: safeSemester, // ✅ Saved
+            userSemester: safeSemester, 
             eventName: eventData.title,
             eventDate: eventData.date,
             eventVenue: eventData.venue || eventData.location,
@@ -207,10 +202,10 @@ export const registerTeam = async (eventId, user, teamName, profile) => {
         transaction.update(eventRef, { registered: increment(1), participants: arrayUnion(user.uid) });
     });
     
-    // Email for Leader
+    // Email for Leader (URL FIXED)
     try {
         const emailHtml = getTicketEmailTemplate(ticketData.userName, ticketData.eventName, ticketData.eventDate, ticketData.eventVenue || 'TBA', ticketRef.id);
-        await fetch('/api/send-email', { // ✅ Fixed Endpoint
+        await fetch('/api/email', { // ✅ '/api/email'
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ to: user.email, subject: `🎟️ Team Leader Ticket: ${ticketData.eventName}`, html: emailHtml })
@@ -222,7 +217,7 @@ export const registerTeam = async (eventId, user, teamName, profile) => {
 };
 
 // ==========================================
-// 🤝 4. JOIN TEAM (FIXED)
+// 🤝 4. JOIN TEAM
 // ==========================================
 export const joinTeam = async (eventId, user, teamCode, profile) => {
   if (!teamCode) throw new Error("Team Code required");
@@ -259,7 +254,7 @@ export const joinTeam = async (eventId, user, teamCode, profile) => {
 
       const safeUserName = profile.name || user.displayName || 'Member';
       const safeRollNo = profile.rollNo ? profile.rollNo.toUpperCase() : 'N/A';
-      const safeSemester = profile.semester ? profile.semester.toString() : 'N/A'; // ✅ Saved
+      const safeSemester = profile.semester ? profile.semester.toString() : 'N/A';
 
       ticketData = {
         eventId,
@@ -269,7 +264,7 @@ export const joinTeam = async (eventId, user, teamCode, profile) => {
         role: 'MEMBER',
         userName: safeUserName,
         userRollNo: safeRollNo,
-        userSemester: safeSemester, // ✅ Saved
+        userSemester: safeSemester, 
         eventName: eventData.title,
         eventDate: eventData.date,
         eventVenue: eventData.venue || eventData.location,
@@ -287,7 +282,7 @@ export const joinTeam = async (eventId, user, teamCode, profile) => {
 
     try {
         const emailHtml = getTicketEmailTemplate(ticketData.userName, ticketData.eventName, ticketData.eventDate, ticketData.eventVenue, ticketRef.id);
-        await fetch('/api/send-email', { // ✅ Fixed Endpoint
+        await fetch('/api/email', { // ✅ '/api/email'
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ to: user.email, subject: `🎟️ Team Ticket: ${ticketData.eventName}`, html: emailHtml })
