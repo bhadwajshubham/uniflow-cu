@@ -27,9 +27,9 @@ import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 
 /* =========================
-   🔐 PROTECTED ROUTE (FIXED LOGIC)
+   🔐 SMART PROTECTED ROUTE (Role Based)
    ========================= */
-const ProtectedRoute = ({ children, requireAdmin = false }) => {
+const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { user, profile, loading } = useAuth();
   const location = useLocation();
 
@@ -41,22 +41,19 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
     );
   }
 
-  // 1. Not Logged In -> Go to Login
+  // 1. Login Check
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 2. Admin Check
-  if (requireAdmin && profile?.role !== 'admin' && profile?.role !== 'super_admin') {
-    return <Navigate to="/" replace />;
+  // 2. Role Check (Agar specific roles allowed hain)
+  if (allowedRoles.length > 0 && profile) {
+    if (!allowedRoles.includes(profile.role)) {
+      // Agar role match nahi hua (e.g. Scanner trying to open Admin), Home bhej do
+      return <Navigate to="/" replace />;
+    }
   }
 
-  // 3. (Optional) Force Profile Completion
-  // Note: We generally don't block access to the *whole* app based on profile 
-  // completeness because it can cause loops. Instead, we block specific actions 
-  // (like booking a ticket) inside the components themselves.
-  // However, if you MUST block navigation, ensure you don't block the /profile route itself.
-  
   return children;
 };
 
@@ -83,23 +80,20 @@ function App() {
         <main className="flex-grow">
           <Routes>
 
-            {/* 🌐 PUBLIC ROUTES (Accessible by everyone) */}
+            {/* 🌐 PUBLIC ROUTES */}
             <Route path="/" element={<HomePage />} />
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/:id" element={<EventDetailsPage />} />
             <Route path="/login" element={<LoginPage />} />
-            
-            {/* Trust Pages (Must be public to avoid loops) */}
             <Route path="/about" element={<AboutPage />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/privacy" element={<Privacy />} />
 
-            {/* 👤 USER ROUTES (Protected) */}
+            {/* 👤 USER ROUTES */}
             <Route
               path="/profile"
               element={
                 <ProtectedRoute>
-                  {/* UserProfile handles its own "editing" state */}
                   <UserProfile /> 
                 </ProtectedRoute>
               }
@@ -123,11 +117,12 @@ function App() {
               }
             />
 
-            {/* 🛠️ ADMIN ROUTES (Protected + Admin Role) */}
+            {/* 🛠️ ADMIN ROUTES (Sirf Admin & Super Admin) */}
+            {/* Scanner yahan nahi aa payega */}
             <Route
               path="/admin"
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
                   <AdminDashboard />
                 </ProtectedRoute>
               }
@@ -136,22 +131,23 @@ function App() {
             <Route
               path="/admin/create"
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
                   <ModalRouteWrapper Component={CreateEventModal} backPath="/admin" />
                 </ProtectedRoute>
               }
             />
 
+            {/* 📷 SCANNER ROUTE (Scanner + Admin + Super Admin) */}
             <Route
               path="/scan"
               element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute allowedRoles={['scanner', 'admin', 'super_admin']}>
                   <ScannerPage />
                 </ProtectedRoute>
               }
             />
 
-            {/* 🔚 Fallback Route */}
+            {/* 🔚 Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
 
           </Routes>
