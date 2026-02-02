@@ -1,19 +1,17 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-// ✅ ADDED ShieldAlert for Super Admin
 import { Home, Calendar, Ticket, User, Moon, Sun, Shield, QrCode, Info, ShieldAlert } from 'lucide-react';
 
 const Navbar = () => {
   const { user, profile } = useAuth();
   const location = useLocation();
   
-  // 🛡️ ROLE CHECKS (Exact Logic)
+  // 🛡️ ROLE CHECKS
   const isSuperAdmin = profile?.role === 'super_admin';
-  const isAdmin = profile?.role === 'admin' || isSuperAdmin; // Super admin is also an admin
+  const isAdmin = profile?.role === 'admin' || isSuperAdmin; 
   const isScanner = profile?.role === 'scanner';
   
-  // Scanner Logic
   const canScan = isAdmin || isScanner;
 
   const toggleTheme = () => {
@@ -22,7 +20,7 @@ const Navbar = () => {
 
   const isActive = (path) => location.pathname === path;
 
-  // Helper for Nav Links (Tere Old Style Wala)
+  // Helper for Nav Links
   const NavLink = ({ to, icon: Icon, label, danger }) => (
     <Link to={to} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${
       isActive(to) 
@@ -51,6 +49,12 @@ const Navbar = () => {
         <div className="hidden md:flex items-center gap-8">
             <Link to="/" className={`text-sm font-bold ${isActive('/') ? 'text-indigo-600' : 'text-zinc-500'}`}>Home</Link>
             <Link to="/events" className={`text-sm font-bold ${isActive('/events') ? 'text-indigo-600' : 'text-zinc-500'}`}>Events</Link>
+            
+            {/* ✅ FIXED: Added My Tickets for Logged In Users */}
+            {user && (
+              <Link to="/my-tickets" className={`text-sm font-bold ${isActive('/my-tickets') ? 'text-indigo-600' : 'text-zinc-500'}`}>My Tickets</Link>
+            )}
+
             <Link to="/about" className={`text-sm font-bold ${isActive('/about') ? 'text-indigo-600' : 'text-zinc-500'}`}>About</Link>
             
             {/* Super Admin Desktop Link */}
@@ -99,30 +103,25 @@ const Navbar = () => {
             <NavLink to="/my-tickets" icon={Ticket} label="My Tix" />
           )}
 
-          {/* RIGHT SIDE LOGIC (Ye hai Fix) */}
-          
-          {/* Case 1: SUPER ADMIN -> Dikhao Admin + Root */}
+          {/* RIGHT SIDE LOGIC */}
           {isSuperAdmin ? (
             <>
               <NavLink to="/admin" icon={Shield} label="Admin" />
               <NavLink to="/root" icon={ShieldAlert} label="Root" danger />
             </>
           ) 
-          /* Case 2: ADMIN -> Dikhao MyTix + Admin */
           : isAdmin ? (
             <>
               <NavLink to="/my-tickets" icon={Ticket} label="My Tix" />
               <NavLink to="/admin" icon={Shield} label="Admin" />
             </>
           ) 
-          /* Case 3: SCANNER -> Dikhao MyTix + Profile */
           : isScanner ? (
             <>
               <NavLink to="/my-tickets" icon={Ticket} label="My Tix" />
               <NavLink to="/profile" icon={User} label="Profile" />
             </>
           ) 
-          /* Case 4: STUDENT -> Dikhao About + Profile (Ye wapis aa gaya) */
           : (
              <>
                <NavLink to="/about" icon={Info} label="About" />

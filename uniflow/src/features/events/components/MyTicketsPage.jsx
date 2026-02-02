@@ -9,9 +9,9 @@ import {
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 
-// ✅ YOUR ORIGINAL MODALS
-import CertificateModal from './CertificateModal';
-import RateEventModal from './RateEventModal'; 
+// ✅ Ensure these paths are correct in your folder structure
+import CertificateModal from '../components/CertificateModal'; // Adjust path if needed
+import RateEventModal from '../components/RateEventModal';     // Adjust path if needed
 
 const MyTicketsPage = () => {
   const { user } = useAuth();
@@ -205,6 +205,7 @@ const MyTicketsPage = () => {
                      </div>
                    ) : (
                      <>
+                        {/* Note: Web pe ye sahi chalta hai, PDF ke liye qrcode.react use karte hain */}
                         <img 
                           src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${ticket.id}`} 
                           alt="Ticket QR" 
