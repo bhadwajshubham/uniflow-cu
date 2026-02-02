@@ -17,6 +17,9 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
   const [isEditing, setIsEditing] = useState(false); 
   const [isAlreadyRegistered, setIsAlreadyRegistered] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  
+  // UX Fix: Force UI to update immediately after quick save
+  const [forceProfileComplete, setForceProfileComplete] = useState(false);
 
   const [step, setStep] = useState('form'); 
   const [mode, setMode] = useState('solo');
@@ -24,40 +27,32 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
   const [teamCode, setTeamCode] = useState('');
   const [customAnswers, setCustomAnswers] = useState({});
 
-  // 🔥 UPDATE STATE (Matches Profile Page)
+  // 🔥 UPDATE STATE
   const [updateData, setUpdateData] = useState({
     name: '', rollNo: '', phone: '', 
     gender: '', branch: '', semester: '', 
     group: '', residency: ''
   });
 
-  const [showOtherBranch, setShowOtherBranch] = useState(false); // Toggle for 'Others'
-  const [customBranch, setCustomBranch] = useState(''); // Text for 'Others'
+  const [showOtherBranch, setShowOtherBranch] = useState(false); 
+  const [customBranch, setCustomBranch] = useState('');
 
-  // Standard Branches (From your Screenshot)
-  const BRANCH_OPTIONS = [
-    "B.E. (CSE)", 
-    "B.E. (CSE-AI)", 
-    "B.E. (ECE)", 
-    "B.E. (ME)",
-    "B.E. (CE)",
-    "BBA", 
-    "MBA", 
-    "BCA",
-    "B.Pharm",
-    "Others"
-  ];
+  // ✅ SIMPLIFIED OPTIONS
+  const BRANCH_OPTIONS = ["CSE", "CSE (AI)", "Others"];
+  const SEMESTER_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8];
 
   const isTeamEvent = event?.type === 'team' || event?.teamSize > 1;
 
   // 1. MISSING FIELDS CHECK
   const getMissingFields = () => {
+    if (forceProfileComplete) return []; // UX Fix: If just saved, assume complete
     if (!profile) return [];
+    
     const missing = [];
     if (!profile.rollNo?.trim()) missing.push("Roll Number");
-    if (!profile.phoneNumber?.trim() && !profile.phone?.trim()) missing.push("Phone Number");
+    if (!profile.phone?.trim() && !profile.phoneNumber?.trim()) missing.push("Phone Number");
     if (!profile.branch?.trim()) missing.push("Branch");
-    // Group & Residency are mandatory as per previous instructions
+    if (!profile.semester) missing.push("Semester"); // Added Semester
     if (!profile.group?.trim()) missing.push("Group"); 
     if (!profile.residency?.trim()) missing.push("Residency");
     return missing;
@@ -80,11 +75,11 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
     checkRegistration();
   }, [user, event, isOpen]);
 
-  // 🔥 INIT DATA (Handle 'Others' Branch Logic)
+  // 🔥 INIT DATA
   useEffect(() => {
     if (profile) {
         const currentBranch = profile.branch || '';
-        const isStandard = BRANCH_OPTIONS.includes(currentBranch);
+        const isStandard = BRANCH_OPTIONS.includes(currentBranch) && currentBranch !== 'Others';
         
         setUpdateData({
             name: profile.name || profile.userName || user.displayName || '',
@@ -97,7 +92,6 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
             residency: profile.residency || ''
         });
 
-        // If branch is custom, show input
         if (currentBranch && !isStandard) {
             setShowOtherBranch(true);
             setCustomBranch(currentBranch);
@@ -123,29 +117,43 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
       }
   };
 
+  // ✅ AUTO-FLOW LOGIC (Saves & Continues without Reload)
   const handleQuickUpdate = async (e) => {
     e.preventDefault();
     setLoading(true);
     
-    // Use Custom Branch if 'Others' is selected
-    const finalBranch = showOtherBranch ? customBranch : updateData.branch;
+    let finalBranch = updateData.branch;
+    if (showOtherBranch) {
+        finalBranch = customBranch.toUpperCase();
+    }
 
     try {
         const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
+        const newData = {
             name: updateData.name,
-            rollNo: updateData.rollNo,
+            rollNo: updateData.rollNo.toUpperCase(),
             phoneNumber: updateData.phone,
             phone: updateData.phone,
             gender: updateData.gender,
-            branch: finalBranch, // Save actual string
+            branch: finalBranch,
             semester: updateData.semester,
-            group: updateData.group,
+            group: updateData.group.toUpperCase(),
             residency: updateData.residency
-        });
-        window.location.reload(); 
+        };
+
+        await updateDoc(userRef, newData);
+        
+        // 🚀 UX FIX: Reload karne ki zarurat nahi. 
+        // Hum system ko bolenge "Profile Complete ho gayi, aage badho"
+        setForceProfileComplete(true);
+        setIsEditing(false); // Close edit mode
+        
+        // Update local state so the Booking Form sees new data immediately
+        setUpdateData(prev => ({...prev, ...newData}));
+
     } catch (error) {
         alert("Update failed: " + error.message);
+    } finally {
         setLoading(false);
     }
   };
@@ -153,11 +161,14 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
   const handleRegister = async (e) => {
     e.preventDefault();
     setLoading(true);
+    // Merge latest updateData in case user just edited it
     const finalData = { ...profile, ...updateData, customAnswers };
+    
     try {
       if (mode === 'solo') await registerForEvent(event.id, user, finalData);
       else if (mode === 'create_team') await registerTeam(event.id, user, teamName, finalData);
       else if (mode === 'join_team') await joinTeam(event.id, user, teamCode, finalData);
+      
       setIsSuccess(true);
       setIsAlreadyRegistered(true);
     } catch (error) {
@@ -174,14 +185,15 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
         <div className="bg-[#FDFBF7] dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] p-8 text-center border dark:border-zinc-800">
            <div className="w-20 h-20 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-6 text-green-600"><CheckCircle className="w-10 h-10" /></div>
            <h2 className="text-2xl font-black dark:text-white uppercase italic mb-2">Confirmed!</h2>
-           <p className="text-zinc-500 text-sm mb-8">See you at <span className="font-bold text-indigo-600">{event.title}</span>.</p>
-           <button onClick={() => { onClose(); navigate('/my-tickets'); }} className="w-full py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2"><Ticket className="w-4 h-4" /> View Pass</button>
+           <p className="text-zinc-500 text-sm mb-8">Ticket sent to email.</p>
+           <button onClick={() => { onClose(); navigate('/my-tickets'); }} className="w-full py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2"><Ticket className="w-4 h-4" /> View Ticket</button>
         </div>
       </div>
     );
   }
 
   // --- UI: PROFILE INCOMPLETE (QUICK EDIT) ---
+  // Agar profile complete nahi hai AND humne abhi-abhi force complete nahi kiya
   if (!isProfileComplete) {
     return (
       <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
@@ -190,7 +202,7 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
              <div className="p-6 text-center">
                 <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/20 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-600"><ShieldCheck className="w-8 h-8" /></div>
                 <h2 className="text-2xl font-black dark:text-white uppercase italic">Complete Profile</h2>
-                <p className="text-zinc-500 text-xs mt-1">One-time setup for all events.</p>
+                <p className="text-zinc-500 text-xs mt-1">Required for booking.</p>
              </div>
 
              <div className="p-8 pt-0 overflow-y-auto custom-scrollbar">
@@ -199,7 +211,7 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
                         {/* Name & Roll */}
                         <div className="grid grid-cols-2 gap-4">
                             <input placeholder="Full Name" required value={updateData.name} onChange={e=>setUpdateData({...updateData, name: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white" />
-                            <input placeholder="Roll No" required value={updateData.rollNo} onChange={e=>setUpdateData({...updateData, rollNo: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white" />
+                            <input placeholder="Roll No" required value={updateData.rollNo} onChange={e=>setUpdateData({...updateData, rollNo: e.target.value.toUpperCase()})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white uppercase" />
                         </div>
 
                         {/* Phone & Gender */}
@@ -209,32 +221,38 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
                                 <option value="">Gender</option>
                                 <option value="Male">Male</option>
                                 <option value="Female">Female</option>
-                                <option value="Other">Other</option>
                             </select>
                         </div>
 
-                        {/* Branch Logic */}
-                        <div className="space-y-2">
-                            <select required value={updateData.branch} onChange={handleBranchChange} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white">
-                                <option value="">Select Branch</option>
-                                {BRANCH_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                            </select>
+                        {/* Branch & Semester (UPDATED) */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <select required value={updateData.branch} onChange={handleBranchChange} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white">
+                                    <option value="">Branch</option>
+                                    {BRANCH_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                </select>
+                            </div>
                             
-                            {/* 🔥 "Others" Input */}
-                            {showOtherBranch && (
-                                <input 
-                                    placeholder="Please specify branch" 
-                                    required 
-                                    value={customBranch} 
-                                    onChange={e=>setCustomBranch(e.target.value)} 
-                                    className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white border border-indigo-500 animate-in fade-in slide-in-from-top-2" 
-                                />
-                            )}
+                            <select required value={updateData.semester} onChange={e=>setUpdateData({...updateData, semester: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white">
+                                <option value="">Sem</option>
+                                {SEMESTER_OPTIONS.map(sem => <option key={sem} value={sem}>{sem}th</option>)}
+                            </select>
                         </div>
+                        
+                        {/* Custom Branch Input */}
+                        {showOtherBranch && (
+                            <input 
+                                placeholder="TYPE BRANCH (e.g. BBA)" 
+                                required 
+                                value={customBranch} 
+                                onChange={e=>setCustomBranch(e.target.value.toUpperCase())} 
+                                className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white border border-indigo-500 uppercase" 
+                            />
+                        )}
 
                         {/* Group & Residency */}
                         <div className="grid grid-cols-2 gap-4">
-                            <input placeholder="Group (e.g. G12)" required value={updateData.group} onChange={e=>setUpdateData({...updateData, group: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white" />
+                            <input placeholder="Group (e.g. G12)" required value={updateData.group} onChange={e=>setUpdateData({...updateData, group: e.target.value.toUpperCase()})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white uppercase" />
                             <select required value={updateData.residency} onChange={e=>setUpdateData({...updateData, residency: e.target.value})} className="w-full p-4 bg-zinc-100 dark:bg-zinc-900 rounded-xl font-bold text-xs outline-none dark:text-white">
                                 <option value="">Residency</option>
                                 <option value="Day Scholar">Day Scholar</option>
@@ -293,8 +311,8 @@ const RegisterModal = ({ event, onClose, isOpen }) => {
                  <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-xs">
                     <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Name</p><p className="font-black dark:text-white truncate">{updateData.name || user.displayName}</p></div>
                     <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Roll No</p><p className="font-black dark:text-white">{updateData.rollNo}</p></div>
-                    <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Group</p><p className="font-black dark:text-white">{updateData.group}</p></div>
-                    <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Residency</p><p className="font-black dark:text-white">{updateData.residency}</p></div>
+                    <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Branch</p><p className="font-black dark:text-white">{updateData.branch}</p></div>
+                    <div><p className="text-[9px] text-indigo-400 uppercase font-bold">Semester</p><p className="font-black dark:text-white">{updateData.semester ? updateData.semester + 'th' : 'N/A'}</p></div>
                  </div>
               </div>
               
