@@ -12,10 +12,16 @@ import {
 } from 'firebase/firestore';
 
 // ==========================================
-// 🎨 1. EMAIL TEMPLATE
+// 🎨 1. EMAIL TEMPLATE (FIXED QR & LINK)
 // ==========================================
 const getTicketEmailTemplate = (userName, eventName, eventDate, venue, ticketId) => {
-  const qrUrl = `https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=${ticketId}&choe=UTF-8`;
+  // ✅ FIX 1: Use Reliable QR API (Gmail friendly)
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${ticketId}`;
+  
+  // ✅ FIX 2: Dynamic Link to Specific Ticket Page
+  // window.location.origin automatically picks localhost or your vercel domain
+  const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://uniflow-cu.vercel.app';
+  const ticketLink = `${appUrl}/tickets/${ticketId}`;
 
   return `
     <!DOCTYPE html>
@@ -29,20 +35,29 @@ const getTicketEmailTemplate = (userName, eventName, eventDate, venue, ticketId)
         .content { padding: 30px; }
         .card { background: #f8fafc; border: 2px dashed #e2e8f0; border-radius: 12px; padding: 20px; }
         .ticket-id { font-family: monospace; color: #4f46e5; word-break: break-all; }
-        .btn { display: inline-block; background: #4f46e5; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; margin-top: 20px; }
+        .btn { display: inline-block; background: #4f46e5; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; margin-top: 20px; font-weight: bold; }
+        .footer { text-align: center; margin-top: 20px; color: #71717a; font-size: 12px; }
       </style>
     </head>
     <body>
       <div class="container">
-        <div class="header"><h1>UniFlow Ticket</h1><p>You're confirmed! 🎟️</p></div>
+        <div class="header"><h1>Ticket Confirmed!</h1><p>See you there, ${userName.split(' ')[0]}! 👋</p></div>
         <div class="content">
-          <p>Hi ${userName}, registration for <strong>${eventName}</strong> is confirmed.</p>
+          <p>Registration for <strong>${eventName}</strong> is successful.</p>
           <div class="card">
-            <p><strong>Event:</strong> ${eventName}</p>
-            <p><strong>Ticket ID:</strong> <span class="ticket-id">${ticketId}</span></p>
+            <p><strong>📅 Date:</strong> ${eventDate}</p>
+            <p><strong>📍 Venue:</strong> ${venue}</p>
+            <p><strong>🎫 ID:</strong> <span class="ticket-id">${ticketId}</span></p>
           </div>
-          <div style="text-align:center;"><img src="${qrUrl}" width="150" /></div>
-          <div style="text-align:center;"><a href="https://uniflow-cu.vercel.app/my-tickets" class="btn">View Ticket</a></div>
+          <div style="text-align:center; margin-top: 20px;">
+            <img src="${qrUrl}" alt="Ticket QR" style="border: 4px solid white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);" width="150" />
+          </div>
+          <div style="text-align:center;">
+            <a href="${ticketLink}" class="btn">View Full Ticket</a>
+          </div>
+          <div class="footer">
+            <p>Show this QR code at the entrance.</p>
+          </div>
         </div>
       </div>
     </body>
@@ -73,11 +88,12 @@ export const registerForEvent = async (eventId, user, profile) => {
       const ticketDoc = await transaction.get(ticketRef);
       if (ticketDoc.exists()) throw new Error("You are already registered!");
 
-      // 🔥 CRASH FIX: Default to 'N/A' if undefined
-      const safeUserName = profile.userName || profile.displayName || user.displayName || 'Student';
-      const safeRollNo = profile.rollNo || profile.rollNumber || 'N/A';
+      // 🔥 DATA CLEANING & SEMESTER FIX
+      const safeUserName = profile.name || profile.userName || user.displayName || 'Student';
+      const safeRollNo = profile.rollNo ? profile.rollNo.toUpperCase() : 'N/A';
       const safePhone = profile.phoneNumber || profile.phone || 'N/A';
-      const safeBranch = profile.branch || 'N/A';
+      const safeBranch = profile.branch ? profile.branch.toUpperCase() : 'N/A';
+      const safeSemester = profile.semester ? profile.semester.toString() : 'N/A'; // ✅ ADDED SEMESTER
       const safeGroup = profile.group || 'N/A';
       const safeResidency = profile.residency || 'N/A';
 
@@ -89,6 +105,7 @@ export const registerForEvent = async (eventId, user, profile) => {
         userRollNo: safeRollNo,
         userPhone: safePhone,
         userBranch: safeBranch,
+        userSemester: safeSemester, // ✅ Saved to DB
         userGroup: safeGroup,
         userResidency: safeResidency,
         customAnswers: profile.customAnswers || {},
@@ -116,13 +133,19 @@ export const registerForEvent = async (eventId, user, profile) => {
       });
     });
 
-    // 📧 SEND EMAIL (Silent Fail)
+    // 📧 SEND EMAIL (Fixed Endpoint & Link)
     try {
         const emailHtml = getTicketEmailTemplate(ticketData.userName, ticketData.eventName, ticketData.eventDate, ticketData.eventVenue, ticketRef.id);
-        await fetch('/api/email', {
+        
+        // ✅ FIX 3: Correct API Endpoint (/api/send-email)
+        await fetch('/api/send-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to: user.email, subject: `🎟️ Ticket: ${ticketData.eventName}`, html: emailHtml })
+            body: JSON.stringify({ 
+                to: user.email, 
+                subject: `🎟️ Ticket: ${ticketData.eventName}`, 
+                html: emailHtml 
+            })
         });
     } catch (e) { console.error("Email failed", e); }
 
@@ -153,9 +176,9 @@ export const registerTeam = async (eventId, user, teamName, profile) => {
         const eventData = eventDoc.data();
         if (eventData.registered >= eventData.totalTickets) throw new Error("Event Full");
 
-        // 🔥 CRASH FIX FOR TEAM
-        const safeUserName = profile.userName || profile.displayName || user.displayName || 'Leader';
-        const safeRollNo = profile.rollNo || 'N/A';
+        const safeUserName = profile.name || user.displayName || 'Leader';
+        const safeRollNo = profile.rollNo ? profile.rollNo.toUpperCase() : 'N/A';
+        const safeSemester = profile.semester || 'N/A'; // ✅ ADDED
 
         const teamCode = Math.random().toString(36).substring(2, 8).toUpperCase();
         
@@ -176,6 +199,7 @@ export const registerTeam = async (eventId, user, teamName, profile) => {
             role: 'LEADER',
             userName: safeUserName,
             userRollNo: safeRollNo,
+            userSemester: safeSemester, // ✅ Saved
             eventName: eventData.title,
             eventDate: eventData.date,
             eventVenue: eventData.venue || eventData.location,
@@ -192,7 +216,7 @@ export const registerTeam = async (eventId, user, teamName, profile) => {
     // Email for Leader
     try {
         const emailHtml = getTicketEmailTemplate(ticketData.userName, ticketData.eventName, ticketData.eventDate, ticketData.eventVenue || 'TBA', ticketRef.id);
-        await fetch('/api/email', {
+        await fetch('/api/send-email', { // ✅ Fixed Endpoint
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ to: user.email, subject: `🎟️ Team Leader Ticket: ${ticketData.eventName}`, html: emailHtml })
@@ -239,9 +263,9 @@ export const joinTeam = async (eventId, user, teamCode, profile) => {
       const existingTicket = await transaction.get(ticketRef);
       if (existingTicket.exists()) throw new Error("You already have a ticket");
 
-      // 🔥 CRASH FIX FOR JOINER
-      const safeUserName = profile.userName || profile.displayName || user.displayName || 'Member';
-      const safeRollNo = profile.rollNo || 'N/A';
+      const safeUserName = profile.name || user.displayName || 'Member';
+      const safeRollNo = profile.rollNo ? profile.rollNo.toUpperCase() : 'N/A';
+      const safeSemester = profile.semester || 'N/A'; // ✅ ADDED
 
       ticketData = {
         eventId,
@@ -251,6 +275,7 @@ export const joinTeam = async (eventId, user, teamCode, profile) => {
         role: 'MEMBER',
         userName: safeUserName,
         userRollNo: safeRollNo,
+        userSemester: safeSemester, // ✅ Saved
         eventName: eventData.title,
         eventDate: eventData.date,
         eventVenue: eventData.venue || eventData.location,
@@ -268,7 +293,7 @@ export const joinTeam = async (eventId, user, teamCode, profile) => {
 
     try {
         const emailHtml = getTicketEmailTemplate(ticketData.userName, ticketData.eventName, ticketData.eventDate, ticketData.eventVenue, ticketRef.id);
-        await fetch('/api/email', {
+        await fetch('/api/send-email', { // ✅ Fixed Endpoint
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ to: user.email, subject: `🎟️ Team Ticket: ${ticketData.eventName}`, html: emailHtml })
