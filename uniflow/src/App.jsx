@@ -20,7 +20,7 @@ import UserProfile from './features/auth/components/UserProfile';
 import AdminDashboard from './features/events/components/AdminDashboard';
 import ScannerPage from './features/events/components/ScannerPage';
 import CreateEventModal from './features/events/components/CreateEventModal';
-import SuperAdminDashboard from './features/events/components/SuperAdminDashboard'; // 👈 IMPORT THIS
+import SuperAdminDashboard from './features/events/components/SuperAdminDashboard'; // ✅ Zaroori Import
 
 // ✅ Trust Pages
 import AboutPage from './pages/AboutPage';
@@ -47,9 +47,10 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 2. Role Check
+  // 2. Role Check (Agar specific roles allowed hain)
   if (allowedRoles.length > 0 && profile) {
     if (!allowedRoles.includes(profile.role)) {
+      // Agar role match nahi hua (e.g. Scanner trying to open Admin), Home bhej do
       return <Navigate to="/" replace />;
     }
   }
@@ -80,21 +81,24 @@ function App() {
         <main className="flex-grow">
           <Routes>
 
-            {/* 🌐 PUBLIC ROUTES */}
+            {/* 🌐 PUBLIC ROUTES (Sabke liye open) */}
             <Route path="/" element={<HomePage />} />
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/:id" element={<EventDetailsPage />} />
             <Route path="/login" element={<LoginPage />} />
+            
+            {/* Trust Pages */}
             <Route path="/about" element={<AboutPage />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/privacy" element={<Privacy />} />
 
-            {/* 👤 USER ROUTES */}
+            {/* 👤 USER ROUTES (Login Required) */}
             <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
             <Route path="/my-tickets" element={<ProtectedRoute><MyTicketsPage /></ProtectedRoute>} />
             <Route path="/tickets/:ticketId" element={<ProtectedRoute><TicketPage /></ProtectedRoute>} />
 
-            {/* 🔥 SUPER ADMIN "ROOT" ROUTE (New Dashboard) */}
+            {/* 🔥 SUPER ADMIN "ROOT" ROUTE (Tera Naya Command Center) */}
+            {/* Sirf super_admin yahan aa sakta hai */}
             <Route
               path="/root"
               element={
@@ -104,8 +108,8 @@ function App() {
               }
             />
 
-            {/* 🛠️ REGULAR ADMIN ROUTE (Event Management) */}
-            {/* Super Admin can also access this to create events */}
+            {/* 🛠️ REGULAR ADMIN ROUTE (Events Manage karne ke liye) */}
+            {/* Super Admin bhi yahan aa sakta hai agar event edit karna ho */}
             <Route
               path="/admin"
               element={
@@ -125,6 +129,7 @@ function App() {
             />
 
             {/* 📷 SCANNER ROUTE */}
+            {/* Scanner role walon ke liye ye route khula hai */}
             <Route
               path="/scan"
               element={
@@ -134,7 +139,7 @@ function App() {
               }
             />
 
-            {/* 🔚 Fallback */}
+            {/* 🔚 Fallback Route */}
             <Route path="*" element={<Navigate to="/" replace />} />
 
           </Routes>
