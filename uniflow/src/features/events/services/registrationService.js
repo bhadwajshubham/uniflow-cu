@@ -12,14 +12,13 @@ import {
 } from 'firebase/firestore';
 
 // ==========================================
-// 🎨 1. EMAIL TEMPLATE (FIXED QR & LINK)
+// 🎨 1. EMAIL TEMPLATE (UPDATED)
 // ==========================================
 const getTicketEmailTemplate = (userName, eventName, eventDate, venue, ticketId) => {
-  // ✅ FIX 1: Use Reliable QR API (Gmail friendly)
+  // ✅ FIX 1: Reliable QR Code (Gmail friendly)
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${ticketId}`;
   
-  // ✅ FIX 2: Dynamic Link to Specific Ticket Page
-  // window.location.origin automatically picks localhost or your vercel domain
+  // ✅ FIX 2: Dynamic Link to Specific Ticket
   const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://uniflow-cu.vercel.app';
   const ticketLink = `${appUrl}/tickets/${ticketId}`;
 
@@ -88,13 +87,13 @@ export const registerForEvent = async (eventId, user, profile) => {
       const ticketDoc = await transaction.get(ticketRef);
       if (ticketDoc.exists()) throw new Error("You are already registered!");
 
-      // 🔥 DATA CLEANING & SEMESTER FIX
+      // 🔥 FIX 3: ADD SEMESTER
       const safeUserName = profile.name || profile.userName || user.displayName || 'Student';
       const safeRollNo = profile.rollNo ? profile.rollNo.toUpperCase() : 'N/A';
       const safePhone = profile.phoneNumber || profile.phone || 'N/A';
       const safeBranch = profile.branch ? profile.branch.toUpperCase() : 'N/A';
-      const safeSemester = profile.semester ? profile.semester.toString() : 'N/A'; // ✅ ADDED SEMESTER
-      const safeGroup = profile.group || 'N/A';
+      const safeSemester = profile.semester ? profile.semester.toString() : 'N/A'; // ✅ Saved
+      const safeGroup = profile.group ? profile.group.toUpperCase() : 'N/A';
       const safeResidency = profile.residency || 'N/A';
 
       ticketData = {
@@ -105,7 +104,7 @@ export const registerForEvent = async (eventId, user, profile) => {
         userRollNo: safeRollNo,
         userPhone: safePhone,
         userBranch: safeBranch,
-        userSemester: safeSemester, // ✅ Saved to DB
+        userSemester: safeSemester, // ✅ Included in Ticket
         userGroup: safeGroup,
         userResidency: safeResidency,
         customAnswers: profile.customAnswers || {},
@@ -118,26 +117,21 @@ export const registerForEvent = async (eventId, user, profile) => {
         qrCode: `${eventId}_${user.uid}`
       };
 
-      // Set Ticket
       transaction.set(ticketRef, ticketData);
-      
-      // Update Event Count
       transaction.update(eventRef, { 
         registered: increment(1), 
         participants: arrayUnion(user.uid) 
       });
-      
-      // Update User History
       transaction.update(userRef, { 
         registeredEvents: arrayUnion(eventId) 
       });
     });
 
-    // 📧 SEND EMAIL (Fixed Endpoint & Link)
+    // 📧 SEND EMAIL
     try {
         const emailHtml = getTicketEmailTemplate(ticketData.userName, ticketData.eventName, ticketData.eventDate, ticketData.eventVenue, ticketRef.id);
         
-        // ✅ FIX 3: Correct API Endpoint (/api/send-email)
+        // ✅ FIX 4: Ensure endpoint matches backend file name (Assuming 'send-email.js')
         await fetch('/api/send-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -178,7 +172,7 @@ export const registerTeam = async (eventId, user, teamName, profile) => {
 
         const safeUserName = profile.name || user.displayName || 'Leader';
         const safeRollNo = profile.rollNo ? profile.rollNo.toUpperCase() : 'N/A';
-        const safeSemester = profile.semester || 'N/A'; // ✅ ADDED
+        const safeSemester = profile.semester ? profile.semester.toString() : 'N/A'; // ✅ Saved
 
         const teamCode = Math.random().toString(36).substring(2, 8).toUpperCase();
         
@@ -265,7 +259,7 @@ export const joinTeam = async (eventId, user, teamCode, profile) => {
 
       const safeUserName = profile.name || user.displayName || 'Member';
       const safeRollNo = profile.rollNo ? profile.rollNo.toUpperCase() : 'N/A';
-      const safeSemester = profile.semester || 'N/A'; // ✅ ADDED
+      const safeSemester = profile.semester ? profile.semester.toString() : 'N/A'; // ✅ Saved
 
       ticketData = {
         eventId,
