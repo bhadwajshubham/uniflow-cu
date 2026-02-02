@@ -16,10 +16,11 @@ import TicketPage from './features/events/components/TicketPage';
 // ✅ User
 import UserProfile from './features/auth/components/UserProfile';
 
-// ✅ Admin
+// ✅ Admin & Super Admin Components
 import AdminDashboard from './features/events/components/AdminDashboard';
 import ScannerPage from './features/events/components/ScannerPage';
 import CreateEventModal from './features/events/components/CreateEventModal';
+import SuperAdminDashboard from './features/events/components/SuperAdminDashboard'; // 👈 IMPORT THIS
 
 // ✅ Trust Pages
 import AboutPage from './pages/AboutPage';
@@ -27,7 +28,7 @@ import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 
 /* =========================
-   🔐 SMART PROTECTED ROUTE (Role Based)
+   🔐 SMART PROTECTED ROUTE
    ========================= */
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { user, profile, loading } = useAuth();
@@ -46,11 +47,9 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 2. Role Check logic
-  // Agar 'allowedRoles' array pass kiya hai, toh check karo ki user ka role usme hai ya nahi
+  // 2. Role Check
   if (allowedRoles.length > 0 && profile) {
     if (!allowedRoles.includes(profile.role)) {
-      // Agar role match nahi hua (e.g. Scanner banda Admin khol raha hai), toh Home bhej do
       return <Navigate to="/" replace />;
     }
   }
@@ -81,47 +80,32 @@ function App() {
         <main className="flex-grow">
           <Routes>
 
-            {/* 🌐 PUBLIC ROUTES (Accessible by everyone) */}
+            {/* 🌐 PUBLIC ROUTES */}
             <Route path="/" element={<HomePage />} />
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/:id" element={<EventDetailsPage />} />
             <Route path="/login" element={<LoginPage />} />
-            
-            {/* Trust Pages (Loop Fix: Inhe Public rehne do) */}
             <Route path="/about" element={<AboutPage />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/privacy" element={<Privacy />} />
 
-            {/* 👤 USER ROUTES (Protected for Logged In Users) */}
+            {/* 👤 USER ROUTES */}
+            <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+            <Route path="/my-tickets" element={<ProtectedRoute><MyTicketsPage /></ProtectedRoute>} />
+            <Route path="/tickets/:ticketId" element={<ProtectedRoute><TicketPage /></ProtectedRoute>} />
+
+            {/* 🔥 SUPER ADMIN "ROOT" ROUTE (New Dashboard) */}
             <Route
-              path="/profile"
+              path="/root"
               element={
-                <ProtectedRoute>
-                  <UserProfile /> 
+                <ProtectedRoute allowedRoles={['super_admin']}>
+                  <SuperAdminDashboard />
                 </ProtectedRoute>
               }
             />
 
-            <Route
-              path="/my-tickets"
-              element={
-                <ProtectedRoute>
-                  <MyTicketsPage />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="/tickets/:ticketId"
-              element={
-                <ProtectedRoute>
-                  <TicketPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* 🛠️ ADMIN ROUTES (Sirf Admin & Super Admin) */}
-            {/* Note: Scanner role yahan nahi aa sakta */}
+            {/* 🛠️ REGULAR ADMIN ROUTE (Event Management) */}
+            {/* Super Admin can also access this to create events */}
             <Route
               path="/admin"
               element={
@@ -140,8 +124,7 @@ function App() {
               }
             />
 
-            {/* 📷 SCANNER ROUTE (Scanner + Admin + Super Admin) */}
-            {/* Note: Yahan scanner allow kiya hai */}
+            {/* 📷 SCANNER ROUTE */}
             <Route
               path="/scan"
               element={
@@ -151,7 +134,7 @@ function App() {
               }
             />
 
-            {/* 🔚 Fallback Route */}
+            {/* 🔚 Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
 
           </Routes>
