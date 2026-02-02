@@ -46,10 +46,11 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 2. Role Check (Agar specific roles allowed hain)
+  // 2. Role Check logic
+  // Agar 'allowedRoles' array pass kiya hai, toh check karo ki user ka role usme hai ya nahi
   if (allowedRoles.length > 0 && profile) {
     if (!allowedRoles.includes(profile.role)) {
-      // Agar role match nahi hua (e.g. Scanner trying to open Admin), Home bhej do
+      // Agar role match nahi hua (e.g. Scanner banda Admin khol raha hai), toh Home bhej do
       return <Navigate to="/" replace />;
     }
   }
@@ -80,16 +81,18 @@ function App() {
         <main className="flex-grow">
           <Routes>
 
-            {/* 🌐 PUBLIC ROUTES */}
+            {/* 🌐 PUBLIC ROUTES (Accessible by everyone) */}
             <Route path="/" element={<HomePage />} />
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/:id" element={<EventDetailsPage />} />
             <Route path="/login" element={<LoginPage />} />
+            
+            {/* Trust Pages (Loop Fix: Inhe Public rehne do) */}
             <Route path="/about" element={<AboutPage />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/privacy" element={<Privacy />} />
 
-            {/* 👤 USER ROUTES */}
+            {/* 👤 USER ROUTES (Protected for Logged In Users) */}
             <Route
               path="/profile"
               element={
@@ -118,7 +121,7 @@ function App() {
             />
 
             {/* 🛠️ ADMIN ROUTES (Sirf Admin & Super Admin) */}
-            {/* Scanner yahan nahi aa payega */}
+            {/* Note: Scanner role yahan nahi aa sakta */}
             <Route
               path="/admin"
               element={
@@ -138,6 +141,7 @@ function App() {
             />
 
             {/* 📷 SCANNER ROUTE (Scanner + Admin + Super Admin) */}
+            {/* Note: Yahan scanner allow kiya hai */}
             <Route
               path="/scan"
               element={
@@ -147,7 +151,7 @@ function App() {
               }
             />
 
-            {/* 🔚 Fallback */}
+            {/* 🔚 Fallback Route */}
             <Route path="*" element={<Navigate to="/" replace />} />
 
           </Routes>
