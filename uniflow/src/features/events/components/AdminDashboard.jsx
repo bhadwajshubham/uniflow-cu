@@ -4,18 +4,18 @@ import { collection, query, where, onSnapshot, deleteDoc, doc, orderBy } from 'f
 import { useAuth } from '../../../context/AuthContext';
 import { 
   Ticket, DollarSign, Calendar, Trash2, Edit3, Plus, Zap, 
-  Users, TrendingUp, Menu, QrCode, FileText, LayoutDashboard, Loader2
+  Menu, QrCode, FileText, LayoutDashboard, Loader2
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 // ✅ MODAL IMPORTS
-import EditEventModal from './EditEventModal'; // Ensure path is correct
-import ManageEventModal from './ManageEventModal'; // Ensure path is correct
-import CreateEventModal from './CreateEventModal'; // Ensure path is correct
+import EditEventModal from './EditEventModal'; 
+import ManageEventModal from './ManageEventModal';
+import CreateEventModal from './CreateEventModal'; 
 
 const AdminDashboard = () => {
-  const { user, profile } = useAuth(); // Added profile for Role Check
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   
   const [events, setEvents] = useState([]);
@@ -32,29 +32,34 @@ const AdminDashboard = () => {
   const [manageEvent, setManageEvent] = useState(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  // 1. FETCH EVENTS (UPDATED LOGIC 🛡️)
+  // 1. FETCH EVENTS (FIXED 🛡️)
   useEffect(() => {
-    if (!user || !profile) return; // Wait for profile to load
+    if (!user || !profile) return;
     setLoading(true);
 
     const eventsRef = collection(db, 'events');
     let q;
 
-    // 🔥 LOGIC CHANGE: Super Admin sees ALL, Others see ONLY THEIRS
     if (profile.role === 'super_admin') {
-      q = query(eventsRef, orderBy('createdAt', 'desc')); // Fetch All
+      // Super Admin: Fetch All + Sort by CreatedAt
+      q = query(eventsRef, orderBy('createdAt', 'desc')); 
     } else {
-      // Assuming 'organizerId' or 'createdBy' is the field name. 
-      // Check your createModal to see which field you used. Usually it's 'createdBy'.
-      // If your old code used 'organizerId', keep it. If new code uses 'createdBy', change it here.
-      // I am using 'createdBy' based on previous context, change to 'organizerId' if needed.
+      // ✅ Admin/Organizer: Fetch Only Theirs
+      // NOTE: Humne yahan 'orderBy' hata diya hai taaki Index Error na aaye.
+      // Hum niche JavaScript se sort kar lenge.
       q = query(eventsRef, where('createdBy', '==', user.uid)); 
     }
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const eventList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      // Client side sort fallback
-      eventList.sort((a, b) => new Date(b.createdAt?.seconds || 0) - new Date(a.createdAt?.seconds || 0));
+      
+      // ✅ Client Side Sorting (Safe & Fast)
+      eventList.sort((a, b) => {
+          const dateA = a.createdAt?.seconds || 0;
+          const dateB = b.createdAt?.seconds || 0;
+          return dateB - dateA; // Newest First
+      });
+
       setEvents(eventList);
       setLoading(false);
     });
@@ -62,18 +67,17 @@ const AdminDashboard = () => {
     return () => unsubscribe();
   }, [user, profile]);
 
-  // 2. FETCH TICKETS
+  // 2. FETCH TICKETS & STATS
   useEffect(() => {
     if (!user || events.length === 0) return;
     const ticketsRef = collection(db, 'tickets');
     
-    // Optimization: In a real app, you'd want a better query here.
-    // For now, fetching all is okay for small scale.
+    // Fetch all tickets to calculate dashboard stats
     const unsubscribe = onSnapshot(ticketsRef, (snapshot) => {
       const allTickets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const myEventIds = events.map(e => e.id);
       
-      // Filter tickets that belong to the visible events
+      // Sirf wahi tickets dikhao jo mere events ke hain
       const myTickets = allTickets.filter(t => myEventIds.includes(t.eventId));
       
       setTickets(myTickets);
@@ -82,7 +86,9 @@ const AdminDashboard = () => {
     return () => unsubscribe();
   }, [user, events]); 
 
-  // 3. STATS LOGIC
+  // ... (Baaki saara code, calculateStats, charts waisa hi rahega) ...
+  // ... (Copy Paste the rest of your logic below from previous file) ...
+
   const calculateStats = (ticketList, eventList) => {
     let totalRevenue = 0;
     let totalAttended = 0;
@@ -117,32 +123,25 @@ const AdminDashboard = () => {
   const COLORS = stats.tickets > 0 ? ['#10B981', '#6366f1'] : ['#e4e4e7', '#f4f4f5']; 
 
   const handleDelete = async (eventId) => {
-    // 🛡️ SECURITY: Only Super Admin can delete
     if (profile?.role !== 'super_admin') {
       alert("Only Super Admin can delete events.");
       return;
     }
-
-    if (window.confirm("Delete event? This cannot be undone.")) {
-      try {
-        await deleteDoc(doc(db, 'events', eventId));
-      } catch (error) {
-        console.error("Delete failed", error);
-      }
+    if (window.confirm("Delete event?")) {
+      try { await deleteDoc(doc(db, 'events', eventId)); } catch (error) { console.error(error); }
     }
   };
 
   const downloadGlobalReport = () => {
     if (tickets.length === 0) { alert("No data."); return; }
-    let csvContent = "data:text/csv;charset=utf-8,Event,Ticket ID,Name,Roll No,Price,Status,Scanned At\n";
+    let csvContent = "data:text/csv;charset=utf-8,Event,Ticket ID,Name,Roll No,Price,Status\n";
     tickets.forEach(t => {
         const event = events.find(e => e.id === t.eventId);
-        const scannedTime = t.scannedAt?.toDate ? t.scannedAt.toDate().toLocaleTimeString() : 'N/A';
-        csvContent += `"${t.eventName}","${t.id}","${t.userName}","${t.userRollNo}",${event?.price || 0},${t.scanned ? "Attended" : "Booked"},${scannedTime}\n`;
+        csvContent += `"${t.eventName}","${t.id}","${t.userName}","${t.userRollNo}",${event?.price || 0},${t.scanned ? "Attended" : "Booked"}\n`;
     });
     const link = document.createElement("a");
     link.href = encodeURI(csvContent);
-    link.download = `UniFlow_Global_Report.csv`;
+    link.download = `UniFlow_Report.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -156,7 +155,7 @@ const AdminDashboard = () => {
       <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} hidden md:flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 transition-all duration-300`}>
         <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
            {isSidebarOpen && <span className="font-black text-lg dark:text-white">Admin</span>}
-           <button onClick={() => setSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg"><Menu className="w-5 h-5 text-zinc-500"/></button>
+           <button onClick={() => setSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-zinc-100 dark:bg-zinc-800 rounded-lg"><Menu className="w-5 h-5 text-zinc-500"/></button>
         </div>
         <nav className="flex-1 p-4 space-y-2">
            <SidebarItem icon={LayoutDashboard} label="Overview" active={activeView === 'overview'} isOpen={isSidebarOpen} onClick={() => setActiveView('overview')} />
@@ -178,9 +177,7 @@ const AdminDashboard = () => {
           <div className="flex justify-between items-center">
              <div>
                 <h1 className="text-3xl font-black dark:text-white">Dashboard</h1>
-                <p className="text-zinc-500 text-sm">
-                   {profile?.role === 'super_admin' ? 'Super Admin View' : 'Organizer View'}
-                </p>
+                <p className="text-zinc-500 text-sm">{profile?.role === 'super_admin' ? 'Super Admin View' : 'Organizer View'}</p>
              </div>
              <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2 px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-xl font-bold text-xs uppercase hover:opacity-90 shadow-xl"><Plus className="w-4 h-4" /> Create Event</button>
           </div>
@@ -209,42 +206,43 @@ const AdminDashboard = () => {
 
           {/* Event List */}
           <div id="events-section" className="space-y-4 pt-4">
-            <h2 className="text-xl font-bold dark:text-white">
-                {profile?.role === 'super_admin' ? 'All Platform Events' : 'Your Events'}
-            </h2>
-            <div className="grid gap-4">
-              {events.map(event => (
-                <div key={event.id} className="bg-white dark:bg-zinc-900 p-4 rounded-3xl border border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row gap-6 items-center shadow-sm">
-                    <div className="w-full md:w-24 h-24 rounded-2xl overflow-hidden shrink-0 bg-zinc-100">
-                      <img src={event.imageUrl || event.image || "https://placehold.co/200x200"} className="w-full h-full object-cover" alt="" />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-lg font-black dark:text-white">{event.title}</h3>
-                      <div className="text-xs font-bold text-zinc-500 mt-1">{new Date(event.date).toLocaleDateString()} • {event.registered}/{event.totalTickets} Sold</div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => setManageEvent(event)} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:text-green-600"><Users className="w-4 h-4" /></button>
-                      <button onClick={() => setEditEvent(event)} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:text-indigo-600"><Edit3 className="w-4 h-4" /></button>
-                      
-                      {/* Only Super Admin Sees Delete */}
-                      {profile?.role === 'super_admin' && (
-                          <button onClick={() => handleDelete(event.id)} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:text-red-500">
-                             <Trash2 className="w-4 h-4" />
-                          </button>
-                      )}
-                    </div>
+            <h2 className="text-xl font-bold dark:text-white">{profile?.role === 'super_admin' ? 'All Platform Events' : 'Your Events'}</h2>
+            {events.length === 0 ? (
+                <div className="p-8 text-center bg-zinc-100 dark:bg-zinc-900 rounded-3xl border border-dashed border-zinc-300">
+                    <p className="text-zinc-500 font-bold">No events found. Create one to get started!</p>
                 </div>
-              ))}
-            </div>
+            ) : (
+                <div className="grid gap-4">
+                {events.map(event => (
+                    <div key={event.id} className="bg-white dark:bg-zinc-900 p-4 rounded-3xl border border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row gap-6 items-center shadow-sm">
+                        <div className="w-full md:w-24 h-24 rounded-2xl overflow-hidden shrink-0 bg-zinc-100">
+                        <img src={event.imageUrl || event.image || "https://placehold.co/200x200"} className="w-full h-full object-cover" alt="" />
+                        </div>
+                        <div className="flex-1">
+                        <h3 className="text-lg font-black dark:text-white">{event.title}</h3>
+                        <div className="text-xs font-bold text-zinc-500 mt-1">{new Date(event.date).toLocaleDateString()} • {event.registered}/{event.totalTickets} Sold</div>
+                        </div>
+                        <div className="flex gap-2">
+                        <button onClick={() => setManageEvent(event)} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:text-green-600"><Users className="w-4 h-4" /></button>
+                        <button onClick={() => setEditEvent(event)} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:text-indigo-600"><Edit3 className="w-4 h-4" /></button>
+                        
+                        {(profile?.role === 'super_admin' || event.createdBy === user.uid) && (
+                            <button onClick={() => handleDelete(event.id)} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:text-red-500">
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        )}
+                        </div>
+                    </div>
+                ))}
+                </div>
+            )}
           </div>
         </div>
       </main>
 
       {/* MODALS */}
       {isCreateModalOpen && <CreateEventModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />}
-      
       {editEvent && <EditEventModal isOpen={!!editEvent} onClose={() => setEditEvent(null)} eventData={editEvent} onSuccess={() => setEditEvent(null)} />}
-      
       {manageEvent && <ManageEventModal isOpen={!!manageEvent} onClose={() => setManageEvent(null)} eventData={manageEvent} />}
     </div>
   );
