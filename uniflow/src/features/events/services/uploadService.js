@@ -1,5 +1,3 @@
-import axios from 'axios';
-
 // ☁️ CLOUDINARY CONFIG
 const CLOUD_NAME = "dt8pjvy7w"; 
 const UPLOAD_PRESET = "uniflow_preset"; 
@@ -13,11 +11,23 @@ export const uploadImage = async (file) => {
   formData.append('folder', 'uniflow_uploads');
 
   try {
-    const response = await axios.post(
+    // Using built-in fetch to avoid 'axios' dependency issues on launch
+    const response = await fetch(
       `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
-      formData
+      {
+        method: 'POST',
+        body: formData,
+      }
     );
-    return response.data.secure_url;
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || "Upload failed");
+    }
+
+    const data = await response.json();
+    return data.secure_url;
+
   } catch (error) {
     console.error("Cloudinary Upload Error:", error);
     throw new Error("Image upload failed");

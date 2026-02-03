@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
-import { db, storage, auth } from '../../../lib/firebase';
+import { db, auth } from '../../../lib/firebase'; // ❌ Removed 'storage' from imports
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'; 
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { signOut } from 'firebase/auth';
 import { Phone, BookOpen, Hash, Camera, Edit2, X, Loader2, Shield, CheckCircle, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+
+// ✅ IMPORT CLOUDINARY SERVICE
+import { uploadImage } from '../../../services/uploadService'; 
 
 const UserProfile = () => {
   const { user } = useAuth();
@@ -38,7 +40,7 @@ const UserProfile = () => {
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     
-    // 🧹 Force Clear Legacy Service Workers (To fix "Old UI" issue)
+    // 🧹 Force Clear Legacy Service Workers
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(registrations => {
             registrations.forEach(registration => registration.unregister());
@@ -81,7 +83,7 @@ const UserProfile = () => {
         return;
     }
 
-    // 🚀 ATOMIC UPDATE: UI immediately assumes success
+    // 🚀 ATOMIC UPDATE
     setHasAcceptedLocally(true); 
     setSuccess("Welcome!");
 
@@ -92,7 +94,6 @@ const UserProfile = () => {
         }, { merge: true });
     } catch (err) {
         console.error("Sync Error:", err);
-        // Note: Even if DB fails, we keep user in Profile View for good UX
     }
   };
 
@@ -109,10 +110,16 @@ const UserProfile = () => {
 
     try {
       let finalPhotoURL = preview || profile?.photoURL || user.photoURL;
+
+      // ✅ CLOUDINARY UPLOAD LOGIC
       if (photo) {
-        const storageRef = ref(storage, `avatars/${user.uid}_${Date.now()}`);
-        await uploadBytes(storageRef, photo);
-        finalPhotoURL = await getDownloadURL(storageRef);
+        // Calling the Cloudinary service instead of Firebase Storage
+        const uploadedUrl = await uploadImage(photo);
+        if (uploadedUrl) {
+            finalPhotoURL = uploadedUrl;
+        } else {
+            throw new Error("Image upload failed (No URL returned).");
+        }
       }
 
       const updatedData = {
@@ -136,7 +143,12 @@ const UserProfile = () => {
       await setDoc(doc(db, 'users', user.uid), updatedData, { merge: true });
       setTimeout(() => { setSuccess(''); setSaving(false); }, 2000);
 
-    } catch (err) { setError("Update failed: " + err.message); setSaving(false); } 
+    } catch (err) { 
+        console.error("Save Error:", err);
+        setError("Update failed: " + err.message); 
+    } finally {
+        setSaving(false);
+    }
   };
 
   const handleLogout = async () => { await signOut(auth); navigate('/login'); };
@@ -153,7 +165,7 @@ const UserProfile = () => {
   // 3. RENDER LOGIC
   if (loading && !profile) return <div className="min-h-screen flex justify-center items-center"><Loader2 className="animate-spin w-8 h-8 text-indigo-600"/></div>;
 
-  // 🔥 DECISION ENGINE: Show Consent IF (Not accepted in DB AND Not accepted locally)
+  // 🔥 DECISION ENGINE
   const showConsentScreen = !profile?.termsAccepted && !hasAcceptedLocally;
 
   return (
