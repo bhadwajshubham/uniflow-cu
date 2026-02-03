@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../../lib/firebase';
 import { collection, query, where, onSnapshot, deleteDoc, doc, orderBy } from 'firebase/firestore';
 import { useAuth } from '../../../context/AuthContext';
+// ✅ FIX: Added 'Users' to imports
 import { 
   Ticket, DollarSign, Calendar, Trash2, Edit3, Plus, Zap, 
-  Menu, QrCode, FileText, LayoutDashboard, Loader2
+  Menu, QrCode, FileText, LayoutDashboard, Loader2, Users 
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -32,7 +33,7 @@ const AdminDashboard = () => {
   const [manageEvent, setManageEvent] = useState(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  // 1. FETCH EVENTS (🔥 FIXED: organizerId)
+  // 1. FETCH EVENTS
   useEffect(() => {
     if (!user || !profile) return;
     setLoading(true);
@@ -41,23 +42,18 @@ const AdminDashboard = () => {
     let q;
 
     if (profile.role === 'super_admin') {
-      // Super Admin: Fetch All
       q = query(eventsRef, orderBy('createdAt', 'desc')); 
     } else {
-      // ✅ FIX: Using 'organizerId' because CreateModal saves it as 'organizerId'
       q = query(eventsRef, where('organizerId', '==', user.uid)); 
     }
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const eventList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      // Client Side Sorting
       eventList.sort((a, b) => {
           const dateA = a.createdAt?.seconds || 0;
           const dateB = b.createdAt?.seconds || 0;
-          return dateB - dateA; // Newest First
+          return dateB - dateA;
       });
-
       setEvents(eventList);
       setLoading(false);
     });
@@ -73,7 +69,6 @@ const AdminDashboard = () => {
     const unsubscribe = onSnapshot(ticketsRef, (snapshot) => {
       const allTickets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const myEventIds = events.map(e => e.id);
-      
       const myTickets = allTickets.filter(t => myEventIds.includes(t.eventId));
       
       setTickets(myTickets);
@@ -217,7 +212,10 @@ const AdminDashboard = () => {
                         <div className="text-xs font-bold text-zinc-500 mt-1">{new Date(event.date).toLocaleDateString()} • {event.registered}/{event.totalTickets} Sold</div>
                         </div>
                         <div className="flex gap-2">
-                        <button onClick={() => setManageEvent(event)} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:text-green-600"><Users className="w-4 h-4" /></button>
+                        <button onClick={() => setManageEvent(event)} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:text-green-600">
+                             {/* ✅ FIX: Users Icon imported now */}
+                             <Users className="w-4 h-4" />
+                        </button>
                         <button onClick={() => setEditEvent(event)} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:text-indigo-600"><Edit3 className="w-4 h-4" /></button>
                         
                         {(profile?.role === 'super_admin' || event.organizerId === user.uid) && (
