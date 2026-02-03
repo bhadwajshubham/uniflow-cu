@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
-import { db, auth } from '../../../lib/firebase'; // ❌ Removed 'storage' from imports
+import { db, auth } from '../../../lib/firebase'; 
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'; 
 import { signOut } from 'firebase/auth';
 import { Phone, BookOpen, Hash, Camera, Edit2, X, Loader2, Shield, CheckCircle, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-// ✅ IMPORT CLOUDINARY SERVICE
-import { uploadImage } from '../../../services/uploadService'; 
+// 🔴 FIX: Path change kiya hai taaki wo 'events' folder se uthaye
+import { uploadImage } from '../../events/services/uploadService'; 
 
 const UserProfile = () => {
   const { user } = useAuth();
@@ -18,7 +18,7 @@ const UserProfile = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
-  // 🛡️ INDUSTRY GRADE FLAG: Local state overrides DB latency
+  // Local state overrides DB latency
   const [hasAcceptedLocally, setHasAcceptedLocally] = useState(false);
 
   // Consent Form States
@@ -40,7 +40,7 @@ const UserProfile = () => {
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     
-    // 🧹 Force Clear Legacy Service Workers
+    // Force Clear Legacy Service Workers
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(registrations => {
             registrations.forEach(registration => registration.unregister());
@@ -52,10 +52,8 @@ const UserProfile = () => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         
-        // Only update if not currently saving (Prevents Jitter)
         if (!saving) { 
             setProfile(data);
-            // Sync form data only if not editing
             if (!isEditing) {
                 const isStandard = ['B.E. (CSE)', 'B.E. (CSE-AI)', 'B.E. (ECE)', 'B.E. (ME)'].includes(data.branch);
                 setFormData({
@@ -83,7 +81,6 @@ const UserProfile = () => {
         return;
     }
 
-    // 🚀 ATOMIC UPDATE
     setHasAcceptedLocally(true); 
     setSuccess("Welcome!");
 
@@ -113,7 +110,6 @@ const UserProfile = () => {
 
       // ✅ CLOUDINARY UPLOAD LOGIC
       if (photo) {
-        // Calling the Cloudinary service instead of Firebase Storage
         const uploadedUrl = await uploadImage(photo);
         if (uploadedUrl) {
             finalPhotoURL = uploadedUrl;
@@ -135,7 +131,6 @@ const UserProfile = () => {
         updatedAt: new Date()
       };
 
-      // Optimistic Update
       setProfile(prev => ({ ...prev, ...updatedData })); 
       setIsEditing(false); 
       setSuccess("Profile Updated!"); 
@@ -165,7 +160,6 @@ const UserProfile = () => {
   // 3. RENDER LOGIC
   if (loading && !profile) return <div className="min-h-screen flex justify-center items-center"><Loader2 className="animate-spin w-8 h-8 text-indigo-600"/></div>;
 
-  // 🔥 DECISION ENGINE
   const showConsentScreen = !profile?.termsAccepted && !hasAcceptedLocally;
 
   return (
