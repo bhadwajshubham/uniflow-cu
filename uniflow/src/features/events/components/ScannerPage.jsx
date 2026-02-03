@@ -23,6 +23,13 @@ const ScannerPage = () => {
 
   // 🔊 AUDIO & VOICE ENGINE
   const playFeedback = (type, name = "") => {
+    // 1. Vibration (Haptic Feedback)
+    if (navigator.vibrate) {
+        if (type === 'success') navigator.vibrate(200); // Short buzz
+        else navigator.vibrate([100, 50, 100]); // Double buzz for error
+    }
+
+    // 2. Audio Beep
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const oscillator = audioCtx.createOscillator();
@@ -42,18 +49,19 @@ const ScannerPage = () => {
       oscillator.stop(audioCtx.currentTime + 0.1);
     } catch (e) { console.error("Audio error:", e); }
 
+    // 3. Voice (Text-to-Speech)
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel(); 
       let text = type === 'success' ? `Welcome, ${name}` : 
                  type === 'error' ? 'Invalid Ticket' : 
                  type === 'warning' ? 'Already Used' : 'Unauthorized';
       const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.2; // Thoda tez bolega
       window.speechSynthesis.speak(utterance);
     }
   };
 
   useEffect(() => {
-    // 🛠️ FIX 1: Scanner ko bhi allow kiya initialize hone ke liye
     if (!canAccess) return;
 
     if (!scannerRef.current) {
@@ -64,7 +72,8 @@ const ScannerPage = () => {
             qrbox: { width: 250, height: 250 },
             aspectRatio: 1.0,
             formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-            showTorchButtonIfSupported: true
+            showTorchButtonIfSupported: true,
+            rememberLastUsedCamera: true
           },
           false 
         );
@@ -72,36 +81,47 @@ const ScannerPage = () => {
         scannerRef.current = scanner;
     
         const onScanSuccess = async (decodedText) => {
+          // Double Scan Prevention Logic
           if (isProcessing.current || decodedText === lastScannedId.current) return;
           
           isProcessing.current = true;
           lastScannedId.current = decodedText;
           setScanResult('processing');
           setMessage('Verifying...');
-    
+
+          let delayTime = 2000; // Default Fallback
+
           try {
             const ticketRef = doc(db, 'tickets', decodedText);
             const ticketSnap = await getDoc(ticketRef);
     
             if (!ticketSnap.exists()) {
+              // 🔴 INVALID TICKET
               setScanResult('error');
               setMessage('Invalid Ticket');
               playFeedback('error');
+              delayTime = 3000; // 3 Seconds (Guard needs to see this)
             } else {
               const data = ticketSnap.data();
     
               if (data.scanned === true) {
+                // ⚠️ ALREADY USED
                 setScanResult('warning');
                 setMessage(`Used by: ${data.userName}`);
                 playFeedback('warning');
+                delayTime = 3000; // 3 Seconds (Alert)
               } else {
+                // ✅ SUCCESS
                 await updateDoc(ticketRef, {
                   scanned: true,
                   scannedAt: serverTimestamp()
                 });
                 setScanResult('success');
-                setMessage(data.userName);
+                setMessage(data.userName || 'Student');
                 playFeedback('success', data.userName?.split(' ')[0]);
+                
+                // ⚡ SPEED LOGIC: 1.5s is safest minimum to avoid double-scan errors
+                delayTime = 1500; 
               }
             }
           } catch (err) {
@@ -109,28 +129,31 @@ const ScannerPage = () => {
             setScanResult('error');
             setMessage('Scan Error');
             playFeedback('error');
+            delayTime = 2500;
           } finally {
             setTimeout(() => {
               isProcessing.current = false;
-              lastScannedId.current = null;
+              lastScannedId.current = null; // Reset taaki naya banda scan ho sake
               setScanResult(null);
               setMessage('');
-            }, 2500); 
+            }, delayTime); 
           }
         };
     
-        scanner.render(onScanSuccess, (err) => { /* ignore errors */ });
+        scanner.render(onScanSuccess, (err) => { /* ignore scanning errors */ });
     }
 
     return () => {
         if (scannerRef.current) {
-            scannerRef.current.clear().catch(e => console.error("Clear failed", e));
+            try {
+                scannerRef.current.clear();
+            } catch (e) { console.error("Scanner clear error", e); }
             scannerRef.current = null;
         }
     };
   }, [profile, user, canAccess]);
 
-  // 🛠️ FIX 2: UI Render Logic Update
+  // Block Unauthorized Access
   if (!canAccess) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center text-red-500">
@@ -142,12 +165,12 @@ const ScannerPage = () => {
     );
   }
 
-  // 🛠️ FIX 3: Smart Exit Logic
+  // Handle Exit Button
   const handleExit = () => {
     if (profile?.role === 'scanner') {
-        navigate('/'); // Scanner ghar jaye
+        navigate('/');
     } else {
-        navigate('/admin'); // Admin dashboard jaye
+        navigate('/admin');
     }
   };
 
@@ -165,24 +188,32 @@ const ScannerPage = () => {
         </div>
 
         <div className="bg-zinc-900 rounded-[2rem] p-4 border border-zinc-800 shadow-2xl overflow-hidden relative">
-          <div id="reader" className="overflow-hidden rounded-xl"></div>
+          {/* SCANNER CONTAINER */}
+          <div id="reader" className="overflow-hidden rounded-xl bg-black"></div>
           
+          {/* OVERLAY FEEDBACK */}
           {scanResult && (
             <div className={`absolute inset-0 z-50 flex flex-col items-center justify-center p-6 text-center backdrop-blur-md animate-in fade-in duration-200 ${
               scanResult === 'success' ? 'bg-green-500/80' : 
               scanResult === 'warning' ? 'bg-amber-500/80' : 
               scanResult === 'processing' ? 'bg-indigo-600/80' : 'bg-red-600/80'
             }`}>
-              {scanResult === 'success' && <CheckCircle className="w-16 h-16 mb-2 text-white" />}
-              {scanResult === 'error' && <XCircle className="w-16 h-16 mb-2 text-white" />}
-              {scanResult === 'warning' && <AlertCircle className="w-16 h-16 mb-2 text-white" />}
+              {scanResult === 'success' && <CheckCircle className="w-20 h-20 mb-4 text-white drop-shadow-lg" />}
+              {scanResult === 'error' && <XCircle className="w-20 h-20 mb-4 text-white drop-shadow-lg" />}
+              {scanResult === 'warning' && <AlertCircle className="w-20 h-20 mb-4 text-white drop-shadow-lg" />}
               
-              <h2 className="text-2xl font-black uppercase italic tracking-tighter text-white">
-                {scanResult === 'processing' ? '...' : scanResult}
+              <h2 className="text-3xl font-black uppercase italic tracking-tighter text-white drop-shadow-md">
+                {scanResult === 'processing' ? 'Checking...' : scanResult}
               </h2>
-              <p className="mt-2 font-bold text-white text-sm">{message}</p>
+              <p className="mt-2 font-bold text-white text-lg drop-shadow-md">{message}</p>
             </div>
           )}
+        </div>
+
+        <div className="mt-8 text-center">
+            <p className="text-zinc-600 text-[10px] uppercase tracking-widest font-bold">
+                Point camera at QR Code
+            </p>
         </div>
       </div>
     </div>
