@@ -32,7 +32,7 @@ const AdminDashboard = () => {
   const [manageEvent, setManageEvent] = useState(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  // 1. FETCH EVENTS (FIXED 🛡️)
+  // 1. FETCH EVENTS (🔥 FIXED: organizerId)
   useEffect(() => {
     if (!user || !profile) return;
     setLoading(true);
@@ -41,19 +41,17 @@ const AdminDashboard = () => {
     let q;
 
     if (profile.role === 'super_admin') {
-      // Super Admin: Fetch All + Sort by CreatedAt
+      // Super Admin: Fetch All
       q = query(eventsRef, orderBy('createdAt', 'desc')); 
     } else {
-      // ✅ Admin/Organizer: Fetch Only Theirs
-      // NOTE: Humne yahan 'orderBy' hata diya hai taaki Index Error na aaye.
-      // Hum niche JavaScript se sort kar lenge.
-      q = query(eventsRef, where('createdBy', '==', user.uid)); 
+      // ✅ FIX: Using 'organizerId' because CreateModal saves it as 'organizerId'
+      q = query(eventsRef, where('organizerId', '==', user.uid)); 
     }
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const eventList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
-      // ✅ Client Side Sorting (Safe & Fast)
+      // Client Side Sorting
       eventList.sort((a, b) => {
           const dateA = a.createdAt?.seconds || 0;
           const dateB = b.createdAt?.seconds || 0;
@@ -72,12 +70,10 @@ const AdminDashboard = () => {
     if (!user || events.length === 0) return;
     const ticketsRef = collection(db, 'tickets');
     
-    // Fetch all tickets to calculate dashboard stats
     const unsubscribe = onSnapshot(ticketsRef, (snapshot) => {
       const allTickets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const myEventIds = events.map(e => e.id);
       
-      // Sirf wahi tickets dikhao jo mere events ke hain
       const myTickets = allTickets.filter(t => myEventIds.includes(t.eventId));
       
       setTickets(myTickets);
@@ -86,9 +82,7 @@ const AdminDashboard = () => {
     return () => unsubscribe();
   }, [user, events]); 
 
-  // ... (Baaki saara code, calculateStats, charts waisa hi rahega) ...
-  // ... (Copy Paste the rest of your logic below from previous file) ...
-
+  // 3. STATS LOGIC
   const calculateStats = (ticketList, eventList) => {
     let totalRevenue = 0;
     let totalAttended = 0;
@@ -226,7 +220,7 @@ const AdminDashboard = () => {
                         <button onClick={() => setManageEvent(event)} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:text-green-600"><Users className="w-4 h-4" /></button>
                         <button onClick={() => setEditEvent(event)} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:text-indigo-600"><Edit3 className="w-4 h-4" /></button>
                         
-                        {(profile?.role === 'super_admin' || event.createdBy === user.uid) && (
+                        {(profile?.role === 'super_admin' || event.organizerId === user.uid) && (
                             <button onClick={() => handleDelete(event.id)} className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:text-red-500">
                                 <Trash2 className="w-4 h-4" />
                             </button>
