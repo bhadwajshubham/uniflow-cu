@@ -1,5 +1,4 @@
 # 🎯 UniFlow - Digital Workflow Automation System
-
 Production-ready attendance system built for NSS residential camp management at Chitkara University.
 
 ## 🌟 Live Demo
@@ -18,7 +17,6 @@ Manual attendance tracking during 7-day NSS camps led to:
 
 ## ✅ Solution: UniFlow
 End-to-end digital workflow with QR-based validation:
-
 1. Registration → Participant signs up online
 2. QR Generation → Unique QR code issued  
 3. Scan Validation → Real-time attendance marking
@@ -53,20 +51,17 @@ End-to-end digital workflow with QR-based validation:
 ---
 
 ## 🏆 Recognition
-Used in official NSS residential camp 2024-25 at Chitkara University, Punjab
+Used in NSS Chitkara During Drug Awareness Camp 2024-25 at Chitkara University, Punjab
 
 ---
 
 ## 👨‍💻 Developer
 Shubham Bhardwaj
 
-LinkedIn: linkedin.com/in/shubhambhardwaj0777
+LinkedIn: linkedin.com/in/shubhambhardwaj0777  
 Portfolio: https://bhardwajshubham.netlify.app
 
 ---
 
----
-
-Built with ❤️ for streamlined event management
-
+Built with ❤️ for streamlined event management  
 Try it live: https://uniflow-cu.vercel.app
