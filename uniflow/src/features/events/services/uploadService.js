@@ -1,6 +1,7 @@
-// ☁️ CLOUDINARY CONFIG
-const CLOUD_NAME = "dt8pjvy7w"; 
-const UPLOAD_PRESET = "uniflow_preset"; 
+// ☁️ CLOUDINARY CONFIG (Professional Way)
+// Ab ye values Vercel ke Environment Variables se aayengi
+const CLOUD_NAME = import.meta.env.VITE_CLOUD_NAME;
+const UPLOAD_PRESET = import.meta.env.VITE_UPLOAD_PRESET;
 
 export const uploadImage = async (file) => {
   if (!file) return null;
