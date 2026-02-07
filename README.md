@@ -15,7 +15,7 @@ Manual attendance tracking during EVENTS led to:
 
 ---
 
-## ✅ Solution: UniFlow
+## ✅ Solution: UniFlow-CU
 End-to-end digital workflow with QR-based validation:
 1. Registration → Participant signs up online
 2. QR Generation → Unique QR code issued  
