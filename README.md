@@ -1,5 +1,5 @@
-# 🎯 UniFlow - Digital Workflow Automation System
-Production-ready attendance system built for NSS residential camp management at Chitkara University.
+# 🎯 UniFlow-CU(Collegs & Universities) Edition - Digital Workflow Automation System
+Production-ready attendance system built for management.
 
 ## 🌟 Live Demo
 https://uniflow-cu.vercel.app
@@ -7,7 +7,7 @@ https://uniflow-cu.vercel.app
 ---
 
 ## 📌 Problem Statement
-Manual attendance tracking during 7-day NSS camps led to:
+Manual attendance tracking during EVENTS led to:
 - Proxy attendance issues
 - Time-consuming paper records  
 - No audit trail
@@ -27,7 +27,7 @@ End-to-end digital workflow with QR-based validation:
 ## 🛠️ Tech Stack
 - Frontend: React.js
 - Backend: Firebase (Authentication & Database)
-- Automation: Google Apps Script  
+- Automation: Google Apps Script (during validation phase) , Google SMTP (for email)  
 - Deployment: Vercel
 - QR Generation: qrcode.react
 
