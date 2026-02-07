@@ -65,4 +65,8 @@ Portfolio: https://bhardwajshubham.netlify.app
 
 ---
 
-Star this repo if you found it helpful!
+---
+
+Built with ❤️ for streamlined event management
+
+Try it live: https://uniflow-cu.vercel.app
