@@ -3,12 +3,17 @@ const CLOUD_NAME = import.meta.env.VITE_CLOUD_NAME;
 export const uploadImage = async (file) => {
   if (!file) return null;
 
-  // Get signature from server
-  const { timestamp, signature, api_key } = await fetch('/api/sign-upload', {
+  const sigResponse = await fetch('/api/sign-upload', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ folder: 'uniflow_uploads' })
-  }).then(r => r.json());
+  });
+
+  if (!sigResponse.ok) {
+    throw new Error('Failed to securely sign the image upload.');
+  }
+
+  const { timestamp, signature, api_key } = await sigResponse.json();
 
   const formData = new FormData();
   formData.append('file', file);
