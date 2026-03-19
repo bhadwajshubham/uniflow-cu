@@ -12,17 +12,14 @@ module.exports = function handler(req, res) {
   const { folder } = req.body;
   const timestamp = Math.round(Date.now() / 1000);
 
-  const paramsToSign = { timestamp, folder };
-
   const signature = cloudinary.utils.api_sign_request(
-    paramsToSign,
+    { timestamp, folder },
     process.env.CLOUDINARY_API_SECRET
   );
 
   res.json({ 
     timestamp, 
     signature, 
-    api_key: process.env.CLOUDINARY_API_KEY,
-    cloud_name: process.env.VITE_CLOUD_NAME
+    api_key: process.env.CLOUDINARY_API_KEY
   });
 };
