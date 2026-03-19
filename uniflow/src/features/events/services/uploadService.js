@@ -1,36 +1,28 @@
-// ☁️ CLOUDINARY CONFIG (Professional Way)
-
 const CLOUD_NAME = import.meta.env.VITE_CLOUD_NAME;
-const UPLOAD_PRESET = import.meta.env.VITE_UPLOAD_PRESET;
 
 export const uploadImage = async (file) => {
   if (!file) return null;
 
+  // Get signature from server
+  const { timestamp, signature, api_key } = await fetch('/api/sign-upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder: 'uniflow_uploads' })
+  }).then(r => r.json());
+
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('upload_preset', UPLOAD_PRESET);
   formData.append('folder', 'uniflow_uploads');
+  formData.append('timestamp', timestamp);
+  formData.append('signature', signature);
+  formData.append('api_key', api_key);
 
-  try {
-    // Using built-in fetch to avoid 'axios' dependency issues on launch
-    const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
-      {
-        method: 'POST',
-        body: formData,
-      }
-    );
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+    { method: 'POST', body: formData }
+  );
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || "Upload failed");
-    }
-
-    const data = await response.json();
-    return data.secure_url;
-
-  } catch (error) {
-    console.error("Cloudinary Upload Error:", error);
-    throw new Error("Image upload failed");
-  }
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error?.message || 'Upload failed');
+  return data.secure_url;
 };
