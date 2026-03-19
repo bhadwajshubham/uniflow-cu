@@ -1,6 +1,6 @@
-import { v2 as cloudinary } from 'cloudinary';
+const cloudinary = require('cloudinary').v2;
 
-export default function handler(req, res) {
+module.exports = function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   cloudinary.config({
@@ -12,10 +12,17 @@ export default function handler(req, res) {
   const { folder } = req.body;
   const timestamp = Math.round(Date.now() / 1000);
 
+  const paramsToSign = { timestamp, folder };
+
   const signature = cloudinary.utils.api_sign_request(
-    { timestamp, folder },
+    paramsToSign,
     process.env.CLOUDINARY_API_SECRET
   );
 
-  res.json({ timestamp, signature, api_key: process.env.CLOUDINARY_API_KEY });
-}
+  res.json({ 
+    timestamp, 
+    signature, 
+    api_key: process.env.CLOUDINARY_API_KEY,
+    cloud_name: process.env.VITE_CLOUD_NAME
+  });
+};
